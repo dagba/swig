@@ -1,2 +1,0 @@
-PODS_SWIG_SWIFT_SWIG_GCC_PREPROCESSOR_DEFINITIONS = $(inherited) PJ_AUTOCONF=1
-PODS_SWIG_SWIFT_SWIG_HEADER_SEARCH_PATHS = $(inherited) $(PODS_ROOT)/pjsip-ios/Pod/pjsip-include $(SOURCE_ROOT)/../Pod/pjsip-include

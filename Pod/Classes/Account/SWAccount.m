@@ -1,4 +1,4 @@
-//
+    //
 //  SWAccount.m
 //  swig
 //
@@ -84,6 +84,9 @@
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
+//    acc_cfg.mwi_enabled = YES;
+    
+//    acc_cfg.ka_interval
     
     acc_cfg.cred_count = 1;
     acc_cfg.cred_info[0].scheme = [self.accountConfiguration.authScheme pjString];
@@ -91,6 +94,9 @@
     acc_cfg.cred_info[0].username = [self.accountConfiguration.username pjString];
     acc_cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
     acc_cfg.cred_info[0].data = [self.accountConfiguration.password pjString];
+
+    acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
+    acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;
@@ -324,5 +330,94 @@
         handler(error);
     }
 }
+
+//-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
+//    
+//    pj_status_t status;
+//    NSError *error;
+//    
+//    pj_str_t pjURI = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+//    
+//    pj_str_t contentType = [@"text/plain" pjString];
+//    
+//    NSData *data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
+//    
+//    char * a = (char *)[data bytes];
+//    
+//    pj_str_t pjMessage;
+//    
+//    pj_strset(&pjMessage, a, (int)[data length]);
+//    
+//    pjsua_msg_data msg_data;
+//    
+//    pjsua_msg_data_init(&msg_data);
+//    
+//    status = pjsua_im_send((int)self.accountId, &pjURI, &contentType, &pjMessage, &msg_data, nil);
+//
+//    if (status != PJ_SUCCESS) {
+//        error = [NSError errorWithDomain:@"Error sendind message" code:0 userInfo:nil];
+//    }
+//
+//    if (handler) {
+//        handler(error);
+//    }
+//}
+
+-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    pj_str_t       contact;
+
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    contact = [[NSString stringWithFormat:@"<sip:%@@%@>;q=0.5;expires=%d", self.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
+    
+    pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info(self.accountId, &info);
+    
+    NSData *message_data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
+
+    char * a = (char *)[message_data bytes];
+
+    pj_str_t pjMessage;
+
+    pj_strset(&pjMessage, a, (int)[message_data length]);
+
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_message_method,
+                                        &info.acc_uri, //proxy
+                                        &info.acc_uri, //local
+                                        &to, //source to
+                                        &contact, //contact
+                                        nil,
+                                        -1,
+                                        &pjMessage,
+                                        &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
+        handler(error, nil);
+        return;
+    }
+    
+    pjsip_cid_hdr *smid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
+    
+    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Error sending message" code:0 userInfo:nil];
+        handler(error, nil);
+        return;
+    }
+    
+    handler(nil, [NSString stringWithPJString:smid_hdr->id]);
+}
+
+
 
 @end

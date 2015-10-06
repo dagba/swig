@@ -10,7 +10,41 @@
 #warning "This project uses features only available in iOS SDK 5.0 and later."
 #endif
 
+
+
+//#define kDomain @"193.200.21.126";
+//#define kDomain @"eastmedia.onpbx.ru";
+
+
+
 #ifdef __OBJC__
     #import <UIKit/UIKit.h>
     #import <Foundation/Foundation.h>
 #endif
+
+//#if TARGET_IPHONE_SIMULATOR
+//
+//#define kUsername @"79220000003"
+//#define kPassword @"1148111e-435f-403a-bd0d-a56e7e70c2bf_4"
+////    configuration.username = @"101";
+////    configuration.password = @"12345678";
+//
+//#else
+//
+//#define kUsername @"79220000002"
+//#define kPassword @"1148111e-435f-403a-bd0d-a56e7e70c2bf_5.7"
+//
+////#define kUsername @"79220000003"
+////#define kPassword @"1148111e-435f-403a-bd0d-a56e7e70c2bf_4"
+//
+//
+////    configuration.username = @"79617788637";
+////    configuration.password = @"1148111e-435f-403a-bd0d-a56e7e70c2bf_6";
+////
+////
+////    configuration.username = @"102";
+////    configuration.password = @"12345678";
+//
+//#endif
+//
+//#define kDomain @"192.168.1.113"

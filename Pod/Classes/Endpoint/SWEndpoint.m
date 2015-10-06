@@ -20,6 +20,8 @@
 #import <AudioToolbox/AudioToolbox.h>
 #import <libextobjc/extobjc.h>
 #import "Logger.h"
+#import "SWAccountConfiguration.h"
+#import "SWUriFormatter.h"
 
 #define KEEP_ALIVE_INTERVAL 600
 
@@ -27,6 +29,7 @@ typedef void (^SWAccountStateChangeBlock)(SWAccount *account);
 typedef void (^SWIncomingCallBlock)(SWAccount *account, SWCall *call);
 typedef void (^SWCallStateChangeBlock)(SWAccount *account, SWCall *call);
 typedef void (^SWCallMediaStateChangeBlock)(SWAccount *account, SWCall *call);
+
 
 //thread statics
 static pj_thread_t *thread;
@@ -47,19 +50,77 @@ static void SWOnRegState(pjsua_acc_id acc_id);
 
 static void SWOnNatDetect(const pj_stun_nat_detect_result *res);
 
+static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info);
+
+static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
+
+//static void SWOnPager (pjsua_call_id call_id, const pj_str_t *from, const pj_str_t *to, const pj_str_t *contact, const pj_str_t *mime_type, const pj_str_t *body, pjsip_rx_data *rdata, pjsua_acc_id acc_id);
+//
+//static void SWOnPagerStatus  (pjsua_call_id call_id, const pj_str_t *to, const pj_str_t *body, void *user_data, pjsip_status_code status, const pj_str_t *reason, pjsip_tx_data *tdata, pjsip_rx_data *rdata, pjsua_acc_id acc_id);
+//
+//static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_str_t *to, const pj_str_t *contact, pj_bool_t is_typing, pjsip_rx_data *rdata, pjsua_acc_id acc_id);
+//
+//static void SWOnMWIInfo (pjsua_acc_id acc_id, pjsua_mwi_info *mwi_info);
+//
+
+static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
+{
+    return [[SWEndpoint sharedEndpoint] requestPackageProcessing:rdata];
+}
+
+
+static pj_bool_t on_rx_response(pjsip_rx_data *rdata)
+{
+    
+    
+    return [[SWEndpoint sharedEndpoint] responsePackageProcessing:rdata];
+}
+
+static pjsip_module sipgate_module =
+{
+    NULL, NULL,	             /* prev and next */
+    { (char *)"sipmessenger-core", 17},   /* Name */
+    //    { "mod-default-handler", 19 },
+    -1,                      /* Id */
+    //    PJSIP_MOD_PRIORITY_APPLICATION,/* Priority	 */
+    PJSIP_MOD_PRIORITY_TRANSPORT_LAYER, /* Priority */
+    NULL,                    /* load() */
+    NULL,                    /* start() */
+    NULL,                    /* stop() */
+    NULL,                    /* unload() */
+    &on_rx_request,          /* on_rx_request() */
+    &on_rx_response,         /* on_rx_response() */
+    NULL,        /* on_tx_request() */
+    NULL,       /* on_tx_response() */
+    NULL,                    /* on_tsx_state() */
+};
+
+
+
 @interface SWEndpoint ()
 
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWAccountStateChangeBlock accountStateChangeBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
+
+@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
+@property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
+@property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
+@property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+@property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
+
 @property (nonatomic) pj_thread_t *thread;
+
+
 
 @end
 
 @implementation SWEndpoint
 
 static SWEndpoint *_sharedEndpoint = nil;
+
+
 
 +(id)sharedEndpoint {
     
@@ -303,6 +364,13 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_call_replaced = &SWOnCallReplaced;
     ua_cfg.cb.on_reg_state = &SWOnRegState;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
+    ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
+    ua_cfg.cb.on_transport_state = &SWOnTransportState;
+    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
+    
+    
+    
+    //
     ua_cfg.max_calls = (unsigned int)self.endpointConfiguration.maxCalls;
     
     log_cfg.level = (unsigned int)self.endpointConfiguration.logLevel;
@@ -312,6 +380,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
+    
     
     status = pjsua_init(&ua_cfg, &log_cfg, &media_cfg);
     
@@ -325,6 +394,17 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         return;
     }
+    
+    status = pjsip_endpt_register_module(pjsua_get_pjsip_endpt(), &sipgate_module);
+    if (status != PJ_SUCCESS) {
+        return;
+    }
+    
+    status = pjnath_init();
+    if (status != PJ_SUCCESS) {
+        return;
+    }
+    
     
     //TODO autodetect port by checking transportId!!!!
     
@@ -435,28 +515,28 @@ static SWEndpoint *_sharedEndpoint = nil;
         dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
     }
     
-//    NSMutableArray *mutableArray = [self.accounts mutableCopy];
-//    
-//    [mutableArray removeAllObjects];
-//    
-//    self.accounts = mutableArray;
+    //    NSMutableArray *mutableArray = [self.accounts mutableCopy];
+    //
+    //    [mutableArray removeAllObjects];
+    //
+    //    self.accounts = mutableArray;
     
-//    pj_status_t status = pjsua_destroy();
-//    
-//    if (status != PJ_SUCCESS) {
-//        
-//        NSError *error = [NSError errorWithDomain:@"Error destroying pjsua" code:status userInfo:nil];
-//        
-//        if (handler) {
-//            handler(error);
-//        }
-//        
-//        return;
-//    }
-//    
-//    if (handler) {
-//        handler(nil);
-//    }    
+    //    pj_status_t status = pjsua_destroy();
+    //
+    //    if (status != PJ_SUCCESS) {
+    //
+    //        NSError *error = [NSError errorWithDomain:@"Error destroying pjsua" code:status userInfo:nil];
+    //
+    //        if (handler) {
+    //            handler(error);
+    //        }
+    //
+    //        return;
+    //    }
+    //
+    //    if (handler) {
+    //        handler(nil);
+    //    }
 }
 
 #pragma Account Management
@@ -473,9 +553,9 @@ static SWEndpoint *_sharedEndpoint = nil;
 }
 
 -(void)removeAccount:(SWAccount *)account {
- 
-    if ([self lookupAccount:account.accountId]) {
     
+    if ([self lookupAccount:account.accountId]) {
+        
         NSMutableArray *mutableArray = [self.accounts mutableCopy];
         [mutableArray removeObject:account];
         
@@ -536,6 +616,22 @@ static SWEndpoint *_sharedEndpoint = nil;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock {
     
     _callMediaStateChangeBlock = callMediaStateChangeBlock;
+}
+
+- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
+    _messageSentBlock = messageSentBlock;
+}
+
+- (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock {
+    _needConfirmBlock = needConfirmBlock;
+}
+
+- (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock {
+    _confirmationBlock = confirmationBlock;
+}
+
+- (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock {
+    _messageStatusBlock = messageStatusBlock;
 }
 
 #pragma PJSUA Callbacks
@@ -610,6 +706,7 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
+    
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:callInfo.acc_id];
     
     if (account) {
@@ -629,7 +726,7 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
 
 //TODO: implement these
 static void SWOnCallTransferStatus(pjsua_call_id call_id, int st_code, const pj_str_t *st_text, pj_bool_t final, pj_bool_t *p_cont) {
-    
+    NSLog(@"%d", call_id);
 }
 
 static void SWOnCallReplaced(pjsua_call_id old_call_id, pjsua_call_id new_call_id) {
@@ -638,6 +735,19 @@ static void SWOnCallReplaced(pjsua_call_id old_call_id, pjsua_call_id new_call_i
 
 static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
     
+    NSLog(@"Nat detect: %s", res->nat_type_name);
+}
+
+static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
+    
+    NSLog(@"%@ %@", tp, info);
+}
+
+static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e){
+    
+    pjsip_redirect_op redirect = PJSIP_REDIRECT_ACCEPT;
+    
+    return redirect;
 }
 
 #pragma Setters/Getters
@@ -653,5 +763,303 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
     _accounts = accounts;
     [self didChangeValueForKey:@"accounts"];
 }
+
+- (pj_bool_t) requestPackageProcessing: (pjsip_rx_data *)data {
+    
+    if (data == nil) {
+        return PJ_FALSE;
+    }
+    
+    if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_register_method) == 0) {
+        //        NSLog(@"data %@", data);
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
+        [self incomingMessage:data];
+        return PJ_TRUE;
+    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {
+        //puts("subs");
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_notify_method) == 0) {
+        [self incomingNotify:data];
+        return PJ_TRUE;
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
+        //        [self incomingInvite:data];
+    }
+    return PJ_FALSE;
+}
+
+- (pj_bool_t) responsePackageProcessing:(pjsip_rx_data *)data {
+    /* Разбираем - на какой запрос пришел ответ */
+    NSString *call_id = [NSString stringWithPJString:data->msg_info.cid->id];
+    int status = data->msg_info.msg->line.status.code;
+    
+    NSUInteger cseq = data->msg_info.cseq->cseq;
+    
+    NSUInteger sm_id = 0;
+    
+    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+    
+    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
+        
+        if (status == PJSIP_SC_NOT_FOUND && [account.accountConfiguration.code length] != 4){
+            if (_needConfirmBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    _needConfirmBlock(account, PJSIP_SC_NOT_FOUND);
+                });
+            }
+            return PJ_FALSE;
+        }
+        
+        if (status == PJSIP_SC_NOT_FOUND && [account.accountConfiguration.code length] == 4){
+            return PJ_FALSE;
+        }
+        
+        if (status == PJSIP_SC_UNAUTHORIZED && [account.accountConfiguration.code length] == 4) {
+            [self processingFirstRegistration:account cseq:cseq];
+            return PJ_FALSE;
+        }
+        
+        if (status == PJSIP_SC_OK) {
+            if (_confirmationBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    _confirmationBlock(nil);
+                });
+            }
+            return PJ_FALSE;
+        }
+    }
+    
+    
+    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
+        /* Смотрим есть ли в сообщении заголовок SmID */
+        pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
+        pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+        if (smid_hdr != nil) {
+            sm_id = atoi(smid_hdr->hvalue.ptr);
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            _messageSentBlock(account, call_id, sm_id, status);
+        });
+        return PJ_TRUE;
+    }
+    
+    return PJ_FALSE;
+}
+
+#pragma mark Входящее уведомление
+- (void) incomingNotify:(pjsip_rx_data *)data {
+    /* Смотрим о каком абоненте речь в сообщении */
+    
+    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+
+    
+    pjsip_sip_uri *uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+    NSString *abonent = [NSString stringWithPJString:uri->user];
+    
+    pj_str_t status_str    = pj_str((char *)"Status");
+    pj_str_t delivered_str = pj_str((char *)"Event");
+    
+    /* Нужно разобраться что за уведомление пришло */
+    /* заголовок Status: status_type      - статус абонента */
+    /* заголовок Event: status            - статус сообщения SmID */
+    
+    /* Status? */
+    pjsip_generic_string_hdr *event_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &status_str, nil);
+    if (event_hdr != nil) {
+        //        if (!InDestrxoy) {
+        int  status;
+        char   buf[32] = {0};
+        memcpy(buf, event_hdr->hvalue.ptr, event_hdr->hvalue.slen);
+        status = atoi(buf);
+#warning
+        
+        //        dispatch_async(dispatch_get_main_queue(), ^{
+        //            if (_receiveAbonentStatusBlock) {
+        //                _receiveAbonentStatusBlock(abonent, (NSInteger)status);
+        //            }
+        //        });
+        [self sendSubmit:data withCode:PJSIP_SC_OK];
+        //        delete abonent;
+        return;
+    }
+    
+    /* Event? */
+    event_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &delivered_str, nil);
+    if (event_hdr != nil) {
+        
+        /* Получаем SmID */
+        NSUInteger sm_id = 0;
+        pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
+        pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+        if (smid_hdr != nil) {
+            sm_id = atoi(smid_hdr->hvalue.ptr);
+            NSUInteger event_value = atoi(event_hdr->hvalue.ptr);
+
+            /* Передаем идентификатор и статус сообщения в GUI */
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (_messageStatusBlock) {
+                    _messageStatusBlock(account, sm_id, event_value);
+                }
+            });
+            
+            [self sendSubmit:data withCode:PJSIP_SC_OK];
+        }
+        return;
+    }
+}
+
+- (void) incomingMessage:(pjsip_rx_data *)data {
+    if (data == nil) {
+        return;
+    }
+    
+    pjsip_sip_uri *uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.to->uri);
+    if (uri == nil) {
+        [self sendSubmit:data withCode:PJSIP_SC_BAD_REQUEST];
+        return;
+    }
+    
+    /* Проверяем - нам ли сообщение */
+    
+    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+    
+    
+    NSString *to = [NSString stringWithPJString:uri->user];
+    if (![account.accountConfiguration.username isEqualToString:to]) {
+        [self sendSubmit:data withCode:PJSIP_SC_NOT_FOUND];
+        return;
+    }
+    
+    uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+    
+    NSString *abonent = [NSString stringWithPJString:uri->user];
+    
+    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+    
+    /* Выдираем Sm_ID */
+    NSUInteger sm_id = 0;
+    
+    /* Смотрим есть ли в сообщении заголовок SmID */
+    pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
+    pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+    if (smid_hdr != nil) {
+        sm_id = atoi(smid_hdr->hvalue.ptr);
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_messageReceivedBlock) {
+            _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id);
+        }
+    });
+    
+    
+    [self sendSubmit:data withCode:PJSIP_SC_OK];
+    
+    //    delete abonent;
+    //    delete message_txt;
+    //    delete to;
+}
+
+
+#pragma mark - Отправляем абоненту результат обработки его сообщения
+- (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
+    pjsip_tx_data       *answer_msg;
+    pj_status_t          status;
+    bool                 ret_value = false;
+    
+    /* Готовим ответ абоненту о результате регистрации */
+    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &answer_msg);
+    if (status == PJ_SUCCESS) {
+        
+        pj_str_t   smid_hdr_str = pj_str((char *)"SMID");
+        pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+        if (smid_hdr != nil) {
+            pjsip_msg_add_hdr(answer_msg->msg, smid_hdr);
+        }
+        
+        /* Получаем адрес, куда мы должны отправить ответ */
+        pjsip_response_addr  response_addr;
+        status = pjsip_get_response_addr(answer_msg->pool, message, &response_addr);
+        if (status == PJ_SUCCESS) {
+            /* Отправляем ответ на регистрацию */
+            status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, answer_msg, nil, nil);
+            if (status == PJ_SUCCESS) {
+                ret_value = true;
+            }
+        }
+    }
+    if (status != PJ_SUCCESS) {
+        NSLog(@"Error");
+        //        [self parseError:status];
+    }
+    return ret_value;
+}
+
+- (BOOL) prepareRegisterData:(pjsip_authorization_hdr *) auth_hdr account:(SWAccount *) account {
+    if (auth_hdr == nil) {
+        return false;
+    }
+    
+    auth_hdr->scheme = pj_str((char *)"digest");
+    auth_hdr->credential.digest.algorithm = pj_str((char *)"md5");
+    
+    auth_hdr->credential.digest.username = [account.accountConfiguration.cryptedUsername pjString];
+    
+    auth_hdr->credential.digest.response = [account.accountConfiguration.cryptedPassword pjString];
+    
+    return true;
+}
+
+
+- (void) processingFirstRegistration:(SWAccount *) account cseq:(NSUInteger) cseq {
+    /* Готовим ответную строку для сервера */
+    pjsip_authorization_hdr* auth_hdr = pjsip_authorization_hdr_create(_pjPool);
+    
+    if (![self prepareRegisterData:auth_hdr account:account]) return;
+    
+    /* Создаем запрос на регистрацию с необходимыми данными */
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    pj_str_t       contact;
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    contact = [[NSString stringWithFormat:@"<sip:%@@%@>;q=0.5;expires=%d", account.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info(0, &info);
+    
+    NSLog(@"info %@", [NSString stringWithPJString:info.acc_uri]);
+    
+    //    pj_str_t local = [_LocalURI pjString];
+    //    pj_str_t proxy = [_ProxyURI pjString];
+    
+    
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_register_method,
+                                        &info.acc_uri, //proxy
+                                        &info.acc_uri, //local
+                                        &info.acc_uri, //local
+                                        &contact, //contact
+                                        nil,
+                                        cseq,
+                                        nil,
+                                        &tx_msg);
+    
+    
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)auth_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 100, nil, nil);
+    }
+}
+
+
 
 @end

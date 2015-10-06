@@ -1,5 +1,5 @@
 PODS:
-  - AFNetworking/Reachability (2.5.0)
+  - AFNetworking/Reachability (2.6.0)
   - CocoaLumberjack (2.0.0-rc):
     - CocoaLumberjack/Default (= 2.0.0-rc)
     - CocoaLumberjack/Extensions (= 2.0.0-rc)
@@ -8,6 +8,7 @@ PODS:
     - CocoaLumberjack/Core
   - CocoaLumberjack/Extensions (2.0.0-rc):
     - CocoaLumberjack/Default
+  - DESCrypt (0.1.0)
   - libextobjc (0.4.1):
     - libextobjc/EXTADT (= 0.4.1)
     - libextobjc/EXTConcreteProtocol (= 0.4.1)
@@ -55,20 +56,29 @@ PODS:
 DEPENDENCIES:
   - AFNetworking/Reachability (~> 2.3)
   - CocoaLumberjack (= 2.0.0-rc)
+  - DESCrypt (from `https://github.com/MaximKeegan/DESCrypt.git`)
   - libextobjc (~> 0.4)
-  - pjsip-ios (~> 0.1)
+  - pjsip-ios
   - Swig (from `../`)
 
 EXTERNAL SOURCES:
+  DESCrypt:
+    :git: https://github.com/MaximKeegan/DESCrypt.git
   Swig:
     :path: ../
 
-SPEC CHECKSUMS:
-  AFNetworking: 0f54cb5d16ce38c1b76948faffb8d5fb705021c7
-  CocoaLumberjack: 6186e27827fc574b50b16c10102fcc591437f06c
-  libextobjc: d6146fce3ebea986b7f75fcb4c967639200b88b0
-  OpenSSL-Universal: 60ee5ddf6530100c0aa702c2e0c9881cfd4a89a5
-  pjsip-ios: 9fae04e5a783b4b416302e8dd9b0b107eaeee374
-  Swig: 7df7ec20edc5600a9af91edda80dd9e95943472f
+CHECKOUT OPTIONS:
+  DESCrypt:
+    :commit: d34c895c0134d5133cc53ad565bea8f777f8953f
+    :git: https://github.com/MaximKeegan/DESCrypt.git
 
-COCOAPODS: 0.35.0
+SPEC CHECKSUMS:
+  AFNetworking: 79f7eb1a0fcfa7beb409332b2ca49afe9ce53b05
+  CocoaLumberjack: 04c5b9b7479dd4276a09700fcd6644423ea1751c
+  DESCrypt: 96f964f1d69f9954dfab0e93c1f9b01ddab4561f
+  libextobjc: a650fc1bf489a3d3a9bc2e621efa3e1006fc5471
+  OpenSSL-Universal: 5b864c8eb334c8e78f44e4b2eb294ee2c1891c23
+  pjsip-ios: c950c1b4f09c27cfe923e3dff4ff0b6c255c3c2b
+  Swig: 042c6f633f8fa471db0fa954ab5afd304262dd55
+
+COCOAPODS: 0.38.2

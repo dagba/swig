@@ -11,5 +11,6 @@
 @interface SWAppDelegate : UIResponder <UIApplicationDelegate>
 
 @property (strong, nonatomic) UIWindow *window;
+-(void)addSIPAccount;
 
 @end

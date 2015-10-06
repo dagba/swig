@@ -6,6 +6,7 @@
 //  Copyright (c) 2014 PeteAppDesigns. All rights reserved.
 //
 
+#import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 
 @interface SWAccountConfiguration : NSObject
@@ -18,9 +19,13 @@
 @property (nonatomic, strong) NSString *authRealm;
 @property (nonatomic, strong) NSString *username;
 @property (nonatomic, strong) NSString *password;
+@property (nonatomic, strong) NSString *code;
 @property (nonatomic) BOOL registerOnAdd;
 @property (nonatomic) BOOL publishEnabled;
 
 +(NSString *)addressFromUsername:(NSString *)username domain:(NSString *)domain;
+
+- (NSString *) cryptedUsername;
+- (NSString *) cryptedPassword;
 
 @end

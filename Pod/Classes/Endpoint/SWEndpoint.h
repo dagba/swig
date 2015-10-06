@@ -10,6 +10,13 @@
 #import "SWAccount.h"
 #import <pjsua.h>
 #import "SWRingtone.h"
+#import <pjnath.h>
+
+typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, NSUInteger status);
+typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *message, NSUInteger messageID);
+typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
+typedef void (^SWConfirmationBlock)(NSError *error);
+typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, NSUInteger status);
 
 @class SWEndpointConfiguration, SWAccount, SWCall;
 
@@ -37,6 +44,19 @@
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
 
+- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
+- (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
+- (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
+
+//- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
+//- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);
+- (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock;
+- (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock;
+
+
 -(void)keepAlive;
+
+- (pj_bool_t) requestPackageProcessing: (pjsip_rx_data *)data;
+- (pj_bool_t) responsePackageProcessing: (pjsip_rx_data *)data;
 
 @end

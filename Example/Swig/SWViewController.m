@@ -8,8 +8,14 @@
 
 #import "SWViewController.h"
 #import <Swig/Swig.h>
+#import "SWAppDelegate.h"
 
 @interface SWViewController ()
+
+@property (weak, nonatomic) IBOutlet UITextField *phoneNumberTextField;
+@property (weak, nonatomic) IBOutlet UILabel *phoneNumberLabel;
+@property (weak, nonatomic) IBOutlet UITextField *messageTextField;
+@property (weak, nonatomic) IBOutlet UITextView *textView;
 
 @end
 
@@ -18,7 +24,47 @@
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    
+    SWAppDelegate *appDelegate = [[UIApplication sharedApplication] delegate];
+    [appDelegate addSIPAccount];
+
+    [[SWEndpoint sharedEndpoint] setMessageSentBlock:^(SWAccount *account, NSString *callID, NSUInteger messageID, NSUInteger status) {
+        NSString *string = [NSString stringWithFormat:@"callID: %@, messageID: %lu, status: %lu\n", callID, (unsigned long)messageID, (unsigned long)status];
+        _textView.text = [_textView.text stringByAppendingString:string];
+
+    }];
+    
+    [[SWEndpoint sharedEndpoint] setMessageReceivedBlock:^(SWAccount *account, NSString *from, NSString *message, NSUInteger messageID) {
+        NSLog(@"messageID: %lu, from: %@, message: %@", (unsigned long)messageID, from, message);
+
+        NSString *dateString = [NSDateFormatter localizedStringFromDate:[NSDate date]
+                                                              dateStyle:NSDateFormatterShortStyle
+                                                              timeStyle:NSDateFormatterMediumStyle];
+
+        NSString *string = [NSString stringWithFormat:@"%@: %@ %@ %d\n", dateString, from, message, messageID];
+        
+        _textView.text = [_textView.text stringByAppendingString:string];
+
+    }];
+    
+    [[SWEndpoint sharedEndpoint] setMessageStatusBlock:^(SWAccount *account, NSUInteger messageID, NSUInteger status) {
+        NSString *string = [NSString stringWithFormat:@"Message %lu: status %d\n", (unsigned long)messageID, status];
+        
+        _textView.text = [_textView.text stringByAppendingString:string];
+    }];
+    
+    //
+    [[SWEndpoint sharedEndpoint] setNeedConfirmBlock:^(SWAccount *account, NSUInteger status) {
+        [self performSegueWithIdentifier:@"SWViewControllerPushSWConfirmViewController" sender:self];
+    }];
+    
 	// Do any additional setup after loading the view, typically from a nib.
+}
+
+- (void) viewDidAppear:(BOOL)animated {
+    
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+    [_phoneNumberLabel setText:account.accountConfiguration.address];
 }
 
 - (void)didReceiveMemoryWarning
@@ -31,7 +77,10 @@
  
     SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
     
-    [account makeCall:@"swig_2@getonsip.com" completionHandler:^(NSError *error) {
+    NSString *callTo = [NSString stringWithFormat:@"%@@ewsip.ru", _phoneNumberTextField.text];
+
+    
+    [account makeCall:callTo completionHandler:^(NSError *error) {
        
         if (error) {
             NSLog(@"%@",[error description]);
@@ -78,6 +127,36 @@
 
         }];
     }
+}
+
+- (IBAction)hang:(UIButton *)sender {
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+    
+    SWCall *call = [account firstCall];
+    
+    if (call) {
+        
+        [call hangup:^(NSError *error) {
+            NSLog(@"hangup error%@", error);
+        }];
+    }
+
+}
+
+- (IBAction)sendMesage:(UIButton *)sender {
+    [self.view endEditing:YES];
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+
+    [account sendMessage:_messageTextField.text to:_phoneNumberTextField.text completionHandler:^(NSError *error, NSString *callID) {
+        if (!error) {
+            NSString *string = [NSString stringWithFormat:@"Message: %@ sent\n", callID];
+            _textView.text = [_textView.text stringByAppendingString:string];
+        } else {
+            NSString *string = [NSString stringWithFormat:@"Message not sent: %@\n", error.domain];
+            _textView.text = [_textView.text stringByAppendingString:string];
+        }
+    }];
+    
 }
 
 @end

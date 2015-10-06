@@ -42,4 +42,6 @@ typedef NS_ENUM(NSInteger, SWAccountState) {
 //-(void)answerCall:(NSUInteger)callId completionHandler:(void(^)(NSError *error))handler;
 //-(void)endCall:(NSInteger)callId completionHandler:(void(^)(NSError *error))handler;
 
+-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler;
+
 @end

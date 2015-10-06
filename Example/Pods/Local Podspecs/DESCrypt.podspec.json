@@ -1,0 +1,21 @@
+{
+  "name": "DESCrypt",
+  "version": "0.1.0",
+  "summary": "A short description of DESCrypt.",
+  "description": "",
+  "homepage": "https://github.com/<GITHUB_USERNAME>/DESCrypt",
+  "license": "MIT",
+  "authors": {
+    "Maxim Keegan": "maxim@keegan.ru"
+  },
+  "source": {
+    "git": "https://github.com/MaximKeegan/DESCrypt.git",
+    "tag": "0.1.0"
+  },
+  "requires_arc": true,
+  "source_files": "Pod/Classes/**/*",
+  "xcconfig": {
+    "HEADER_SEARCH_PATHS": "$(inherited)"
+  },
+  "libraries": "c++"
+}
