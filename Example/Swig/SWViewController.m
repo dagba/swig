@@ -58,7 +58,14 @@
         [self performSegueWithIdentifier:@"SWViewControllerPushSWConfirmViewController" sender:self];
     }];
     
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapGesture)];
+    [self.view addGestureRecognizer:tap];
+    
 	// Do any additional setup after loading the view, typically from a nib.
+}
+
+- (void) tapGesture {
+    [self.view endEditing:YES];
 }
 
 - (void) viewDidAppear:(BOOL)animated {

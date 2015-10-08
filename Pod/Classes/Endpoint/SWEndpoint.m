@@ -413,7 +413,11 @@ static SWEndpoint *_sharedEndpoint = nil;
         pjsua_transport_config transportConfig;
         pjsua_transport_id transportId;
         
+        pjsip_tls_setting tls_setting;
+        pjsip_tls_setting_default(&tls_setting);
+        
         pjsua_transport_config_default(&transportConfig);
+        transportConfig.tls_setting = tls_setting;
         
         pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
         
@@ -740,7 +744,7 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
     
-    NSLog(@"%@ %@", tp, info);
+//    NSLog(@"%@ %@", tp, info);
 }
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e){
@@ -781,6 +785,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         [self incomingNotify:data];
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
+        //        [self incomingInvite:data];
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
+        [self incomingRefer:data];
+        return PJ_TRUE;
         //        [self incomingInvite:data];
     }
     return PJ_FALSE;
@@ -960,6 +968,85 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     //    delete abonent;
     //    delete message_txt;
     //    delete to;
+}
+
+- (void) incomingRefer:(pjsip_rx_data *)data {
+    /* Смотрим о каком абоненте речь в сообщении */
+    
+    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+    
+    pjsip_sip_uri *uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+    
+    pj_str_t  smid_hdr_str = pj_str((char *)"Refer-To");
+    pjsip_generic_string_hdr* refer_to = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+    if (refer_to == nil) {
+        return;
+    }
+
+    
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    pj_str_t       contact;
+    
+    
+    pj_str_t hname = pj_str((char *)"Event");
+    pj_str_t hvalue = pj_str((char *)"Ready");
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(_pjPool, &hname, &hvalue);
+
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    contact = [[NSString stringWithFormat:@"<sip:%@@%@>;q=0.5;expires=%d", account.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info(0, &info);
+    
+    NSLog(@"info %@", [NSString stringWithPJString:info.acc_uri]);
+    
+    //    pj_str_t local = [_LocalURI pjString];
+    //    pj_str_t proxy = [_ProxyURI pjString];
+
+    pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
+    pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
+
+    char to_string[256];
+    char from_string[256];
+
+    pj_str_t source;
+    source.ptr = to_string;
+    source.slen = snprintf(to_string, 256, "sip:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
+
+    pj_str_t target;
+    target.ptr = from_string;
+    target.slen = snprintf(from_string, 256, "sip:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_notify_method,
+                                        &refer_to->hvalue, //proxy
+                                        &source, //from
+                                        &target, //to
+                                        &contact, //contact
+                                        &data->msg_info.cid->id,
+                                        data->msg_info.cseq->cseq,
+                                        nil,
+                                        &tx_msg);
+    
+
+    if (status != PJ_SUCCESS) {
+        return;
+    }
+
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    }
 }
 
 

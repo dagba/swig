@@ -322,6 +322,7 @@
     else {
         
         SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
+
         
         [self addCall:call];
     }
