@@ -18,8 +18,8 @@
     
     NSString *sipUri = uri;
     
-    if (![sipUri hasPrefix:@"sip:"]) {
-        sipUri = [NSString stringWithFormat:@"sip:%@", sipUri];
+    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
+        sipUri = [NSString stringWithFormat:@"sips:%@", sipUri];
     }
     
     return sipUri;
@@ -47,8 +47,8 @@
     
     NSString *sipUri = uri;
     
-    if (![sipUri hasPrefix:@"sip:"]) {
-        sipUri = [NSString stringWithFormat:@"sip:%@", sipUri];
+    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
+        sipUri = [NSString stringWithFormat:@"sips:%@", sipUri];
     }
     
     if (displayName) {

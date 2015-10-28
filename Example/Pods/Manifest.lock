@@ -9,6 +9,7 @@ PODS:
   - CocoaLumberjack/Extensions (2.0.0-rc):
     - CocoaLumberjack/Default
   - DESCrypt (0.1.0)
+  - IQKeyboardManager (3.3.2)
   - libextobjc (0.4.1):
     - libextobjc/EXTADT (= 0.4.1)
     - libextobjc/EXTConcreteProtocol (= 0.4.1)
@@ -57,13 +58,16 @@ DEPENDENCIES:
   - AFNetworking/Reachability (~> 2.3)
   - CocoaLumberjack (= 2.0.0-rc)
   - DESCrypt (from `https://github.com/MaximKeegan/DESCrypt.git`)
+  - IQKeyboardManager
   - libextobjc (~> 0.4)
-  - pjsip-ios
+  - pjsip-ios (from `../../../Pods/pjsip-ios`)
   - Swig (from `../`)
 
 EXTERNAL SOURCES:
   DESCrypt:
     :git: https://github.com/MaximKeegan/DESCrypt.git
+  pjsip-ios:
+    :path: ../../../Pods/pjsip-ios
   Swig:
     :path: ../
 
@@ -76,9 +80,10 @@ SPEC CHECKSUMS:
   AFNetworking: 79f7eb1a0fcfa7beb409332b2ca49afe9ce53b05
   CocoaLumberjack: 04c5b9b7479dd4276a09700fcd6644423ea1751c
   DESCrypt: 96f964f1d69f9954dfab0e93c1f9b01ddab4561f
+  IQKeyboardManager: d863eb0bca424d1f6dad6bdd1f856af52664add8
   libextobjc: a650fc1bf489a3d3a9bc2e621efa3e1006fc5471
   OpenSSL-Universal: 5b864c8eb334c8e78f44e4b2eb294ee2c1891c23
-  pjsip-ios: c950c1b4f09c27cfe923e3dff4ff0b6c255c3c2b
+  pjsip-ios: 68daea244af48f837f9c699ba5c4984108d294cf
   Swig: 042c6f633f8fa471db0fa954ab5afd304262dd55
 
 COCOAPODS: 0.38.2

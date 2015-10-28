@@ -7,7 +7,6 @@
 //
 
 #import "SWAccountConfiguration.h"
-#import "DESCrypt.h"
 
 @implementation SWAccountConfiguration
 
@@ -33,9 +32,10 @@
     NSUUID *oNSUUID = [[UIDevice currentDevice] identifierForVendor];
     _password = [oNSUUID UUIDString];
     
+    NSLog(@"%@:%@", _username, _password);
     
-//    _username = @"79220000002";
-//    _password = @"1148111e-435f-403a-bd0d-a56e7e70c2bf_5.7";
+//    _username = @"79220000033";
+//    _password = @"1234567890";
     
     _code = @"";
     _registerOnAdd = NO;
@@ -45,14 +45,6 @@
 
 +(NSString *)addressFromUsername:(NSString *)username domain:(NSString *)domain {
     return [NSString stringWithFormat:@"%@@%@", username, domain];
-}
-
-- (NSString *) cryptedUsername {
-    return [DESCrypt crypt:self.username withCode:self.code baseTable:@"EWSIPfghijklmnopqrstuvwxyz012345"];
-
-}
-- (NSString *) cryptedPassword {
-    return [DESCrypt crypt:self.password withCode:self.code baseTable:@"EWSIPfghijklmnopqrstuvwxyz012345"];
 }
 
 @end

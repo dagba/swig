@@ -20,6 +20,19 @@ typedef NS_ENUM(NSInteger, SWAccountState) {
     SWAccountStateOffline
 };
 
+typedef NS_ENUM(NSInteger, SWPresenseState) {
+    SWPresenseStateOffline,
+    SWPresenseStateOnline
+};
+
+typedef NS_ENUM(NSInteger, SWFileType) {
+    SWFileTypeNo,
+    SWFileTypeBin,
+    SWFileTypePicture,
+    SWFileTypeAudio,
+    SWFileTypeVideo
+};
+
 @interface SWAccount : NSObject <SWAccountProtocol>
 
 @property (nonatomic, readonly) NSInteger accountId;
@@ -43,5 +56,10 @@ typedef NS_ENUM(NSInteger, SWAccountState) {
 //-(void)endCall:(NSInteger)callId completionHandler:(void(^)(NSError *error))handler;
 
 -(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler;
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler;
+-(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
+
+-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
+-(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler;
 
 @end

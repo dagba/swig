@@ -70,23 +70,21 @@
         self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
     }
     
-    NSString *tcpSuffix = @"";
+    NSString *suffix = @"";
     
-    if ([[SWEndpoint sharedEndpoint] hasTCPConfiguration]) {
-        tcpSuffix = @";transport=TCP";
-    }
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
     
-    acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:tcpSuffix] withDisplayName:self.accountConfiguration.displayName] pjString];
-    acc_cfg.reg_uri = [[SWUriFormatter sipUri:[self.accountConfiguration.domain stringByAppendingString:tcpSuffix]] pjString];
+    acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
+    acc_cfg.reg_uri = [[SWUriFormatter sipUri:[self.accountConfiguration.domain stringByAppendingString:suffix]] pjString];
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
-//    acc_cfg.mwi_enabled = YES;
-    
-//    acc_cfg.ka_interval
     
     acc_cfg.cred_count = 1;
     acc_cfg.cred_info[0].scheme = [self.accountConfiguration.authScheme pjString];
@@ -95,17 +93,25 @@
     acc_cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
     acc_cfg.cred_info[0].data = [self.accountConfiguration.password pjString];
 
+    if ([self.accountConfiguration.code length] == 4) {
+        pj_str_t hname = pj_str((char *)"Auth");
+        pj_str_t hvalue = [[NSString stringWithFormat:@"code = %@; UID = %@", self.accountConfiguration.code, self.accountConfiguration.password] pjString];
+        
+        struct pjsip_generic_string_hdr event_hdr;
+        pjsip_generic_string_hdr_init2(&event_hdr, &hname, &hvalue);
+
+        pj_list_push_back(&acc_cfg.reg_hdr_list, &event_hdr);
+    }
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;
+    } else {
+        acc_cfg.proxy_cnt = 1;
+        acc_cfg.proxy[0] = [[SWUriFormatter sipUri:[self.accountConfiguration.proxy stringByAppendingString:suffix]] pjString];
     }
     
-    else {
-        acc_cfg.proxy_cnt = 1;
-        acc_cfg.proxy[0] = [[SWUriFormatter sipUri:[self.accountConfiguration.proxy stringByAppendingString:tcpSuffix]] pjString];
-    }
     
     pj_status_t status;
     
@@ -122,9 +128,7 @@
         }
         
         return;
-    }
-    
-    else {
+    } else {
         [[SWEndpoint sharedEndpoint] addAccount:self];
     }
     
@@ -332,39 +336,11 @@
     }
 }
 
-//-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
-//    
-//    pj_status_t status;
-//    NSError *error;
-//    
-//    pj_str_t pjURI = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-//    
-//    pj_str_t contentType = [@"text/plain" pjString];
-//    
-//    NSData *data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
-//    
-//    char * a = (char *)[data bytes];
-//    
-//    pj_str_t pjMessage;
-//    
-//    pj_strset(&pjMessage, a, (int)[data length]);
-//    
-//    pjsua_msg_data msg_data;
-//    
-//    pjsua_msg_data_init(&msg_data);
-//    
-//    status = pjsua_im_send((int)self.accountId, &pjURI, &contentType, &pjMessage, &msg_data, nil);
-//
-//    if (status != PJ_SUCCESS) {
-//        error = [NSError errorWithDomain:@"Error sendind message" code:0 userInfo:nil];
-//    }
-//
-//    if (handler) {
-//        handler(error);
-//    }
-//}
-
 -(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
+    [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI completionHandler:handler];
+}
+
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     pj_str_t       contact;
@@ -379,7 +355,7 @@
     
     pjsua_acc_info info;
     
-    pjsua_acc_get_info(self.accountId, &info);
+    pjsua_acc_get_info((int)self.accountId, &info);
     
     NSData *message_data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
 
@@ -407,7 +383,25 @@
         return;
     }
     
-    pjsip_cid_hdr *smid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
+    if (fileType != SWFileTypeNo) {
+        pj_str_t hname = pj_str((char *)"FileType");
+        char to_string[256];
+        pj_str_t hvalue;
+        hvalue.ptr = to_string;
+        hvalue.slen = sprintf(to_string, "%lu",(unsigned long)fileType);
+        pjsip_generic_string_hdr* filetype_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        
+        hname = pj_str((char *)"FileHash");
+        
+        hvalue = [fileHash pjString];
+
+        pjsip_generic_string_hdr* file_hash_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)filetype_hdr);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)file_hash_hdr);
+    }
+    
+    pjsip_cid_hdr *cid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
     
     status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
     if (status != PJ_SUCCESS) {
@@ -416,9 +410,189 @@
         return;
     }
     
-    handler(nil, [NSString stringWithPJString:smid_hdr->id]);
+    handler(nil, [NSString stringWithPJString:cid_hdr->id]);
 }
 
 
+-(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname = pj_str((char *)"Event");
+    char to_string[256];
+    pj_str_t hvalue;
+    hvalue.ptr = to_string;
+    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    
+    hname = pj_str((char *)"SMID");
+    hvalue.ptr = to_string;
+    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
+    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+//    pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
+//    pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
+    
+//    char to_string[256];
+//    char from_string[256];
+//    
+//    pj_str_t source;
+//    source.ptr = to_string;
+//    source.slen = snprintf(to_string, 256, "sip:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
+//    
+//    pj_str_t target;
+//    target.ptr = from_string;
+//    target.slen = snprintf(from_string, 256, "sip:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
+
+    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+
+
+    
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_notify_method,
+                                        &info.acc_uri, //proxy
+                                        &info.acc_uri, //from
+                                        &target, //to
+                                        &info.acc_uri, //contact
+                                        NULL,
+                                        -1,
+                                        NULL,
+                                        &tx_msg);
+    
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
+        handler(error);
+    
+        return;
+    }
+    
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+    }
+}
+
+-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname = pj_str((char *)"Event");
+    
+    char to_string[256];
+    pj_str_t hvalue;
+    hvalue.ptr = to_string;
+    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)state);
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_publish_method,
+                                        &info.acc_uri, //proxy
+                                        &info.acc_uri, //from
+                                        &info.acc_uri, //to
+                                        &info.acc_uri, //contact
+                                        NULL,
+                                        -1,
+                                        NULL,
+                                        &tx_msg);
+    
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+    
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+    }
+
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+}
+
+-(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname = pj_str((char *)"Event");
+    
+    pj_str_t hvalue = pj_str((char *)"presence");
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+    
+    /* Создаем непосредственно запрос */
+    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+                                        &pjsip_subscribe_method,
+                                        &info.acc_uri, //proxy
+                                        &info.acc_uri, //from
+                                        &target, //to
+                                        &info.acc_uri, //contact
+                                        NULL,
+                                        -1,
+                                        NULL,
+                                        &tx_msg);
+    
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create subscribe request" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+    }
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to send subscribe requesrt" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+}
 
 @end

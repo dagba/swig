@@ -58,10 +58,12 @@ install_resource()
   esac
 }
 if [[ "$CONFIGURATION" == "Debug" ]]; then
+  install_resource "IQKeyboardManager/IQKeyBoardManager/Resources/IQKeyboardManager.bundle"
   install_resource "../../Pod/Assets/Ringtone.aif"
   install_resource "../../Pod/SoundSwitch/mute.caf"
 fi
 if [[ "$CONFIGURATION" == "Release" ]]; then
+  install_resource "IQKeyboardManager/IQKeyBoardManager/Resources/IQKeyboardManager.bundle"
   install_resource "../../Pod/Assets/Ringtone.aif"
   install_resource "../../Pod/SoundSwitch/mute.caf"
 fi

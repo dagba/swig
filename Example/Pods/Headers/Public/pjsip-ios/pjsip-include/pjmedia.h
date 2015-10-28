@@ -1,1 +1,1 @@
-../../../../pjsip-ios/Pod/pjsip-include/pjmedia.h
+../../../../../../../../Pods/pjsip-ios/Pod/pjsip-include/pjmedia.h

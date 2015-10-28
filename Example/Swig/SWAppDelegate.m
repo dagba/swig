@@ -14,12 +14,14 @@
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
-    
-    NSUserDefaults * standardUserDefaults = [NSUserDefaults standardUserDefaults];
-    if (![standardUserDefaults objectForKey:@"phone"] || ![standardUserDefaults objectForKey:@"domain"]) {
-        [self registerDefaultsFromSettingsBundle];
-    }
 
+    NSUserDefaults * standardUserDefaults = [NSUserDefaults standardUserDefaults];
+
+    NSDictionary *userDefaultsDefaults = [NSDictionary dictionaryWithObjectsAndKeys:
+                                          @"79220000057", @"phone",
+                                          @"193.200.21.126", @"domain",
+                                          nil];
+    [standardUserDefaults registerDefaults:userDefaultsDefaults];
     
     NSLog(@"phone: %@", [standardUserDefaults objectForKey:@"phone"]);
     NSLog(@"domain: %@", [standardUserDefaults objectForKey:@"domain"]);
@@ -32,50 +34,6 @@
     return YES;
 }
 
-#pragma NSUserDefaults
-- (void)registerDefaultsFromSettingsBundle
-{
-    NSLog(@"Registering default values from Settings.bundle");
-    NSUserDefaults * defs = [NSUserDefaults standardUserDefaults];
-    [defs synchronize];
-    
-    NSString *settingsBundle = [[NSBundle mainBundle] pathForResource:@"Settings" ofType:@"bundle"];
-    
-    if(!settingsBundle)
-    {
-        NSLog(@"Could not find Settings.bundle");
-        return;
-    }
-    
-    NSDictionary *settings = [NSDictionary dictionaryWithContentsOfFile:[settingsBundle stringByAppendingPathComponent:@"Root.plist"]];
-    NSArray *preferences = [settings objectForKey:@"PreferenceSpecifiers"];
-    NSMutableDictionary *defaultsToRegister = [[NSMutableDictionary alloc] initWithCapacity:[preferences count]];
-    
-    for (NSDictionary *prefSpecification in preferences)
-    {
-        NSString *key = [prefSpecification objectForKey:@"Key"];
-        if (key)
-        {
-            // check if value readable in userDefaults
-            id currentObject = [defs objectForKey:key];
-            if (currentObject == nil)
-            {
-                // not readable: set value from Settings.bundle
-                id objectToSet = [prefSpecification objectForKey:@"DefaultValue"];
-                [defaultsToRegister setObject:objectToSet forKey:key];
-                NSLog(@"Setting object %@ for key %@", objectToSet, key);
-            }
-            else
-            {
-                // already readable: don't touch
-                NSLog(@"Key %@ is readable (value: %@), nothing written to defaults.", key, currentObject);
-            }
-        }
-    }
-    
-    [defs registerDefaults:defaultsToRegister];
-    [defs synchronize];
-}
 
 - (void)applicationWillResignActive:(UIApplication *)application
 {
@@ -106,13 +64,13 @@
 
 -(void)configureEndpoint {
     
-    SWTransportConfiguration *udp = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeUDP];
+//    SWTransportConfiguration *udp = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeUDP];
 //    udp.port = 5060;
     
-//    SWTransportConfiguration *tcp = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeTCP];
-//    tcp.port = 5060;
+    SWTransportConfiguration *tls = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeTLS];
+    tls.port = 5060;
     
-    SWEndpointConfiguration *endpointConfiguration = [SWEndpointConfiguration configurationWithTransportConfigurations:@[udp]];
+    SWEndpointConfiguration *endpointConfiguration = [SWEndpointConfiguration configurationWithTransportConfigurations:@[tls]];
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
@@ -166,6 +124,7 @@
     configuration.address = [SWAccountConfiguration addressFromUsername:configuration.username domain:configuration.domain];
 //    configuration.proxy = @"sbc.multifon.ru";
     configuration.registerOnAdd = YES;
+//    configuration.authScheme = @"Basic";
     
     [account configure:configuration completionHandler:^(NSError *error) {
         

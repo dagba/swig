@@ -225,6 +225,7 @@
             
         case PJSIP_INV_STATE_INCOMING: {
             [[SWEndpoint sharedEndpoint].ringtone start];
+            [self sendRinging];
             self.callState = SWCallStateIncoming;
         } break;
             
@@ -234,7 +235,9 @@
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
-            [self.ringback start];
+            if (!self.inbound) {
+                [self.ringback start];
+            }
             self.callState = SWCallStateCalling;
         } break;
             
@@ -290,6 +293,20 @@
     
     self.contact = [SWUriFormatter contactFromURI:remoteURI];
 }
+
+- (void) sendRinging {
+    pj_status_t status;
+    NSError *error;
+    
+    status = pjsua_call_answer((int)self.callId, PJSIP_SC_RINGING, NULL, NULL);
+    
+    if (status != PJ_SUCCESS) {
+        
+        error = [NSError errorWithDomain:@"Error send ringing" code:0 userInfo:nil];
+    }
+    
+}
+
 
 #pragma Call Management
 

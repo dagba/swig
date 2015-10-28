@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "901BDABC9C78210D97D87B25"
+               BlueprintIdentifier = "62E1606C900A5288196203FD"
                BuildableName = "libSwig.a"
                BlueprintName = "Swig"
                ReferencedContainer = "container:Pods.xcodeproj">

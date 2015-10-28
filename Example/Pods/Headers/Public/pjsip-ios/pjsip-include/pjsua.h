@@ -1,1 +1,1 @@
-../../../../pjsip-ios/Pod/pjsip-include/pjsua.h
+../../../../../../../../Pods/pjsip-ios/Pod/pjsip-include/pjsua.h

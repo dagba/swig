@@ -5,12 +5,14 @@
   },
   "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
     "23EA03446048746F7F90E807CE8C8559967606AB" : 0,
-    "2F0639FD04F9CE2E69C5DF9ED88DAF1FE9E2FDF7" : 0
+    "2F0639FD04F9CE2E69C5DF9ED88DAF1FE9E2FDF7" : 0,
+    "B820881F0E41DF003B6F0D1CA598B6D3472EE2AD" : 0
   },
   "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "B855B939-0799-4CF9-B939-2927FB52CBFC",
   "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
     "23EA03446048746F7F90E807CE8C8559967606AB" : "swig",
-    "2F0639FD04F9CE2E69C5DF9ED88DAF1FE9E2FDF7" : "Pods\/DESCrypt"
+    "2F0639FD04F9CE2E69C5DF9ED88DAF1FE9E2FDF7" : "Pods\/DESCrypt",
+    "B820881F0E41DF003B6F0D1CA598B6D3472EE2AD" : "..\/Pods\/pjsip-ios"
   },
   "DVTSourceControlWorkspaceBlueprintNameKey" : "Swig",
   "DVTSourceControlWorkspaceBlueprintVersion" : 204,
@@ -25,6 +27,11 @@
       "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:MaximKeegan\/DESCrypt.git",
       "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
       "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "2F0639FD04F9CE2E69C5DF9ED88DAF1FE9E2FDF7"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:MaximKeegan\/pjsip-ios.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "B820881F0E41DF003B6F0D1CA598B6D3472EE2AD"
     }
   ]
 }

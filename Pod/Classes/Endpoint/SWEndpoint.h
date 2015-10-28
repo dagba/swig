@@ -12,11 +12,23 @@
 #import "SWRingtone.h"
 #import <pjnath.h>
 
-typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, NSUInteger status);
-typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *message, NSUInteger messageID);
+typedef NS_ENUM(NSUInteger, SWMessageStatus) {
+    SWMessageStatusUnknown = 0,
+    SWMessageStatusSended = 1,
+    SWMessageStatusDelivered = 2,
+    SWMessageStatusNotDelivered = 3,
+    SWMessageStatusRead = 4
+};
+
+typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status);
+typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *message, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
-typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, NSUInteger status);
+typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
+typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
+typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
+
+
 
 @class SWEndpointConfiguration, SWAccount, SWCall;
 
@@ -47,11 +59,15 @@ typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, 
 - (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
+- (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);
 - (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock;
 - (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock;
+
+- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
+
 
 
 -(void)keepAlive;

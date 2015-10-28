@@ -25,7 +25,4 @@
 
 +(NSString *)addressFromUsername:(NSString *)username domain:(NSString *)domain;
 
-- (NSString *) cryptedUsername;
-- (NSString *) cryptedPassword;
-
 @end
