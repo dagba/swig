@@ -1,1 +1,5 @@
-AFNETWORKING_OTHER_LDFLAGS = -framework "SystemConfiguration"
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1
+HEADER_SEARCH_PATHS = "${PODS_ROOT}/Headers/Private" "${PODS_ROOT}/Headers/Private/AFNetworking" "${PODS_ROOT}/Headers/Public" "${PODS_ROOT}/Headers/Public/AFNetworking" "${PODS_ROOT}/Headers/Public/CocoaLumberjack" "${PODS_ROOT}/Headers/Public/IQKeyboardManager" "${PODS_ROOT}/Headers/Public/OpenSSL" "${PODS_ROOT}/Headers/Public/Swig" "${PODS_ROOT}/Headers/Public/libextobjc" "${PODS_ROOT}/Headers/Public/pjsip-ios"
+OTHER_LDFLAGS = -framework "SystemConfiguration"
+PODS_ROOT = ${SRCROOT}
+SKIP_INSTALL = YES

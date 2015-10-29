@@ -18,8 +18,8 @@
   },
   "requires_arc": false,
   "dependencies": {
-    "OpenSSL-Universal": [
-      "1.0.1.k"
+    "OpenSSL": [
+      "~> 1.0"
     ]
   },
   "public_header_files": "Pod/pjsip-include/**",

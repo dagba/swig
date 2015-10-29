@@ -1,5 +1,0 @@
-#include "Swig.xcconfig"
-GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1 ${SWIG_GCC_PREPROCESSOR_DEFINITIONS}
-HEADER_SEARCH_PATHS = "${PODS_ROOT}/Headers/Private" "${PODS_ROOT}/Headers/Private/Swig" "${PODS_ROOT}/Headers/Public" "${PODS_ROOT}/Headers/Public/AFNetworking" "${PODS_ROOT}/Headers/Public/CocoaLumberjack" "${PODS_ROOT}/Headers/Public/DESCrypt" "${PODS_ROOT}/Headers/Public/IQKeyboardManager" "${PODS_ROOT}/Headers/Public/OpenSSL-Universal" "${PODS_ROOT}/Headers/Public/OpenSSL-Universal/openssl" "${PODS_ROOT}/Headers/Public/Swig" "${PODS_ROOT}/Headers/Public/libextobjc" "${PODS_ROOT}/Headers/Public/pjsip-ios" "${PODS_ROOT}/Headers/Public/pjsip-ios/pjsip-include" ${SWIG_HEADER_SEARCH_PATHS}
-PODS_ROOT = ${SRCROOT}
-SKIP_INSTALL = YES

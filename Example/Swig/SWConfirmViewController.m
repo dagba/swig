@@ -8,7 +8,7 @@
 
 #import "SWConfirmViewController.h"
 #import <Swig/Swig.h>
-#import "DESCrypt.h"
+//#import "DESCrypt.h"
 
 @interface SWConfirmViewController ()
 
@@ -43,19 +43,12 @@
 */
 - (IBAction)confirmAction:(UIButton *)sender {
     
-    SWAccount *account = [SWAccount new];
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
     
-    SWAccountConfiguration *configuration = [SWAccountConfiguration new];
-
-    [configuration setCode:_codeTextField.text];
-    
-//    configuration.domain = kDomain;
-    configuration.address = [SWAccountConfiguration addressFromUsername:configuration.username domain:configuration.domain];
-    configuration.registerOnAdd = YES;
-
-    [account configure:configuration completionHandler:^(NSError *error) {
-        NSLog(@"%@", error);
+    [account setCode:_codeTextField.text completionHandler:^(NSError *error) {
+        NSLog(@"error: %@", error);
     }];
+    
 }
 
 @end

@@ -74,9 +74,8 @@ static pj_bool_t on_rx_response(pjsip_rx_data *rdata)
     return [[SWEndpoint sharedEndpoint] responsePackageProcessing:rdata];
 }
 
-static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
-{
-
+//static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
+//{
 //    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
 //
 //    pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);
@@ -97,9 +96,8 @@ static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
 //        
 //        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
 //    }
-    
-    return PJ_FALSE;
-}
+//    return PJ_FALSE;
+//}
 
 
 static pjsip_module sipgate_module =
@@ -723,9 +721,9 @@ static void SWOnRegState(pjsua_acc_id acc_id) {
             [SWEndpoint sharedEndpoint].accountStateChangeBlock(account);
         }
         
-        if (account.accountState == SWAccountStateDisconnected) {
-            [[SWEndpoint sharedEndpoint] removeAccount:account];
-        }
+//        if (account.accountState == SWAccountStateDisconnected) {
+//            [[SWEndpoint sharedEndpoint] removeAccount:account];
+//        }
     }
 }
 
@@ -845,7 +843,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return PJ_FALSE;
     }
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+//    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
 
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_register_method) == 0) {
 
@@ -894,7 +892,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
         
-        if (status == PJSIP_SC_NOT_FOUND && [account.accountConfiguration.code length] != 4){
+//        if (status == PJSIP_SC_NOT_FOUND && [account.accountConfiguration.code length] != 4){
+        if (status == PJSIP_SC_NOT_FOUND){
             if (_needConfirmBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _needConfirmBlock(account, PJSIP_SC_NOT_FOUND);

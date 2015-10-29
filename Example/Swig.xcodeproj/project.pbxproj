@@ -455,6 +455,7 @@
 				0656874E1A7B2FE400F3037B /* Frameworks */,
 				0656874F1A7B2FE400F3037B /* Resources */,
 				17B6653ACB5E9389F8EBF4D0 /* Copy Pods Resources */,
+				75388D1ED2AEBEE5E20B3C84 /* Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -493,6 +494,7 @@
 				065D23131A7B5ADA008A280F /* Frameworks */,
 				065D23141A7B5ADA008A280F /* Resources */,
 				EC0222D0778F0E3B835AB2F0 /* Copy Pods Resources */,
+				19AA6291B7657D23D8EBD2FF /* Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -513,6 +515,7 @@
 				6003F587195388D20070C39A /* Frameworks */,
 				6003F588195388D20070C39A /* Resources */,
 				A92827CE5F054A2D9BE9632B /* Copy Pods Resources */,
+				234B5DBA3D1106000C9CF934 /* Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -635,6 +638,36 @@
 			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Swig-Swift/Pods-Swig-Swift-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		19AA6291B7657D23D8EBD2FF /* Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Pods Frameworks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Swig-PodTests/Pods-Swig-PodTests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		234B5DBA3D1106000C9CF934 /* Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Pods Frameworks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Swig/Pods-Swig-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		61DD867C04EB01DE4B66EA2D /* Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -663,6 +696,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
+			showEnvVarsInLog = 0;
+		};
+		75388D1ED2AEBEE5E20B3C84 /* Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Pods Frameworks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Swig-Swift/Pods-Swig-Swift-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		9003D064BF7DC072A15B6F4A /* Check Pods Manifest.lock */ = {

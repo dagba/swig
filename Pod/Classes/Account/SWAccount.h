@@ -41,6 +41,7 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 @property (nonatomic, readonly , assign, getter=isValid) BOOL valid;
 
 -(void)configure:(SWAccountConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler; //configure and add account
+-(void)setCode: (NSString *)code completionHandler:(void(^)(NSError *error))handler;
 -(void)connect:(void(^)(NSError *error))handler;
 -(void)disconnect:(void(^)(NSError *error))handler;
 

@@ -93,15 +93,6 @@
     acc_cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
     acc_cfg.cred_info[0].data = [self.accountConfiguration.password pjString];
 
-    if ([self.accountConfiguration.code length] == 4) {
-        pj_str_t hname = pj_str((char *)"Auth");
-        pj_str_t hvalue = [[NSString stringWithFormat:@"code = %@; UID = %@", self.accountConfiguration.code, self.accountConfiguration.password] pjString];
-        
-        struct pjsip_generic_string_hdr event_hdr;
-        pjsip_generic_string_hdr_init2(&event_hdr, &hname, &hvalue);
-
-        pj_list_push_back(&acc_cfg.reg_hdr_list, &event_hdr);
-    }
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
     
@@ -141,6 +132,53 @@
         if (handler) {
             handler(nil);
         }
+    }
+}
+
+- (void) setCode: (NSString *) code completionHandler:(void(^)(NSError *error))handler {
+    if ([code length] == 4) {
+        pjsua_acc_config acc_cfg;
+        pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+            
+            if (handler) {
+                handler(error);
+            }
+            return;
+        }
+
+        
+        pj_str_t hname = pj_str((char *)"Auth");
+        pj_str_t hvalue = [[NSString stringWithFormat:@"code = %@; UID = %@", code, self.accountConfiguration.password] pjString];
+        
+        struct pjsip_generic_string_hdr event_hdr;
+        pjsip_generic_string_hdr_init2(&event_hdr, &hname, &hvalue);
+
+
+        
+        pj_list_push_back(&acc_cfg.reg_hdr_list, &event_hdr);
+        status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
+            
+            if (handler) {
+                handler(error);
+            }
+            return;
+        }
+
+        
+        if (handler) {
+            handler(nil);
+        }
+        return;
+    }
+    NSError *error = [NSError errorWithDomain:@"Code invalid" code:0 userInfo:nil];
+    if (handler) {
+        handler(error);
     }
 }
 

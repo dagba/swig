@@ -37,7 +37,7 @@
 //    _username = @"79220000033";
 //    _password = @"1234567890";
     
-    _code = @"";
+//    _code = @"";
     _registerOnAdd = NO;
     
     return self;

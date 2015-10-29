@@ -1,2 +1,4 @@
-SWIG_GCC_PREPROCESSOR_DEFINITIONS = $(inherited) PJ_AUTOCONF=1
-SWIG_HEADER_SEARCH_PATHS = $(inherited) $(PODS_ROOT)/pjsip-ios/Pod/pjsip-include $(SOURCE_ROOT)/../Pod/pjsip-include
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) COCOAPODS=1 $(inherited) PJ_AUTOCONF=1
+HEADER_SEARCH_PATHS = "${PODS_ROOT}/Headers/Private" "${PODS_ROOT}/Headers/Private/Swig" "${PODS_ROOT}/Headers/Public" "${PODS_ROOT}/Headers/Public/AFNetworking" "${PODS_ROOT}/Headers/Public/CocoaLumberjack" "${PODS_ROOT}/Headers/Public/IQKeyboardManager" "${PODS_ROOT}/Headers/Public/OpenSSL" "${PODS_ROOT}/Headers/Public/Swig" "${PODS_ROOT}/Headers/Public/libextobjc" "${PODS_ROOT}/Headers/Public/pjsip-ios" $(inherited) $(PODS_ROOT)/pjsip-ios/Pod/pjsip-include $(SOURCE_ROOT)/../Pod/pjsip-include
+PODS_ROOT = ${SRCROOT}
+SKIP_INSTALL = YES

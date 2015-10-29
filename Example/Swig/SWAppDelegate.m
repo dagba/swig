@@ -18,7 +18,7 @@
     NSUserDefaults * standardUserDefaults = [NSUserDefaults standardUserDefaults];
 
     NSDictionary *userDefaultsDefaults = [NSDictionary dictionaryWithObjectsAndKeys:
-                                          @"79220000057", @"phone",
+                                          @"79220000055", @"phone",
                                           @"193.200.21.126", @"domain",
                                           nil];
     [standardUserDefaults registerDefaults:userDefaultsDefaults];
