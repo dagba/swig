@@ -949,10 +949,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             
             pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
             NSString *URIto = [NSString stringWithPJString:to->user];
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
-            });
+            if (_readyToSendFileBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
+                });
+            }
             
             
             return PJ_TRUE;
@@ -960,10 +961,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
 
 
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            _messageSentBlock(account, call_id, sm_id, status);
-        });
+        if (_messageSentBlock) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                _messageSentBlock(account, call_id, sm_id, status);
+            });
+        }
         return PJ_TRUE;
     }
     
@@ -996,12 +998,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         char   buf[32] = {0};
         memcpy(buf, status_hdr->hvalue.ptr, status_hdr->hvalue.slen);
         status = atoi(buf);
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (_abonentStatusBlock) {
+
+        if (_abonentStatusBlock) {
+            dispatch_async(dispatch_get_main_queue(), ^{
                 _abonentStatusBlock(account, abonent, (SWPresenseState)status);
-            }
-        });
+            });
+        }
+
         [self sendSubmit:data withCode:PJSIP_SC_OK];
         //        delete abonent;
         return;
@@ -1020,11 +1023,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             NSUInteger event_value = atoi(event_hdr->hvalue.ptr);
 
             /* Передаем идентификатор и статус сообщения в GUI */
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (_messageStatusBlock) {
-                    _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
-                }
-            });
+            if (_messageStatusBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                        _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
+                });
+            }
             
             [self sendSubmit:data withCode:PJSIP_SC_OK];
         }
@@ -1086,12 +1089,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             fileHash = [NSString stringWithPJString:file_hash_hdr->hvalue];
         }
     }
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (_messageReceivedBlock) {
-            _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id, fileType, fileHash);
-        }
-    });
+
+    if (_messageReceivedBlock) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+                _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id, fileType, fileHash);
+        });
+    }
     
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
