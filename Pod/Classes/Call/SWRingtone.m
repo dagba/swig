@@ -57,21 +57,23 @@
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
 
-    @weakify(self);
-    [SharkfoodMuteSwitchDetector shared].silentNotify = ^(BOOL silent){
-        
-        @strongify(self);
-        
-        if (silent) {
-            
-            self.volume = 0.0;
-        }
-        
-        else {
-            
-            self.volume = 1.0;
-        }
-    };
+    self.volume = 1;
+    
+//    @weakify(self);
+//    [SharkfoodMuteSwitchDetector shared].silentNotify = ^(BOOL silent){
+//        
+//        @strongify(self);
+//        
+//        if (silent) {
+//            
+//            self.volume = 0.0;
+//        }
+//        
+//        else {
+//            
+//            self.volume = 1.0;
+//        }
+//    };
     
     return self;
 }

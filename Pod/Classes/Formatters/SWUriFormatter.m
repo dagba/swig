@@ -7,7 +7,7 @@
 //
 
 #import "SWUriFormatter.h"
-//#import "Swig.h"
+#import "Swig.h"
 #import "SWContact.h"
 #import "SWAccount.h"
 #import "SWAccountConfiguration.h"
@@ -18,8 +18,16 @@
     
     NSString *sipUri = uri;
     
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+
+    NSString *urlSchema = @"sip";
+    if (transport_info.type == PJSIP_TRANSPORT_TLS || transport_info.type == PJSIP_TRANSPORT_TLS6) {
+        urlSchema = @"sips";
+    }
+    
     if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
-        sipUri = [NSString stringWithFormat:@"sips:%@", sipUri];
+        sipUri = [NSString stringWithFormat:@"%@:%@", urlSchema, sipUri];
     }
     
     return sipUri;
@@ -47,8 +55,16 @@
     
     NSString *sipUri = uri;
     
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+
+    NSString *urlSchema = @"sip";
+    if (transport_info.type == PJSIP_TRANSPORT_TLS || transport_info.type == PJSIP_TRANSPORT_TLS6) {
+        urlSchema = @"sips";
+    }
+    
     if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
-        sipUri = [NSString stringWithFormat:@"sips:%@", sipUri];
+        sipUri = [NSString stringWithFormat:@"%@:%@", urlSchema, sipUri];
     }
     
     if (displayName) {

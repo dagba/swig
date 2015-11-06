@@ -22,15 +22,15 @@
     
     _displayName = nil;
     _address = nil;
-    _domain = [standardUserDefaults stringForKey:@"domain"];
+    _domain = @"";
     _proxy = nil;
     _authScheme = @"digest";
     _authRealm = @"*";
 
-    _username = [standardUserDefaults stringForKey:@"phone"];
+    _username = @"";
     
-    NSUUID *oNSUUID = [[UIDevice currentDevice] identifierForVendor];
-    _password = [oNSUUID UUIDString];
+    
+    _password = @"";
     
     NSLog(@"%@:%@", _username, _password);
     

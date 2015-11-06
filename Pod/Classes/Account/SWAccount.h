@@ -42,6 +42,7 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 
 -(void)configure:(SWAccountConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler; //configure and add account
 -(void)setCode: (NSString *)code completionHandler:(void(^)(NSError *error))handler;
+-(void)setPhone: (NSString *)phone completionHandler:(void(^)(NSError *error))handler;
 -(void)connect:(void(^)(NSError *error))handler;
 -(void)disconnect:(void(^)(NSError *error))handler;
 

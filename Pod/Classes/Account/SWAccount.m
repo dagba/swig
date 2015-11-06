@@ -82,7 +82,7 @@
     
     acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
     acc_cfg.reg_uri = [[SWUriFormatter sipUri:[self.accountConfiguration.domain stringByAppendingString:suffix]] pjString];
-    acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;;
+    acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
     
@@ -125,10 +125,7 @@
     
     if (!self.accountConfiguration.registerOnAdd) {
         [self connect:handler];
-    }
-    
-    else {
-        
+    } else {
         if (handler) {
             handler(nil);
         }
@@ -180,6 +177,40 @@
     if (handler) {
         handler(error);
     }
+}
+
+- (void) setPhone: (NSString *) phone completionHandler:(void(^)(NSError *error))handler {
+    self.accountConfiguration.username = phone;
+    pjsua_acc_config acc_cfg;
+    pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+        
+        if (handler) {
+            handler(error);
+        }
+        return;
+    }
+    
+    acc_cfg.cred_info[0].username = [phone pjString];
+    
+    status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
+        
+        if (handler) {
+            handler(error);
+        }
+        return;
+    }
+    
+    
+    if (handler) {
+        handler(nil);
+    }
+    return;
 }
 
 -(void)connect:(void(^)(NSError *error))handler {
