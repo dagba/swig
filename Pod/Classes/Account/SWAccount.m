@@ -75,7 +75,7 @@
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+    suffix = [NSString stringWithFormat:@":5060;transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
@@ -417,7 +417,7 @@
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    contact = [[NSString stringWithFormat:@"<sip:%@@%@>;q=0.5;expires=%d", self.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
+    contact = [[NSString stringWithFormat:@"<sips:%@@%@>;q=0.5;expires=%d", self.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
     
     pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
 
@@ -426,7 +426,8 @@
     
     pjsua_acc_get_info((int)self.accountId, &info);
     
-    NSData *message_data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
+//    NSData *message_data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
+    NSData *message_data = [message dataUsingEncoding:NSUTF8StringEncoding];
 
     char * a = (char *)[message_data bytes];
 
