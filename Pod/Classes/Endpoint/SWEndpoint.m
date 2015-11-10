@@ -74,30 +74,28 @@ static pj_bool_t on_rx_response(pjsip_rx_data *rdata)
     return [[SWEndpoint sharedEndpoint] responsePackageProcessing:rdata];
 }
 
-//static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
-//{
-//    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
-//
-//    pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);
-//
-//    pjsua_acc_id acc_id = pjsua_acc_find_for_outgoing(&uri->user);
-//    
-//    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-//
-//    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
-//        //        NSLog(@"data %@", data);
-//        pj_str_t hname = pj_str((char *)"Auth");
-//        pj_str_t hvalue = [[NSString stringWithFormat:@"code = %@; UID = %@", account.accountConfiguration.code, account.accountConfiguration.password] pjString];
-//        
-//        NSLog(@"%@", [[SWEndpoint sharedEndpoint] pjPool]);
-//        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua", 512, 512);
-//        
-//        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
-//        
-//        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
-//    }
-//    return PJ_FALSE;
-//}
+static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
+{
+    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
+
+    pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);
+
+    pjsua_acc_id acc_id = pjsua_acc_find_for_outgoing(&uri->user);
+    
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+
+    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
+        pj_str_t hname = pj_str((char *)"Auth");
+        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", account.accountConfiguration.code, account.accountConfiguration.password] pjString];
+        [account.accountConfiguration setCode:@""];
+        
+        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua", 512, 512);
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+    }
+    
+    return PJ_FALSE;
+}
 
 
 static pjsip_module sipgate_module =
@@ -114,7 +112,7 @@ static pjsip_module sipgate_module =
     NULL,                    /* unload() */
     &on_rx_request,          /* on_rx_request() */
     &on_rx_response,         /* on_rx_response() */
-    NULL,        /* on_tx_request() */
+    &on_tx_request,        /* on_tx_request() */
     NULL,       /* on_tx_response() */
     NULL,                    /* on_tsx_state() */
 };
@@ -912,22 +910,20 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 //        }
         
         if (status == PJSIP_SC_OK) {
-            
-            
-            pjsua_acc_config acc_cfg;
-            pj_status_t status = pjsua_acc_get_config((int)acc_id, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
-            
-            if (status != PJ_SUCCESS) {
-                NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
-            }
-            
-            
-            pj_list_erase(&acc_cfg.reg_hdr_list);
-            status = pjsua_acc_modify((int)acc_id, &acc_cfg);
-            
-            if (status != PJ_SUCCESS) {
-                NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
-            }
+//            pjsua_acc_config acc_cfg;
+//            pj_status_t status = pjsua_acc_get_config((int)acc_id, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+//            
+//            if (status != PJ_SUCCESS) {
+//                NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+//            }
+//            
+//            
+//            pj_list_erase(&acc_cfg.reg_hdr_list);
+//            status = pjsua_acc_modify((int)acc_id, &acc_cfg);
+//            
+//            if (status != PJ_SUCCESS) {
+//                NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
+//            }
             
             if (_confirmationBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -1186,8 +1182,14 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
-    if (status == PJ_SUCCESS) {
-        pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    if (status != PJ_SUCCESS) {
+        return;
+    }
+    
+    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    
+    if (status != PJ_SUCCESS) {
+        return;
     }
 }
 
