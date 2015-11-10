@@ -75,7 +75,7 @@
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@":5060;transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
@@ -148,14 +148,16 @@
 
         
         pj_str_t hname = pj_str((char *)"Auth");
-        pj_str_t hvalue = [[NSString stringWithFormat:@"code = %@; UID = %@", code, self.accountConfiguration.password] pjString];
+        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", code, self.accountConfiguration.password] pjString];
         
         struct pjsip_generic_string_hdr event_hdr;
         pjsip_generic_string_hdr_init2(&event_hdr, &hname, &hvalue);
 
 
-        
+        pj_list_erase(&acc_cfg.reg_hdr_list);
         pj_list_push_back(&acc_cfg.reg_hdr_list, &event_hdr);
+        
+        
         status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
         
         if (status != PJ_SUCCESS) {

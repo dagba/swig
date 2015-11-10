@@ -9,7 +9,7 @@
 #import "SWRingtone.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <AVFoundation/AVFoundation.h>
-#import "SharkfoodMuteSwitchDetector.h"
+//#import "SharkfoodMuteSwitchDetector.h"
 #import <UIKit/UIKit.h>
 #import <libextobjc/extobjc.h>
 #import "Logger.h"
@@ -180,14 +180,14 @@
 }
 
 -(void)handleEnteredForeground:(NSNotification *)notification {
-    
-    if ([SharkfoodMuteSwitchDetector shared].isMute) {
-        self.volume = 0.0;
-    }
-    
-    else {
-        self.volume = 1.0;
-    }
+    self.volume = 1.0;
+//    if ([SharkfoodMuteSwitchDetector shared].isMute) {
+//        self.volume = 0.0;
+//    }
+//    
+//    else {
+//        self.volume = 1.0;
+//    }
 }
 
 @end

@@ -392,7 +392,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_call_transfer_status = &SWOnCallTransferStatus;
     ua_cfg.cb.on_call_replaced = &SWOnCallReplaced;
     ua_cfg.cb.on_reg_state = &SWOnRegState;
-    ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
+//    ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
 //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
@@ -433,10 +433,10 @@ static SWEndpoint *_sharedEndpoint = nil;
         return;
     }
     
-    status = pjnath_init();
-    if (status != PJ_SUCCESS) {
-        return;
-    }
+//    status = pjnath_init();
+//    if (status != PJ_SUCCESS) {
+//        return;
+//    }
     
     
     //TODO autodetect port by checking transportId!!!!
@@ -912,6 +912,23 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 //        }
         
         if (status == PJSIP_SC_OK) {
+            
+            
+            pjsua_acc_config acc_cfg;
+            pj_status_t status = pjsua_acc_get_config((int)acc_id, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+            
+            if (status != PJ_SUCCESS) {
+                NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+            }
+            
+            
+            pj_list_erase(&acc_cfg.reg_hdr_list);
+            status = pjsua_acc_modify((int)acc_id, &acc_cfg);
+            
+            if (status != PJ_SUCCESS) {
+                NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
+            }
+            
             if (_confirmationBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _confirmationBlock(nil);
