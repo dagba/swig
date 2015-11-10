@@ -89,8 +89,10 @@ static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
         pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", account.accountConfiguration.code, account.accountConfiguration.password] pjString];
         [account.accountConfiguration setCode:@""];
         
-        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua", 512, 512);
+        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
         pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+        pj_pool_release(tempPool);
+        
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
     
