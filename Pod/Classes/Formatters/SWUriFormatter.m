@@ -11,6 +11,7 @@
 #import "SWContact.h"
 #import "SWAccount.h"
 #import "SWAccountConfiguration.h"
+#import "NSString+PJString.h"
 
 @implementation SWUriFormatter
 
@@ -128,6 +129,20 @@
     NSString *address = [uri substringWithRange:addressRange];
     
     return [[SWContact alloc] initWithName:[name stringByTrimmingCharactersInSet:spaceSet] address:[address stringByTrimmingCharactersInSet:spaceSet]];
+}
+
++ (NSString *) usernameFromURI: (NSString *) URI {
+    
+    NSError *error = nil;
+    NSRegularExpression *regexp = [[NSRegularExpression alloc] initWithPattern:@"^<?(sips|sip)?:?\\+?([0-9a-z]+)" options:NSRegularExpressionCaseInsensitive error:&error];
+    
+    NSTextCheckingResult *result = [regexp firstMatchInString:URI options:0 range:NSMakeRange(0, [URI length])];
+    
+    if (result == nil) return nil;
+    
+    NSRange range = [result rangeAtIndex:2];
+    
+    return [URI substringWithRange:range];
 }
 
 @end

@@ -314,8 +314,28 @@
     
     pj_status_t status;
     NSError *error;
+
+//    pjsua_msg_data msg_data;
+//    
+//    pjsua_msg_data_init(&msg_data);
+//    
+//    pj_str_t hname = pj_str((char *)"Contact2");
+////    char * headerValue=(char *)[(NSString *)[headers objectForKey:key] UTF8String];
+//    
+//    pjsip_sip_uri *uri = [SWEndpoint sharedEndpoint].fix_contact_uri;
+//    
+//    //    pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:79220000032@188.234.214.138:%d;transport=TLS;ob>", uri->port] pjString];
+//    pj_str_t hvalue = pj_str((char *)"Here we need to set fixed contact?");
+//    
+//    pjsip_generic_string_hdr* add_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+//    pj_list_push_front(&msg_data.hdr_list, add_hdr);
+////    pj_list_push_front(<#pj_list_type *list#>, <#pj_list_type *node#>)
+//    
+////    pj_str_t reason = pj_str((char *)"Contact Fix");
     
     status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
+//    pjsua_call_setting
+//    pjsua_call_answer2((int)self.callId, nil, PJSIP_SC_OK, <#const pj_str_t *reason#>, <#const pjsua_msg_data *msg_data#>)
     
     if (status != PJ_SUCCESS) {
         

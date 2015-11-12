@@ -38,6 +38,8 @@ typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInt
 @property (nonatomic, readonly) pj_pool_t *pjPool;
 @property (nonatomic, strong, readonly) NSArray *accounts;
 @property (nonatomic, strong) SWRingtone *ringtone;
+@property (atomic) pjsip_sip_uri *fix_contact_uri;
+
 
 +(instancetype)sharedEndpoint;
 
@@ -74,5 +76,6 @@ typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInt
 
 - (pj_bool_t) requestPackageProcessing: (pjsip_rx_data *)data;
 - (pj_bool_t) responsePackageProcessing: (pjsip_rx_data *)data;
+- (pj_bool_t) responseTXPackageProcessing: (pjsip_tx_data *)tdata;
 
 @end

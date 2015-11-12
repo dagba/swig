@@ -18,5 +18,6 @@
 +(NSString *)sipUri:(NSString *)uri fromAccount:(SWAccount *)account;
 +(NSString *)sipUri:(NSString *)uri withDisplayName:(NSString *)displayName;
 +(SWContact *)contactFromURI:(NSString *)uri;
++ (NSString *) usernameFromURI: (NSString *) URI;
 
 @end
