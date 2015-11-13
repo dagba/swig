@@ -811,10 +811,7 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
 }
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e){
-    
-    pjsip_redirect_op redirect = PJSIP_REDIRECT_ACCEPT;
-    
-    return redirect;
+    return PJSIP_REDIRECT_ACCEPT;
 }
 
 #pragma Setters/Getters
