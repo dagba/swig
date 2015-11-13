@@ -437,8 +437,6 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     for (SWTransportConfiguration *transport in self.endpointConfiguration.transportConfigurations) {
         
-        //        pj_ssl_cipher ciphers[1024];
-        
         pjsua_transport_config transportConfig;
         pjsua_transport_id transportId;
         
@@ -448,14 +446,6 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         tls_setting.verify_server = PJ_FALSE;
         tls_setting.method = PJSIP_TLSV1_METHOD;
-        //        tls_setting.ciphers = ciphers;
-        //        tls_setting.ciphers_num = 1024;
-        
-        //        status = pj_ssl_cipher_get_availables(tls_setting.ciphers, &tls_setting.ciphers_num);
-        //        if (status != PJ_SUCCESS) {
-        ////            parse_error(__FUNCTION__, status);
-        //        }
-        
         
         pjsua_transport_config_default(&transportConfig);
         transportConfig.tls_setting = tls_setting;
@@ -463,7 +453,6 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         
         pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
-        NSLog(@"craated transport ");
         
         status = pjsua_transport_create(transportType, &transportConfig, &transportId);
         if (status != PJ_SUCCESS) {
@@ -843,13 +832,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         [self incomingNotify:data];
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
-        
-        pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-        
-        [[SWEndpoint sharedEndpoint] setFix_contact_uri:uri];
-        
-        NSLog(@"Incoming Invite" );
-        
         //        [self incomingInvite:data];
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
         [self incomingRefer:data];

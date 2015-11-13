@@ -426,15 +426,11 @@
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
-    pj_str_t       contact;
 
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    contact = [[NSString stringWithFormat:@"<sips:%@@%@>;q=0.5;expires=%d", self.accountConfiguration.username, [NSString stringWithPJString:transport_info.local_name.host], 3600] pjString];
-    
     pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-
     
     pjsua_acc_info info;
     
@@ -455,7 +451,7 @@
                                         &info.acc_uri, //proxy
                                         &info.acc_uri, //local
                                         &to, //source to
-                                        &contact, //contact
+                                        nil, //contact
                                         nil,
                                         -1,
                                         &pjMessage,
@@ -542,6 +538,8 @@
 
     
     /* Создаем непосредственно запрос */
+    
+    //TODO: Контакт не нужен!
     status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
                                         &pjsip_notify_method,
                                         &info.acc_uri, //proxy

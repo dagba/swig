@@ -38,8 +38,6 @@ typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInt
 @property (nonatomic, readonly) pj_pool_t *pjPool;
 @property (nonatomic, strong, readonly) NSArray *accounts;
 @property (nonatomic, strong) SWRingtone *ringtone;
-@property (atomic) pjsip_sip_uri *fix_contact_uri;
-
 
 +(instancetype)sharedEndpoint;
 
