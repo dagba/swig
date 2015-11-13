@@ -74,8 +74,8 @@ typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInt
 
 -(void)keepAlive;
 
-- (pj_bool_t) requestPackageProcessing: (pjsip_rx_data *)data;
-- (pj_bool_t) responsePackageProcessing: (pjsip_rx_data *)data;
-- (pj_bool_t) responseTXPackageProcessing: (pjsip_tx_data *)tdata;
+- (pj_bool_t) incomingRequestPackageProcessing: (pjsip_rx_data *)data;
+- (pj_bool_t) incomingResponsePackageProcessing: (pjsip_rx_data *)data;
+- (pj_bool_t) outgoingResponsePackageProcessing: (pjsip_tx_data *)tdata;
 
 @end

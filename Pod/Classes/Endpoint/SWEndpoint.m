@@ -56,18 +56,18 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
-    return [[SWEndpoint sharedEndpoint] requestPackageProcessing:rdata];
+    return [[SWEndpoint sharedEndpoint] incomingRequestPackageProcessing:rdata];
 }
 
 
 static pj_bool_t on_rx_response(pjsip_rx_data *rdata)
 {
-    return [[SWEndpoint sharedEndpoint] responsePackageProcessing:rdata];
+    return [[SWEndpoint sharedEndpoint] incomingResponsePackageProcessing:rdata];
 }
 
 static pj_bool_t on_tx_response(pjsip_tx_data *tdata) {
     
-    return [[SWEndpoint sharedEndpoint] responseTXPackageProcessing:tdata];
+    return [[SWEndpoint sharedEndpoint] outgoingResponsePackageProcessing:tdata];
 }
 
 
@@ -92,6 +92,23 @@ static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
+    
+    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    if (contact) {
+        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+        
+        pj_str_t hname = pj_str((char *)"Contact");
+        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:contact_uri->user], [NSString stringWithPJString:contact_uri->host], tdata->tp_info.transport->local_name.port] pjString];
+
+        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+        pj_pool_release(tempPool);
+        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+        }
+    }
+
     
     return PJ_FALSE;
 }
@@ -834,7 +851,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     [self didChangeValueForKey:@"accounts"];
 }
 
-- (pj_bool_t) requestPackageProcessing: (pjsip_rx_data *)data {
+- (pj_bool_t) incomingRequestPackageProcessing: (pjsip_rx_data *)data {
     
     if (data == nil) {
         return PJ_FALSE;
@@ -866,28 +883,45 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 }
 
 
-- (pj_bool_t) responseTXPackageProcessing:(pjsip_tx_data *) tdata {
+- (pj_bool_t) outgoingResponsePackageProcessing:(pjsip_tx_data *) tdata {
     
     //Fix Wrong Contact header
+//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+//    if (contact) {
+//        pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(tdata->msg);
+//        
+//        pjsip_sip_uri *to_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(to_hdr->uri);
+//
+//        pj_str_t hname = pj_str((char *)"Contact");
+//        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:to_uri->user], [NSString stringWithPJString:to_uri->host], tdata->tp_info.transport->local_name.port] pjString];
+//        
+//        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+//        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+//        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+//    }
+
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
-        pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(tdata->msg);
-        
-        pjsip_sip_uri *to_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(to_hdr->uri);
-
-        pj_str_t hname = pj_str((char *)"Contact");
-        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:to_uri->user], [NSString stringWithPJString:to_uri->host], tdata->tp_info.transport->local_name.port] pjString];
-        
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+            
+            pj_str_t hname = pj_str((char *)"Contact");
+            pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:contact_uri->user], [NSString stringWithPJString:contact_uri->host], tdata->tp_info.transport->local_name.port] pjString];
+            
+            pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+            pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+            pj_pool_release(tempPool);
+            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+        }
     }
 
+    
     return PJ_FALSE;
 }
 
 
-- (pj_bool_t) responsePackageProcessing:(pjsip_rx_data *)data {
+- (pj_bool_t) incomingResponsePackageProcessing:(pjsip_rx_data *)data {
     /* Разбираем - на какой запрос пришел ответ */
     NSString *call_id = [NSString stringWithPJString:data->msg_info.cid->id];
     int status = data->msg_info.msg->line.status.code;
