@@ -74,13 +74,13 @@ static pj_bool_t on_tx_response(pjsip_tx_data *tdata) {
 static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
 {
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
-
+    
     pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);
-
+    
     pjsua_acc_id acc_id = pjsua_acc_find_for_outgoing(&uri->user);
     
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-
+    
     if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
         pj_str_t hname = pj_str((char *)"Auth");
         pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", account.accountConfiguration.code, account.accountConfiguration.password] pjString];
@@ -93,22 +93,37 @@ static pj_bool_t on_tx_request(pjsip_tx_data *tdata)
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
     
+    //    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    //    if (contact) {
+    //        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+    //        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+    //
+    //        pj_str_t hname = pj_str((char *)"Contact");
+    //        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:contact_uri->user], [NSString stringWithPJString:contact_uri->host], tdata->tp_info.transport->local_name.port] pjString];
+    //
+    //        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+    //        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+    //        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+    //        pj_pool_release(tempPool);
+    //        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+    //        }
+    //    }
+    
+    
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-        
-        pj_str_t hname = pj_str((char *)"Contact");
-        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:contact_uri->user], [NSString stringWithPJString:contact_uri->host], tdata->tp_info.transport->local_name.port] pjString];
-
-        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
-        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-        pj_pool_release(tempPool);
-        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+            
+            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+            contact_uri->port = tdata->tp_info.transport->local_name.port;
+            contact->uri = contact_uri;
+            
+            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
         }
     }
-
+    
+    
     
     return PJ_FALSE;
 }
@@ -409,13 +424,13 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
-    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
+    //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
     
     ua_cfg.user_agent = pj_str((char *)"Polyphone 1.0");
     
-//    ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
-//    ua_cfg.srtp_secure_signaling = 1;
+    //    ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
+    //    ua_cfg.srtp_secure_signaling = 1;
     
     //
     ua_cfg.max_calls = (unsigned int)self.endpointConfiguration.maxCalls;
@@ -457,7 +472,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     for (SWTransportConfiguration *transport in self.endpointConfiguration.transportConfigurations) {
         
-//        pj_ssl_cipher ciphers[1024];
+        //        pj_ssl_cipher ciphers[1024];
         
         pjsua_transport_config transportConfig;
         pjsua_transport_id transportId;
@@ -468,14 +483,14 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         tls_setting.verify_server = PJ_FALSE;
         tls_setting.method = PJSIP_TLSV1_METHOD;
-//        tls_setting.ciphers = ciphers;
-//        tls_setting.ciphers_num = 1024;
+        //        tls_setting.ciphers = ciphers;
+        //        tls_setting.ciphers_num = 1024;
         
-//        status = pj_ssl_cipher_get_availables(tls_setting.ciphers, &tls_setting.ciphers_num);
-//        if (status != PJ_SUCCESS) {
-////            parse_error(__FUNCTION__, status);
-//        }
-
+        //        status = pj_ssl_cipher_get_availables(tls_setting.ciphers, &tls_setting.ciphers_num);
+        //        if (status != PJ_SUCCESS) {
+        ////            parse_error(__FUNCTION__, status);
+        //        }
+        
         
         pjsua_transport_config_default(&transportConfig);
         transportConfig.tls_setting = tls_setting;
@@ -574,7 +589,7 @@ static SWEndpoint *_sharedEndpoint = nil;
             
         }
     }
-
+    
     
     if (handler) {
         handler(nil);
@@ -735,9 +750,9 @@ static void SWOnRegState(pjsua_acc_id acc_id) {
             [SWEndpoint sharedEndpoint].accountStateChangeBlock(account);
         }
         
-//        if (account.accountState == SWAccountStateDisconnected) {
-//            [[SWEndpoint sharedEndpoint] removeAccount:account];
-//        }
+        //        if (account.accountState == SWAccountStateDisconnected) {
+        //            [[SWEndpoint sharedEndpoint] removeAccount:account];
+        //        }
     }
 }
 
@@ -827,7 +842,7 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
     
-//    NSLog(@"%@ %@", tp, info);
+    //    NSLog(@"%@ %@", tp, info);
 }
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e){
@@ -866,7 +881,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         [self incomingNotify:data];
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
-
+        
         pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
         
         [[SWEndpoint sharedEndpoint] setFix_contact_uri:uri];
@@ -878,7 +893,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         [self incomingRefer:data];
         return PJ_TRUE;
     }
-
+    
     return PJ_FALSE;
 }
 
@@ -886,36 +901,32 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 - (pj_bool_t) outgoingResponsePackageProcessing:(pjsip_tx_data *) tdata {
     
     //Fix Wrong Contact header
-//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
-//    if (contact) {
-//        pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(tdata->msg);
-//        
-//        pjsip_sip_uri *to_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(to_hdr->uri);
-//
-//        pj_str_t hname = pj_str((char *)"Contact");
-//        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:to_uri->user], [NSString stringWithPJString:to_uri->host], tdata->tp_info.transport->local_name.port] pjString];
-//        
-//        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-//        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-//        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
-//    }
-
+    //    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    //    if (contact) {
+    //        pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(tdata->msg);
+    //
+    //        pjsip_sip_uri *to_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(to_hdr->uri);
+    //
+    //        pj_str_t hname = pj_str((char *)"Contact");
+    //        pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:to_uri->user], [NSString stringWithPJString:to_uri->host], tdata->tp_info.transport->local_name.port] pjString];
+    //
+    //        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    //        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+    //        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+    //    }
+    
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
             
-            pj_str_t hname = pj_str((char *)"Contact");
-            pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:%@@%@:%d;transport=TLS;ob>", [NSString stringWithPJString:contact_uri->user], [NSString stringWithPJString:contact_uri->host], tdata->tp_info.transport->local_name.port] pjString];
-            
-            pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-            pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-            pj_pool_release(tempPool);
-            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+            contact_uri->port = tdata->tp_info.transport->local_name.port;
+            contact->uri = contact_uri;
+            
+            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
         }
     }
-
     
     return PJ_FALSE;
 }
@@ -926,7 +937,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     NSString *call_id = [NSString stringWithPJString:data->msg_info.cid->id];
     int status = data->msg_info.msg->line.status.code;
     
-//    NSUInteger cseq = data->msg_info.cseq->cseq;
+    //    NSUInteger cseq = data->msg_info.cseq->cseq;
     
     pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
@@ -959,15 +970,15 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         NSUInteger sm_id = 0;
         NSString *file_hash = 0;
         SWFileType file_type = 0;
-
         
-
+        
+        
         pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
         pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
         if (smid_hdr != nil) {
             sm_id = atoi(smid_hdr->hvalue.ptr);
         }
-
+        
         pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
         pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
         if (file_type_hdr != nil) {
@@ -991,8 +1002,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             return PJ_TRUE;
         }
         
-
-
+        
+        
         if (_messageSentBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 _messageSentBlock(account, call_id, sm_id, status);
@@ -1010,7 +1021,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
-
+    
     
     pjsip_sip_uri *uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
     NSString *abonent = [NSString stringWithPJString:uri->user];
@@ -1030,13 +1041,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         char   buf[32] = {0};
         memcpy(buf, status_hdr->hvalue.ptr, status_hdr->hvalue.slen);
         status = atoi(buf);
-
+        
         if (_abonentStatusBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 _abonentStatusBlock(account, abonent, (SWPresenseState)status);
             });
         }
-
+        
         [self sendSubmit:data withCode:PJSIP_SC_OK];
         //        delete abonent;
         return;
@@ -1053,11 +1064,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         if (smid_hdr != nil) {
             sm_id = atoi(smid_hdr->hvalue.ptr);
             NSUInteger event_value = atoi(event_hdr->hvalue.ptr);
-
+            
             /* Передаем идентификатор и статус сообщения в GUI */
             if (_messageStatusBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
-                        _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
+                    _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
                 });
             }
             
@@ -1094,7 +1105,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     NSString *abonent = [NSString stringWithPJString:uri->user];
     
-//    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+    //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
     NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
     
     /* Выдираем Sm_ID */
@@ -1106,10 +1117,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (smid_hdr != nil) {
         sm_id = atoi(smid_hdr->hvalue.ptr);
     }
-
+    
     SWFileType fileType = SWFileTypeNo;
     NSString *fileHash = @"";
-
+    
     /* Смотрим есть ли в сообщении заголовок FileType */
     pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
     pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
@@ -1122,10 +1133,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             fileHash = [NSString stringWithPJString:file_hash_hdr->hvalue];
         }
     }
-
+    
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-                _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id, fileType, fileHash);
+            _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id, fileType, fileHash);
         });
     }
     
@@ -1147,7 +1158,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (refer_to == nil) {
         return;
     }
-
+    
     
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
@@ -1156,27 +1167,27 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pj_str_t hvalue = pj_str((char *)"Ready");
     
     pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(_pjPool, &hname, &hvalue);
-
+    
     
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
-
+    
     
     pjsua_acc_info info;
     
     pjsua_acc_get_info(acc_id, &info);
     
-
+    
     pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
     pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
-
+    
     char to_string[256];
     char from_string[256];
-
+    
     pj_str_t source;
     source.ptr = to_string;
     source.slen = snprintf(to_string, 256, "sips:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
-
+    
     pj_str_t target;
     target.ptr = from_string;
     target.slen = snprintf(from_string, 256, "sips:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
@@ -1193,11 +1204,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                                         nil,
                                         &tx_msg);
     
-
+    
     if (status != PJ_SUCCESS) {
         return;
     }
-
+    
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
