@@ -482,6 +482,11 @@
     }
     
     pjsip_cid_hdr *cid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
+
+//    pj_str_t hname = pj_str((char *)"Location");
+//    pj_str_t hvalue = pj_str((char *)"lat:56.123; lon:62.123; zoom:10;");
+//    pjsip_generic_string_hdr* location_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+//    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)location_hdr);
     
     status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
     if (status != PJ_SUCCESS) {

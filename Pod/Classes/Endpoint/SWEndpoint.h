@@ -21,7 +21,7 @@ typedef NS_ENUM(NSUInteger, SWMessageStatus) {
 };
 
 typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status);
-typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *message, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
+typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);

@@ -54,20 +54,51 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
+//static void fixContactHeader(pjsip_tx_data *tdata) {
+//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+//    if (contact) {
+//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+//
+//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+//            contact_uri->port = tdata->tp_info.transport->local_name.port;
+//            contact->uri = contact_uri;
+//
+//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+//        }
+//    }
+//}
+
 static void fixContactHeader(pjsip_tx_data *tdata) {
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
             
+            pj_bool_t is_secure =  PJSIP_URI_SCHEME_IS_SIPS(contact_uri);
+            
+            pjsip_sip_uri *uri = pjsip_sip_uri_create([SWEndpoint sharedEndpoint].pjPool, is_secure);
+            
+            uri->user = contact_uri->user;
+            uri->host = contact_uri->host;
+            
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-            contact_uri->port = tdata->tp_info.transport->local_name.port;
-            contact->uri = contact_uri;
+            //            contact_uri->port = tdata->tp_info.transport->local_name.port;
+            contact->uri = uri;
             
             pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+            
+            pj_str_t hname = pj_str((char *)"Test");
+            pj_str_t hvalue = pj_str((char *)"Test");
+            
+            pjsip_generic_string_hdr* hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+            
+            
+            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
         }
     }
 }
+
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
@@ -218,7 +249,6 @@ static SWEndpoint *_sharedEndpoint = nil;
 }
 
 -(void)dealloc {
-    
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillTerminateNotification object:nil];
@@ -231,7 +261,6 @@ static SWEndpoint *_sharedEndpoint = nil;
 #pragma Notification Methods
 
 -(void)handleEnteredBackground:(NSNotification *)notification {
-    
     UIApplication *application = (UIApplication *)notification.object;
     
     [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:NULL];
@@ -239,7 +268,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     self.ringtone.volume = 0.0;
     
-    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+    //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     
     [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
         [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
@@ -250,43 +279,41 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
-    //TODO hangup all calls
-    //TODO remove all accounts
-    //TODO close all transports
-    //TODO reset endpoint
-    
-    for (int i = 0; i < [self.accounts count]; ++i) {
+    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        //TODO hangup all calls
+        //TODO remove all accounts
+        //TODO close all transports
+        //TODO reset endpoint
         
-        SWAccount *account = [self.accounts objectAtIndex:i];
-        
-        dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
-        
-        @weakify(account);
-        [account disconnect:^(NSError *error) {
+        for (int i = 0; i < [self.accounts count]; ++i) {
             
-            @strongify(account);
-            account = nil;
+            SWAccount *account = [self.accounts objectAtIndex:i];
             
-            dispatch_semaphore_signal(semaphone);
-        }];
-        
-        dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
-    }
-    
-    NSMutableArray *mutableAccounts = [self.accounts mutableCopy];
-    
-    [mutableAccounts removeAllObjects];
-    
-    self.accounts = mutableAccounts;
-    
-    [self reset:^(NSError *error) {
-        
-        if (error) {
-            DDLogDebug(@"%@", [error description]);
+            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
+            
+            @weakify(account);
+            [account disconnect:^(NSError *error) {
+                
+                @strongify(account);
+                account = nil;
+                
+                dispatch_semaphore_signal(semaphone);
+            }];
+            
+            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
         }
-    }];
+        
+        NSMutableArray *mutableAccounts = [self.accounts mutableCopy];
+        
+        [mutableAccounts removeAllObjects];
+        
+        self.accounts = mutableAccounts;
+        
+        pj_status_t status = pjsua_destroy();
+        
+        [application setApplicationIconBadgeNumber:0];
+    });
     
-    [application setApplicationIconBadgeNumber:0];
 }
 
 -(void)keepAlive {
@@ -551,7 +578,6 @@ static SWEndpoint *_sharedEndpoint = nil;
 }
 
 -(void)reset:(void(^)(NSError *error))handler {
-    
     //TODO shutdown agent correctly. stop all calls, destroy all accounts
     
     for (SWAccount *account in self.accounts) {
@@ -1023,27 +1049,27 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
     
-    pjsip_sip_uri *uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.to->uri);
-    if (uri == nil) {
+    pjsip_sip_uri *toUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.to->uri);
+    if (toUri == nil) {
         [self sendSubmit:data withCode:PJSIP_SC_BAD_REQUEST];
         return;
     }
-    
-    /* Проверяем - нам ли сообщение */
     
     pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     
-    NSString *to = [NSString stringWithPJString:uri->user];
-    if (![account.accountConfiguration.username isEqualToString:to]) {
-        [self sendSubmit:data withCode:PJSIP_SC_NOT_FOUND];
-        return;
-    }
+//    NSString *to = [NSString stringWithPJString:uri->user];
+//    if (![account.accountConfiguration.username isEqualToString:to]) {
+//        [self sendSubmit:data withCode:PJSIP_SC_NOT_FOUND];
+//        return;
+//    }
+
     
-    uri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+    pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
     
-    NSString *abonent = [NSString stringWithPJString:uri->user];
+    NSString *fromUser = [NSString stringWithPJString:fromUri->user];
+    NSString *toUser = [NSString stringWithPJString:toUri->user];
     
     //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
     NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
@@ -1076,7 +1102,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, abonent, message_txt, (NSUInteger) sm_id, fileType, fileHash);
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, fileType, fileHash);
         });
     }
     
