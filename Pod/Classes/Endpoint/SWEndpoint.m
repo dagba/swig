@@ -54,54 +54,72 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
-//static void fixContactHeader(pjsip_tx_data *tdata) {
-//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
-//    if (contact) {
-//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-//
-//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-//            contact_uri->port = tdata->tp_info.transport->local_name.port;
-//            contact->uri = contact_uri;
-//
-//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-//        }
-//    }
-//}
-
 static void fixContactHeader(pjsip_tx_data *tdata) {
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-            
-            pj_bool_t is_secure =  PJSIP_URI_SCHEME_IS_SIPS(contact_uri);
-            
-            pjsip_sip_uri *uri = pjsip_sip_uri_create([SWEndpoint sharedEndpoint].pjPool, is_secure);
-            
-            uri->user = contact_uri->user;
-            uri->host = contact_uri->host;
-            
+
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-            //            contact_uri->port = tdata->tp_info.transport->local_name.port;
-            contact->uri = uri;
-            
+            contact_uri->port = tdata->tp_info.transport->local_name.port;
+            contact->uri = contact_uri;
+
             pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-            
-            pj_str_t hname = pj_str((char *)"Test");
-            pj_str_t hvalue = pj_str((char *)"Test");
-            
-            pjsip_generic_string_hdr* hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-            
-            
-            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
         }
     }
 }
 
+static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
+    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL));
+    //pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, &pjsip_invite_method) == 0 &&
+    if (contact) {
+        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+        if (contact_uri->port > 0 && rdata->tp_info.transport->local_name.port != contact_uri->port) {
+            
+            pjsip_msg_find_remove_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, nil);
+            contact_uri->port = rdata->tp_info.transport->local_name.port;
+            contact->uri = contact_uri;
+            
+            pjsip_msg_add_hdr(rdata->msg_info.msg, (pjsip_hdr*)contact);
+        }
+    }
+}
+
+//static void fixContactHeader(pjsip_tx_data *tdata) {
+//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+//    if (contact) {
+//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+//            
+//            pj_bool_t is_secure =  PJSIP_URI_SCHEME_IS_SIPS(contact_uri);
+//            
+//            pjsip_sip_uri *uri = pjsip_sip_uri_create([SWEndpoint sharedEndpoint].pjPool, is_secure);
+//            
+//            uri->user = contact_uri->user;
+//            uri->host = contact_uri->host;
+//            
+//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+//            //            contact_uri->port = tdata->tp_info.transport->local_name.port;
+//            contact->uri = uri;
+//            
+//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+//            
+//            pj_str_t hname = pj_str((char *)"Test");
+//            pj_str_t hvalue = pj_str((char *)"Test");
+//            
+//            pjsip_generic_string_hdr* hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+//            
+//            
+//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
+//        }
+//    }
+//}
+
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
+    fixContactHeaderRdata(rdata);
+//    fixContactHeader(rdata);
     return [[SWEndpoint sharedEndpoint] rxRequestPackageProcessing:rdata];
 }
 
@@ -162,6 +180,8 @@ static pjsip_module sipgate_module =
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
 
 @property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
+
+@property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
 
 
 @property (nonatomic) pj_thread_t *thread;
@@ -419,10 +439,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
     
-    ua_cfg.user_agent = pj_str((char *)"Polyphone 1.0");
+    ua_cfg.user_agent = pj_str((char *)"Polyphone iOS 1.0");
     
-    //    ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
-    //    ua_cfg.srtp_secure_signaling = 1;
+        ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
+        ua_cfg.srtp_secure_signaling = 1;
     
     //
     ua_cfg.max_calls = (unsigned int)self.endpointConfiguration.maxCalls;
@@ -716,6 +736,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _readyToSendFileBlock = readyToSendFileBlock;
 }
 
+- (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock {
+    _getCountersBlock = getCountersBlock;
+}
+
 #pragma PJSUA Callbacks
 
 static void SWOnRegState(pjsua_acc_id acc_id) {
@@ -886,6 +910,25 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pj_pool_release(tempPool);
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+    }
+    
+    
+//    PJSIP_H_AUTHORIZATION
+//    PJSIP_MSG_CID_HDR(<#msg#>)
+    
+    pjsip_authorization_hdr *auth_header = (pjsip_authorization_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, 0);
+    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && auth_header) {
+        pj_str_t hname = pj_str((char *)"SYNC");
+        
+        struct Sync counters = _getCountersBlock(account);
+        
+        pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
+        
+        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+        pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+        pj_pool_release(tempPool);
+        
+         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
     return PJ_FALSE;
 }
@@ -1181,8 +1224,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (status != PJ_SUCCESS) {
         return;
     }
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, nil);
     
-    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+//    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
     
     if (status != PJ_SUCCESS) {
         return;

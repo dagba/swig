@@ -12,6 +12,13 @@
 #import "SWRingtone.h"
 #import <pjnath.h>
 
+struct Sync {
+    NSUInteger lastSmidRX;
+    NSUInteger lastSmidTX;
+    NSUInteger lastReport;
+    NSUInteger lastViev;
+};
+
 typedef NS_ENUM(NSUInteger, SWMessageStatus) {
     SWMessageStatusUnknown = 0,
     SWMessageStatusSended = 1,
@@ -27,6 +34,9 @@ typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
 typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
+typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
+typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
+
 
 
 
@@ -68,7 +78,7 @@ typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInt
 
 - (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 
-
+- (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock;
 
 -(void)keepAlive;
 
