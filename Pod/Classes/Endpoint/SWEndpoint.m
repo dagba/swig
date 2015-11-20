@@ -182,7 +182,7 @@ static pjsip_module sipgate_module =
 @property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
-
+@property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
 
 @property (nonatomic) pj_thread_t *thread;
 
@@ -747,6 +747,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _getCountersBlock = getCountersBlock;
 }
 
+- (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock {
+    _contactsServerUpdatedBlock = contactsServerUpdatedBlock;
+}
+
 #pragma PJSUA Callbacks
 
 static void SWOnRegState(pjsua_acc_id acc_id) {
@@ -959,6 +963,20 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
+
+        pj_str_t contact_server_hdr_str = pj_str((char *)"Contact-Server");
+        pjsip_generic_string_hdr* contact_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &contact_server_hdr_str, nil);
+        if (contact_server_hdr != nil) {
+            
+            if (_contactsServerUpdatedBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSString *contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+
+                    _contactsServerUpdatedBlock(contactServer);
+                });
+
+            }
+        }
         
         if (status == PJSIP_SC_NOT_FOUND){
             if (_needConfirmBlock) {
@@ -978,6 +996,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             }
             return PJ_FALSE;
         }
+        
+
     }
     
     

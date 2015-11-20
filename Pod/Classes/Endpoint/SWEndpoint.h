@@ -35,6 +35,7 @@ typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, 
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
 typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
+typedef void (^SWContactServerUpdatedBlock) (NSString *contactsServerUrl);
 
 
 
@@ -78,6 +79,8 @@ typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 - (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 
 - (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock;
+- (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock;
+
 
 -(void)keepAlive;
 
