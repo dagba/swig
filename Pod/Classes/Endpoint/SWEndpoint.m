@@ -118,7 +118,7 @@ static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
-    fixContactHeaderRdata(rdata);
+//    fixContactHeaderRdata(rdata);
 //    fixContactHeader(rdata);
     return [[SWEndpoint sharedEndpoint] rxRequestPackageProcessing:rdata];
 }
@@ -422,6 +422,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     pjsua_config ua_cfg;
     pjsua_logging_config log_cfg;
     pjsua_media_config media_cfg;
+
     
     pjsua_config_default(&ua_cfg);
     pjsua_logging_config_default(&log_cfg);
@@ -441,8 +442,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     ua_cfg.user_agent = pj_str((char *)"Polyphone iOS 1.0");
     
-        ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
-        ua_cfg.srtp_secure_signaling = 1;
+    ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
+    ua_cfg.srtp_secure_signaling = 2;
     
     //
     ua_cfg.max_calls = (unsigned int)self.endpointConfiguration.maxCalls;
@@ -454,7 +455,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
-    
+    media_cfg.no_vad = 1;
     
     status = pjsua_init(&ua_cfg, &log_cfg, &media_cfg);
     
@@ -479,6 +480,12 @@ static SWEndpoint *_sharedEndpoint = nil;
         return;
     }
     
+    
+//    status = pjmedia_srtp_init_lib(pjsua_get_pjmedia_endpt());
+//    if (status != PJ_SUCCESS) {
+//        NSLog(@"Cannot start srtp");
+//        return;
+//    }
     
     //TODO autodetect port by checking transportId!!!!
     
@@ -732,7 +739,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     _messageStatusBlock = messageStatusBlock;
 }
 
-- (void) setReadyReadyToSendFileBlock:(SWReadyToSendFileBlock)readyToSendFileBlock {
+- (void) setReadyToSendFileBlock:(SWReadyToSendFileBlock)readyToSendFileBlock {
     _readyToSendFileBlock = readyToSendFileBlock;
 }
 
@@ -1114,9 +1121,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     NSString *fromUser = [NSString stringWithPJString:fromUri->user];
     NSString *toUser = [NSString stringWithPJString:toUri->user];
     
-    //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
-    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
+    NSString *message_txt = @"";
     
+    if (data->msg_info.msg->body != nil) {
+    //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+        message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
+    }
     /* Выдираем Sm_ID */
     NSUInteger sm_id = 0;
     
@@ -1139,7 +1149,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
         pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
         if (file_hash_hdr != nil) {
-            fileHash = [NSString stringWithPJString:file_hash_hdr->hvalue];
+            NSInteger hashInt = atoi(file_hash_hdr->hvalue.ptr);
+            fileHash = [NSString stringWithFormat:@"%x", hashInt];
         }
     }
     
