@@ -183,6 +183,7 @@ static pjsip_module sipgate_module =
 
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
 @property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
+@property (nonatomic, copy) SWPushServerUpdatedBlock pushServerUpdatedBlock;
 
 @property (nonatomic) pj_thread_t *thread;
 
@@ -751,6 +752,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _contactsServerUpdatedBlock = contactsServerUpdatedBlock;
 }
 
+- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock {
+    _pushServerUpdatedBlock = pushServerUpdatedBlock;
+}
+
 #pragma PJSUA Callbacks
 
 static void SWOnRegState(pjsua_acc_id acc_id) {
@@ -971,10 +976,23 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             if (_contactsServerUpdatedBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     NSString *contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-
+                    
                     _contactsServerUpdatedBlock(contactServer);
                 });
+                
+            }
+        }
 
+        pj_str_t push_server_hdr_str = pj_str((char *)"Push-Server");
+        pjsip_generic_string_hdr* push_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &push_server_hdr_str, nil);
+        if (push_server_hdr != nil) {
+            
+            if (_pushServerUpdatedBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSString *pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+                    _pushServerUpdatedBlock(pushServer);
+                });
+                
             }
         }
         
