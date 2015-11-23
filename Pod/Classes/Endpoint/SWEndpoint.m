@@ -974,9 +974,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         if (contact_server_hdr != nil) {
             
             if (_contactsServerUpdatedBlock) {
+                NSString *contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    NSString *contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-                    
                     _contactsServerUpdatedBlock(contactServer);
                 });
                 
@@ -988,8 +987,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         if (push_server_hdr != nil) {
             
             if (_pushServerUpdatedBlock) {
+                NSString *pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    NSString *pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
                     _pushServerUpdatedBlock(pushServer);
                 });
                 
