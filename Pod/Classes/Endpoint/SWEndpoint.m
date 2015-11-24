@@ -1023,7 +1023,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         NSUInteger sm_id = 0;
         NSString *file_hash = 0;
         SWFileType file_type = 0;
-        
+        NSString *fileServer = @"http://193.200.21.126:4950/";
         
         
         pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
@@ -1059,7 +1059,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         if (_messageSentBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                _messageSentBlock(account, call_id, sm_id, status);
+                _messageSentBlock(account, call_id, sm_id, status, fileServer);
             });
         }
         return PJ_TRUE;
@@ -1176,7 +1176,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     SWFileType fileType = SWFileTypeNo;
     NSString *fileHash = @"";
-    
+    NSString *fileServer = @"";
     /* Смотрим есть ли в сообщении заголовок FileType */
     pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
     pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
@@ -1189,11 +1189,16 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             NSInteger hashInt = atoi(file_hash_hdr->hvalue.ptr);
             fileHash = [NSString stringWithFormat:@"%x", hashInt];
         }
+        pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
+        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
+        if (file_server_hdr != nil) {
+            fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+        }
     }
     
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, fileType, fileHash);
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, fileType, fileHash, fileServer);
         });
     }
     
