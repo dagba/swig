@@ -28,12 +28,12 @@ typedef NS_ENUM(NSUInteger, SWMessageStatus) {
 };
 
 typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status, NSString *fileServer);
-typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, SWFileType fileType, NSString *fileHash, NSString *fileServer);
+typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, NSDate *date, SWFileType fileType, NSString *fileHash, NSString *fileServer);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
-typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
+//typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWContactServerUpdatedBlock) (NSString *contactsServerUrl);
 typedef void (^SWPushServerUpdatedBlock) (NSString *pushServerUrl);
@@ -77,7 +77,7 @@ typedef void (^SWPushServerUpdatedBlock) (NSString *pushServerUrl);
 - (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock;
 - (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock;
 
-- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
+//- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 
 - (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock;
 - (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock;

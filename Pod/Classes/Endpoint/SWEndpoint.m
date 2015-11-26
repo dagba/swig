@@ -59,11 +59,11 @@ static void fixContactHeader(pjsip_tx_data *tdata) {
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-
+            
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
             contact_uri->port = tdata->tp_info.transport->local_name.port;
             contact->uri = contact_uri;
-
+            
             pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
         }
     }
@@ -90,26 +90,26 @@ static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
 //    if (contact) {
 //        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
 //        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-//            
+//
 //            pj_bool_t is_secure =  PJSIP_URI_SCHEME_IS_SIPS(contact_uri);
-//            
+//
 //            pjsip_sip_uri *uri = pjsip_sip_uri_create([SWEndpoint sharedEndpoint].pjPool, is_secure);
-//            
+//
 //            uri->user = contact_uri->user;
 //            uri->host = contact_uri->host;
-//            
+//
 //            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
 //            //            contact_uri->port = tdata->tp_info.transport->local_name.port;
 //            contact->uri = uri;
-//            
+//
 //            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-//            
+//
 //            pj_str_t hname = pj_str((char *)"Test");
 //            pj_str_t hvalue = pj_str((char *)"Test");
-//            
+//
 //            pjsip_generic_string_hdr* hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-//            
-//            
+//
+//
 //            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
 //        }
 //    }
@@ -118,8 +118,8 @@ static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
-//    fixContactHeaderRdata(rdata);
-//    fixContactHeader(rdata);
+    //    fixContactHeaderRdata(rdata);
+    //    fixContactHeader(rdata);
     return [[SWEndpoint sharedEndpoint] rxRequestPackageProcessing:rdata];
 }
 
@@ -179,7 +179,7 @@ static pjsip_module sipgate_module =
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
 
-@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
+//@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
 @property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
@@ -423,7 +423,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     pjsua_config ua_cfg;
     pjsua_logging_config log_cfg;
     pjsua_media_config media_cfg;
-
+    
     
     pjsua_config_default(&ua_cfg);
     pjsua_logging_config_default(&log_cfg);
@@ -482,11 +482,11 @@ static SWEndpoint *_sharedEndpoint = nil;
     }
     
     
-//    status = pjmedia_srtp_init_lib(pjsua_get_pjmedia_endpt());
-//    if (status != PJ_SUCCESS) {
-//        NSLog(@"Cannot start srtp");
-//        return;
-//    }
+    //    status = pjmedia_srtp_init_lib(pjsua_get_pjmedia_endpt());
+    //    if (status != PJ_SUCCESS) {
+    //        NSLog(@"Cannot start srtp");
+    //        return;
+    //    }
     
     //TODO autodetect port by checking transportId!!!!
     
@@ -584,22 +584,22 @@ static SWEndpoint *_sharedEndpoint = nil;
         return;
     }
     
-    pjmedia_codec_info codecs[PJMEDIA_CODEC_MGR_MAX_CODECS];
-    unsigned int prio[PJMEDIA_CODEC_MGR_MAX_CODECS];
-    unsigned int count = PJ_ARRAY_SIZE(codecs);
-    
-    pjmedia_codec_mgr *codec_mgr = pjmedia_endpt_get_codec_mgr(pjsua_get_pjmedia_endpt());
-    
-    status = pjmedia_codec_mgr_enum_codecs(codec_mgr, &count, codecs, prio);
-    
-    if (status==PJ_SUCCESS) {
-        for (int i=0; i<count; i++) {
-            NSLog(@"%@", [NSString stringWithFormat:@"%d %@/%u ", prio[i], [NSString stringWithPJString:codecs[i].encoding_name], codecs[i].clock_rate]);
-            
-        }
-    }
-    
-    
+    //    pjmedia_codec_info codecs[PJMEDIA_CODEC_MGR_MAX_CODECS];
+    //    unsigned int prio[PJMEDIA_CODEC_MGR_MAX_CODECS];
+    //    unsigned int count = PJ_ARRAY_SIZE(codecs);
+    //
+    //    pjmedia_codec_mgr *codec_mgr = pjmedia_endpt_get_codec_mgr(pjsua_get_pjmedia_endpt());
+    //
+    //    status = pjmedia_codec_mgr_enum_codecs(codec_mgr, &count, codecs, prio);
+    //
+    //    if (status==PJ_SUCCESS) {
+    //        for (int i=0; i<count; i++) {
+    //            NSLog(@"%@", [NSString stringWithFormat:@"%d %@/%u ", prio[i], [NSString stringWithPJString:codecs[i].encoding_name], codecs[i].clock_rate]);
+    //
+    //        }
+    //    }
+    //
+    //
     if (handler) {
         handler(nil);
     }
@@ -740,9 +740,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     _messageStatusBlock = messageStatusBlock;
 }
 
-- (void) setReadyToSendFileBlock:(SWReadyToSendFileBlock)readyToSendFileBlock {
-    _readyToSendFileBlock = readyToSendFileBlock;
-}
+//- (void) setReadyToSendFileBlock:(SWReadyToSendFileBlock)readyToSendFileBlock {
+//    _readyToSendFileBlock = readyToSendFileBlock;
+//}
 
 - (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock {
     _getCountersBlock = getCountersBlock;
@@ -929,14 +929,19 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     
     
-//    PJSIP_H_AUTHORIZATION
-//    PJSIP_MSG_CID_HDR(<#msg#>)
+    //    PJSIP_H_AUTHORIZATION
+    //    PJSIP_MSG_CID_HDR(<#msg#>)
     
     pjsip_authorization_hdr *auth_header = (pjsip_authorization_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, 0);
-    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && auth_header) {
+    if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && auth_header) {
         pj_str_t hname = pj_str((char *)"SYNC");
         
-        struct Sync counters = _getCountersBlock(account);
+        __block struct Sync counters;
+        
+//        dispatch_sync(dispatch_get_main_queue(), ^{
+            counters = _getCountersBlock(account);
+//        });
+        
         
         pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
         
@@ -944,7 +949,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
         pj_pool_release(tempPool);
         
-         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
+        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
     return PJ_FALSE;
 }
@@ -968,7 +973,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
-
+        
         pj_str_t contact_server_hdr_str = pj_str((char *)"Contact-Server");
         pjsip_generic_string_hdr* contact_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &contact_server_hdr_str, nil);
         if (contact_server_hdr != nil) {
@@ -981,7 +986,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                 
             }
         }
-
+        
         pj_str_t push_server_hdr_str = pj_str((char *)"Push-Server");
         pjsip_generic_string_hdr* push_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &push_server_hdr_str, nil);
         if (push_server_hdr != nil) {
@@ -1014,7 +1019,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             return PJ_FALSE;
         }
         
-
+        
     }
     
     
@@ -1032,29 +1037,36 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             sm_id = atoi(smid_hdr->hvalue.ptr);
         }
         
-        pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
-        pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
-        if (file_type_hdr != nil) {
-            file_type = atoi(file_type_hdr->hvalue.ptr);
-            
-            pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
-            pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
-            if (file_hash_hdr != nil) {
-                file_hash = [NSString stringWithPJString:file_hash_hdr->hvalue];
-            }
-            
-            pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-            NSString *URIto = [NSString stringWithPJString:to->user];
-            if (_readyToSendFileBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
-                });
-            }
-            
-            
-            return PJ_TRUE;
+        pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
+        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
+        if (file_server_hdr != nil) {
+            fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
         
+        
+        //        pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
+        //        pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
+        //        if (file_type_hdr != nil) {
+        //            file_type = atoi(file_type_hdr->hvalue.ptr);
+        //
+        //            pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
+        //            pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
+        //            if (file_hash_hdr != nil) {
+        //                file_hash = [NSString stringWithPJString:file_hash_hdr->hvalue];
+        //            }
+        //
+        ////            pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
+        ////            NSString *URIto = [NSString stringWithPJString:to->user];
+        ////            if (_readyToSendFileBlock) {
+        ////                dispatch_async(dispatch_get_main_queue(), ^{
+        ////                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
+        ////                });
+        ////            }
+        ////
+        ////
+        ////            return PJ_TRUE;
+        //        }
+        //
         
         
         if (_messageSentBlock) {
@@ -1146,12 +1158,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     
-//    NSString *to = [NSString stringWithPJString:uri->user];
-//    if (![account.accountConfiguration.username isEqualToString:to]) {
-//        [self sendSubmit:data withCode:PJSIP_SC_NOT_FOUND];
-//        return;
-//    }
-
+    //    NSString *to = [NSString stringWithPJString:uri->user];
+    //    if (![account.accountConfiguration.username isEqualToString:to]) {
+    //        [self sendSubmit:data withCode:PJSIP_SC_NOT_FOUND];
+    //        return;
+    //    }
+    
     
     pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
     
@@ -1161,7 +1173,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     NSString *message_txt = @"";
     
     if (data->msg_info.msg->body != nil) {
-    //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+        //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
         message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
     }
     /* Выдираем Sm_ID */
@@ -1196,11 +1208,29 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
     }
     
+    NSDate *submitTime = [NSDate date];
+    pj_str_t submit_time_hdr_str = pj_str((char *)"SubmitTime");
+    pjsip_generic_string_hdr* submit_time_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &submit_time_hdr_str, nil);
+    if (submit_time_hdr != nil) {
+        NSString *dateString = [NSString stringWithPJString:submit_time_hdr->hvalue];
+        
+        NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+        [dateFormatter setDateFormat:@"dd.MM.yyyy HH:mm:ss"];
+        
+        NSTimeZone *zone = [[NSTimeZone alloc] initWithName:@"GMT"];
+        
+        [dateFormatter setTimeZone:zone];
+        submitTime = [dateFormatter dateFromString:dateString];
+    }
+    
+    
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, fileType, fileHash, fileServer);
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, submitTime, fileType, fileHash, fileServer);
         });
     }
+    
+    
     
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
@@ -1279,7 +1309,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, nil);
     
-//    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    //    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
     
     if (status != PJ_SUCCESS) {
         return;
@@ -1292,16 +1322,49 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pjsip_tx_data       *answer_msg;
     pj_status_t          status;
     bool                 ret_value = false;
+    int                   sm_id;
+    
+    
     
     /* Готовим ответ абоненту о результате регистрации */
     status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &answer_msg);
     if (status == PJ_SUCCESS) {
         
-        pj_str_t   smid_hdr_str = pj_str((char *)"SMID");
+        pj_str_t smid_hdr_str = pj_str((char *)"SMID");
         pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+        
+        pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+        pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
+        
         if (smid_hdr != nil) {
             pjsip_msg_add_hdr(answer_msg->msg, smid_hdr);
+            sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
         }
+        
+        if (sync_hdr != nil) {
+            int num = 0;
+            int total = 0;
+            int seq = 0;
+            int type = 0;
+            
+            sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+            
+            
+            if (total == seq) {
+                char sync_buf[256];
+                
+                pj_str_t hname = pj_str((char *)"SYNC");
+                pj_str_t hvalue;
+                hvalue.ptr = sync_buf;
+                hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
+                
+                pjsip_generic_string_hdr* sumbit_sync_hdr = pjsip_generic_string_hdr_create(answer_msg->pool, &hname, &hvalue);
+                if (sumbit_sync_hdr != nil) {
+                    pjsip_msg_add_hdr(answer_msg->msg, sumbit_sync_hdr);
+                }
+            }
+        }
+        
         
         /* Получаем адрес, куда мы должны отправить ответ */
         pjsip_response_addr  response_addr;
