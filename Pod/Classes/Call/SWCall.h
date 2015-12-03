@@ -31,7 +31,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
     SWMediaStateError = PJSUA_CALL_MEDIA_ERROR,
     SWMediaStateActive = PJSUA_CALL_MEDIA_ACTIVE,
     SWMediaStateLocalHold = PJSUA_CALL_MEDIA_LOCAL_HOLD,
-    SWMediaStateRemoteHole = PJSUA_CALL_MEDIA_REMOTE_HOLD
+    SWMediaStateRemoteHold = PJSUA_CALL_MEDIA_REMOTE_HOLD
 };
 
 @interface SWCall : NSObject <SWCallProtocol, NSCopying, NSMutableCopying>
@@ -43,6 +43,9 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 @property (nonatomic, readonly) SWMediaState mediaState;
 @property (nonatomic, readonly) BOOL inbound;
 @property (nonatomic, readonly) BOOL missed;
+@property (nonatomic, readonly) BOOL speaker;
+@property (nonatomic, readonly) BOOL mute;
+
 @property (nonatomic, readonly) NSDate *date;
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
 

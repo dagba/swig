@@ -20,8 +20,6 @@
 
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
-@property (nonatomic) BOOL speaker;
-@property (nonatomic) BOOL mute;
 
 @end
 
@@ -60,7 +58,7 @@
     
     //TODO: move to account to fix multiple call problem
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(returnToBackground:) name:UIApplicationWillResignActiveNotification object:nil];
-
+    
     return self;
 }
 
@@ -76,7 +74,7 @@
     call.missed = self.missed;
     call.date = [self.date copyWithZone:zone];
     call.duration = self.duration;
-
+    
     return call;
 }
 
@@ -92,7 +90,7 @@
     call.missed = self.missed;
     call.date = [self.date copyWithZone:zone];
     call.duration = self.duration;
-
+    
     return call;
 }
 
@@ -131,7 +129,7 @@
 }
 
 -(void)dealloc {
-
+    
     if (_notification) {
         [[UIApplication sharedApplication] cancelLocalNotification:_notification];
     }
@@ -248,6 +246,8 @@
         case PJSIP_INV_STATE_CONFIRMED: {
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
+            
+            
             self.callState = SWCallStateConnected;
         } break;
             
@@ -285,7 +285,7 @@
 }
 
 -(void)contactChanged {
- 
+    
     pjsua_call_info info;
     pjsua_call_get_info((int)self.callId, &info);
     
@@ -314,28 +314,28 @@
     
     pj_status_t status;
     NSError *error;
-
-//    pjsua_msg_data msg_data;
-//    
-//    pjsua_msg_data_init(&msg_data);
-//    
-//    pj_str_t hname = pj_str((char *)"Contact2");
-////    char * headerValue=(char *)[(NSString *)[headers objectForKey:key] UTF8String];
-//    
-//    pjsip_sip_uri *uri = [SWEndpoint sharedEndpoint].fix_contact_uri;
-//    
-//    //    pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:79220000032@188.234.214.138:%d;transport=TLS;ob>", uri->port] pjString];
-//    pj_str_t hvalue = pj_str((char *)"Here we need to set fixed contact?");
-//    
-//    pjsip_generic_string_hdr* add_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-//    pj_list_push_front(&msg_data.hdr_list, add_hdr);
-////    pj_list_push_front(<#pj_list_type *list#>, <#pj_list_type *node#>)
-//    
-////    pj_str_t reason = pj_str((char *)"Contact Fix");
+    
+    //    pjsua_msg_data msg_data;
+    //
+    //    pjsua_msg_data_init(&msg_data);
+    //
+    //    pj_str_t hname = pj_str((char *)"Contact2");
+    ////    char * headerValue=(char *)[(NSString *)[headers objectForKey:key] UTF8String];
+    //
+    //    pjsip_sip_uri *uri = [SWEndpoint sharedEndpoint].fix_contact_uri;
+    //
+    //    //    pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:79220000032@188.234.214.138:%d;transport=TLS;ob>", uri->port] pjString];
+    //    pj_str_t hvalue = pj_str((char *)"Here we need to set fixed contact?");
+    //
+    //    pjsip_generic_string_hdr* add_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    //    pj_list_push_front(&msg_data.hdr_list, add_hdr);
+    ////    pj_list_push_front(<#pj_list_type *list#>, <#pj_list_type *node#>)
+    //
+    ////    pj_str_t reason = pj_str((char *)"Contact Fix");
     
     status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
-//    pjsua_call_setting
-//    pjsua_call_answer2((int)self.callId, nil, PJSIP_SC_OK, <#const pj_str_t *reason#>, <#const pjsua_msg_data *msg_data#>)
+    //    pjsua_call_setting
+    //    pjsua_call_answer2((int)self.callId, nil, PJSIP_SC_OK, <#const pj_str_t *reason#>, <#const pjsua_msg_data *msg_data#>)
     
     if (status != PJ_SUCCESS) {
         
@@ -382,31 +382,31 @@
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
 
 -(void)toggleMute:(void(^)(NSError *error))handler {
-
+    
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
     
-    if (!self.mute) {
+    if (!_mute) {
         pjsua_conf_disconnect(0, callInfo.conf_slot);
-        self.mute = YES;
+        _mute = YES;
     }
     
     else {
         pjsua_conf_connect(0, callInfo.conf_slot);
-        self.mute = NO;
+        _mute = NO;
     }
 }
 
 -(void)toggleSpeaker:(void(^)(NSError *error))handler {
     
-    if (!self.speaker) {
+    if (!_speaker) {
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
-        self.speaker = YES;
+        _speaker = YES;
     }
     
     else {
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
-        self.speaker = NO;
+        _speaker = NO;
     }
 }
 
@@ -417,7 +417,7 @@
     pj_str_t digits = [dtmf pjString];
     
     status = pjsua_call_dial_dtmf((int)self.callId, &digits);
-
+    
     if (status != PJ_SUCCESS) {
         error = [NSError errorWithDomain:@"Error sending DTMF" code:0 userInfo:nil];
     }

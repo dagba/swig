@@ -85,6 +85,9 @@
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
+//    acc_cfg.reg_delay_before_refresh
+//    acc_cfg.reg_first_retry_interval
+    acc_cfg.reg_retry_interval = 5;
     
     acc_cfg.cred_count = 1;
     acc_cfg.cred_info[0].scheme = [self.accountConfiguration.authScheme pjString];
@@ -135,57 +138,11 @@
 - (void) setCode: (NSString *) code completionHandler:(void(^)(NSError *error))handler {
     if ([code length] == 4) {
         [self.accountConfiguration setCode:code];
-//        if (handler) {
-//            handler(nil);
-//            return;
-//        }
-        
         [self connect:^(NSError *error) {
             handler(error);
         }];
 
         return;
-        
-//        pjsua_acc_config acc_cfg;
-//        pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
-//        
-//        if (status != PJ_SUCCESS) {
-//            NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
-//            
-//            if (handler) {
-//                handler(error);
-//            }
-//            return;
-//        }
-//
-//        
-//        pj_str_t hname = pj_str((char *)"Auth");
-//        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", code, self.accountConfiguration.password] pjString];
-//        
-//        struct pjsip_generic_string_hdr event_hdr;
-//        pjsip_generic_string_hdr_init2(&event_hdr, &hname, &hvalue);
-//
-//
-//        pj_list_erase(&acc_cfg.reg_hdr_list);
-//        pj_list_push_back(&acc_cfg.reg_hdr_list, &event_hdr);
-//        
-//        
-//        status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
-//        
-//        if (status != PJ_SUCCESS) {
-//            NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
-//            
-//            if (handler) {
-//                handler(error);
-//            }
-//            return;
-//        }
-//
-//        
-//        if (handler) {
-//            handler(nil);
-//        }
-//        return;
     }
     NSError *error = [NSError errorWithDomain:@"Code invalid" code:0 userInfo:nil];
     if (handler) {
@@ -508,12 +465,16 @@
     pj_str_t hvalue;
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    
+    pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
     
     hname = pj_str((char *)"SMID");
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
-    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
 
     
     pjsua_transport_info transport_info;
@@ -556,10 +517,12 @@
                                         NULL,
                                         &tx_msg);
     
+
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
         handler(error);
+        pj_pool_release(tempPool);
     
         return;
     }
@@ -571,6 +534,8 @@
     if (status == PJ_SUCCESS) {
         pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
     }
+    pj_pool_release(tempPool);
+
 }
 
 -(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {

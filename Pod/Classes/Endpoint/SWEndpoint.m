@@ -23,6 +23,9 @@
 #import "SWAccountConfiguration.h"
 #import "SWUriFormatter.h"
 
+#include <pjsua-lib/pjsua.h>
+#include <pjsua-lib/pjsua_internal.h>
+
 #define KEEP_ALIVE_INTERVAL 600
 
 typedef void (^SWAccountStateChangeBlock)(SWAccount *account);
@@ -54,14 +57,41 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
+static int rport;
+static pj_str_t rhost;
+
+static int resp_rport;
+static pj_str_t resp_rhost;
+
+
+
+//static void fixContactHeader(pjsip_tx_data *tdata) {
+//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+//    if (contact) {
+//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
+//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+//            NSLog(@"fixContactHeader");
+//
+//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
+//            contact_uri->port = tdata->tp_info.transport->local_name.port;
+//            contact_uri->host = tdata->tp_info.transport->local_name.host;
+//            contact->uri = contact_uri;
+//            
+//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+//        }
+//    }
+//}
+
 static void fixContactHeader(pjsip_tx_data *tdata) {
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
+        if (rport > 0 && tdata->tp_info.transport->remote_name.port == 5060) {
+            NSLog(@"fixContactHeader");
             
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-            contact_uri->port = tdata->tp_info.transport->local_name.port;
+            contact_uri->port = rport;
+            contact_uri->host = rhost;
             contact->uri = contact_uri;
             
             pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
@@ -70,12 +100,13 @@ static void fixContactHeader(pjsip_tx_data *tdata) {
 }
 
 static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
+
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL));
     //pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, &pjsip_invite_method) == 0 &&
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         if (contact_uri->port > 0 && rdata->tp_info.transport->local_name.port != contact_uri->port) {
-            
+            NSLog(@"fixContactHeaderRdata");
             pjsip_msg_find_remove_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, nil);
             contact_uri->port = rdata->tp_info.transport->local_name.port;
             contact->uri = contact_uri;
@@ -162,6 +193,14 @@ static pjsip_module sipgate_module =
     NULL,                    /* on_tsx_state() */
 };
 
+static void refer_notify_callback(void *token, pjsip_event *e) {
+    pjsip_via_hdr *via_hdr = (pjsip_via_hdr *)e->body.rx_msg.rdata->msg_info.via;
+    if (via_hdr) {
+        rport = via_hdr->rport_param;
+        rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
+        NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:via_hdr->recvd_param], via_hdr->rport_param);
+    }
+}
 
 
 @interface SWEndpoint ()
@@ -438,8 +477,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
-    //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
+        ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
     ua_cfg.user_agent = pj_str((char *)"Polyphone iOS 1.0");
     
@@ -802,6 +841,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
+
+    
+//    pjsip_inv_update(pjsip_inv_session *inv, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>)
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:callInfo.acc_id];
     
     if (account) {
@@ -809,6 +851,67 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
         SWCall *call = [account lookupCall:call_id];
         
         if (call) {
+
+            if (callInfo.state == PJSIP_INV_STATE_CONNECTING && call.inbound == NO) {
+                pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
+                resp_rport = via_hdr->rport_param;
+                resp_rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
+                
+                NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:resp_rhost], resp_rport);
+            }
+
+            
+            if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && call.inbound == NO) {
+                
+                char contact_buf[256];
+
+                pj_str_t new_contact;
+                new_contact.ptr = contact_buf;
+                
+//                :%.*s@%.*s", (int)to->user.slen, to->user.ptr,
+                
+                pj_str_t username = [account.accountConfiguration.username pjString];
+                
+                new_contact.slen = snprintf(contact_buf, 256, "<sips:%.*s@%.*s:%d;transport=TLS;ob>", username.slen, username.ptr, resp_rhost.slen, resp_rhost.ptr, resp_rport);
+
+                pjsip_tx_data *tdata;
+                pjsua_call *call;
+                pjsip_dialog *dlg = NULL;
+                pj_status_t status;
+                
+//                PJ_ASSERT_RETURN(call_id >= 0 && call_id < (int)pjsua_var.ua_cfg.max_calls,
+//                                 PJ_EINVAL);
+//                
+//                PJ_LOG(4, (THIS_FILE, "Sending UPDATE Contact on call %d", call_id));
+//                pj_log_push_indent();
+                
+                status = acquire_call("pjsua_call_update_contact()", call_id, &call, &dlg);
+                
+                NSLog(@"e", e);
+                if (status != PJ_SUCCESS) {
+                    NSLog(@"cannot aquire call");
+                }
+                    
+                
+//                / Create UPDATE with new offer /
+                status = pjsip_inv_update(call->inv, &new_contact, NULL, &tdata);
+                if (status != PJ_SUCCESS) {
+                    NSLog(@"Unable to create UPDATE request");
+                }
+                
+//                / Add additional headers etc /
+//                pjsua_process_msg_data(tdata, msg_data);
+                
+//                / Send the request /
+                status = pjsip_inv_send_msg(call->inv, tdata);
+                if (status != PJ_SUCCESS) {
+                    NSLog(@"Unable to send UPDATE");
+                }
+                
+                if (dlg) pjsip_dlg_dec_lock(dlg);
+            }
+            
+            
             
             [call callStateChanged];
             
@@ -892,13 +995,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
         [self incomingMessage:data];
         return PJ_TRUE;
-    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {
+//    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {
         //puts("subs");
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_notify_method) == 0) {
         [self incomingNotify:data];
         return PJ_TRUE;
-    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
-        //        [self incomingInvite:data];
+//    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
+//        [self incomingInvite:data];
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
         [self incomingRefer:data];
         return PJ_TRUE;
@@ -951,6 +1054,17 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
+    
+    
+//    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_ack_method) == 0) {
+//       
+//        NSLog(@"Ack");
+//        pjsip_inv_update(pjsip_inv_session *inv, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>);
+////        [self incomingAck:tdata];
+//        
+//    }
+//
+//    
     return PJ_FALSE;
 }
 
@@ -958,6 +1072,16 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 
 - (pj_bool_t) txResponsePackageProcessing:(pjsip_tx_data *) tdata {
+    
+//    if (pjsip_method_cmp(&tdata->msg->type, &pjsip_register_method) == 0) {
+//    
+//    pjsip_via_hdr *via_hdr = (pjsip_via_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, nil);
+//    if (via_hdr) {
+//        NSLog(@"MyRealIP: %@:%d", via_hdr->rport_param, via_hdr->recvd_param);
+//    }
+//    
+//    }
+    
     return PJ_FALSE;
 }
 
@@ -1010,8 +1134,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
         
         if (status == PJSIP_SC_OK) {
-            
-            if (_confirmationBlock) {
+            if (_confirmationBlock && account.accountState != SWAccountStateConnected) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _confirmationBlock(nil);
                 });
@@ -1021,7 +1144,17 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         
     }
-    
+
+//    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_invite_method) == 0 && status == 200) {
+//        pjsip_via_hdr *via_hdr = (pjsip_via_hdr *)data->msg_info.via;
+//        if (via_hdr) {
+//            rport = via_hdr->rport_param;
+//            rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
+//            NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:via_hdr->recvd_param], via_hdr->rport_param);
+//        }
+//    }
+
+
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
         /* Смотрим есть ли в сообщении заголовок SmID */
@@ -1142,6 +1275,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
 }
+
+//- (void) incomingInvite:(pjsip_rx_data *)data {
+//    /* Смотрим о каком абоненте речь в сообщении */
+//    
+//}
+
 
 - (void) incomingMessage:(pjsip_rx_data *)data {
     if (data == nil) {
@@ -1307,7 +1446,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (status != PJ_SUCCESS) {
         return;
     }
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, nil);
+
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, &refer_notify_callback);
     
     //    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
     
@@ -1315,6 +1455,61 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
 }
+
+//- (void) incomingAck:(pjsip_tx_data *)data {
+//    /* Смотрим о каком абоненте речь в сообщении */
+//    
+//    pj_status_t    status;
+//    pjsip_tx_data *tx_msg;
+//    
+//    pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
+//    pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
+//    
+//    char to_string[256];
+//    char from_string[256];
+//    
+//    pj_str_t source;
+//    source.ptr = to_string;
+//    source.slen = snprintf(to_string, 256, "sips:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
+//    
+//    pj_str_t target;
+//    target.ptr = from_string;
+//    target.slen = snprintf(from_string, 256, "sips:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
+//    
+//    pjsip_inv_update(<#pjsip_inv_session *inv#>, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>)
+//    
+//    /* Создаем непосредственно запрос */
+//    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+//                                        &pjsip_notify_method,
+//                                        &refer_to->hvalue, //proxy
+//                                        &source, //from
+//                                        &target, //to
+//                                        &info.acc_uri, //contact
+//                                        &data->msg_info.cid->id,
+//                                        data->msg_info.cseq->cseq,
+//                                        nil,
+//                                        &tx_msg);
+//    
+//    
+//    if (status != PJ_SUCCESS) {
+//        return;
+//    }
+//    
+//    
+//    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+//    
+//    if (status != PJ_SUCCESS) {
+//        return;
+//    }
+//    
+//    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, &refer_notify_callback);
+//    
+//    //    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+//    
+//    if (status != PJ_SUCCESS) {
+//        return;
+//    }
+//}
 
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
