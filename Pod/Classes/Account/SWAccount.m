@@ -95,6 +95,7 @@
     acc_cfg.cred_info[0].username = [self.accountConfiguration.username pjString];
     acc_cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
     acc_cfg.cred_info[0].data = [self.accountConfiguration.password pjString];
+    acc_cfg.ka_interval = 25;
 
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;

@@ -55,6 +55,8 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res);
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info);
 
+static void SWOnDTMFDigit (pjsua_call_id call_id, int digit);
+
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
 static int rport;
@@ -477,8 +479,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
+    ua_cfg.cb.on_dtmf_digit = &SWOnDTMFDigit;
+
     
-        ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
+//    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
     ua_cfg.user_agent = pj_str((char *)"Polyphone iOS 1.0");
     
@@ -496,6 +500,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
     media_cfg.no_vad = 1;
+
     
     status = pjsua_init(&ua_cfg, &log_cfg, &media_cfg);
     
@@ -544,6 +549,7 @@ static SWEndpoint *_sharedEndpoint = nil;
         pjsua_transport_config_default(&transportConfig);
         transportConfig.tls_setting = tls_setting;
         transportConfig.port = transport.port;
+        
         
         
         pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
@@ -968,6 +974,11 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
     //    NSLog(@"%@ %@", tp, info);
 }
 
+static void SWOnDTMFDigit (pjsua_call_id call_id, int digit) {
+    NSLog(@"SWOnDTMFDigit: %@", [NSNumber numberWithInt:digit]);
+}
+
+
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e){
     return PJSIP_REDIRECT_ACCEPT;
 }
@@ -1204,7 +1215,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         if (_messageSentBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                _messageSentBlock(account, call_id, sm_id, status, fileServer);
+                SWMessageStatus messageStatus = (status == PJSIP_SC_OK ? SWMessageStatusSended : SWMessageStatusNotDelivered);
+                
+                _messageSentBlock(account, call_id, sm_id, messageStatus, fileServer);
             });
         }
         return PJ_TRUE;

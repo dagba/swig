@@ -30,7 +30,8 @@ typedef NS_ENUM(NSInteger, SWFileType) {
     SWFileTypeBin,
     SWFileTypePicture,
     SWFileTypeAudio,
-    SWFileTypeVideo
+    SWFileTypeVideo,
+    SWFileTypeLocation
 };
 
 @interface SWAccount : NSObject <SWAccountProtocol>

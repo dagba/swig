@@ -246,7 +246,9 @@
         case PJSIP_INV_STATE_CONFIRMED: {
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
-            
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self keepAlive];
+            });
             
             self.callState = SWCallStateConnected;
         } break;
@@ -386,28 +388,40 @@
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
     
+    pj_status_t status;
+    NSError *error = nil;
     if (!_mute) {
-        pjsua_conf_disconnect(0, callInfo.conf_slot);
+        status = pjsua_conf_disconnect(0, callInfo.conf_slot);
         _mute = YES;
+        if (status != PJ_SUCCESS) {
+            error = [NSError errorWithDomain:@"Error mute" code:0 userInfo:nil];
+        }
+
     }
     
     else {
-        pjsua_conf_connect(0, callInfo.conf_slot);
+        status = pjsua_conf_connect(0, callInfo.conf_slot);
         _mute = NO;
+        if (status != PJ_SUCCESS) {
+            error = [NSError errorWithDomain:@"Error unmute" code:0 userInfo:nil];
+        }
+
     }
+    handler(error);
 }
 
 -(void)toggleSpeaker:(void(^)(NSError *error))handler {
-    
+    NSError *error = nil;
     if (!_speaker) {
-        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
+        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         _speaker = YES;
     }
     
     else {
-        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
         _speaker = NO;
     }
+    handler(error);
 }
 
 -(void)sendDTMF:(NSString *)dtmf handler:(void(^)(NSError *error))handler {
@@ -415,6 +429,7 @@
     pj_status_t status;
     NSError *error;
     pj_str_t digits = [dtmf pjString];
+    
     
     status = pjsua_call_dial_dtmf((int)self.callId, &digits);
     
@@ -433,6 +448,21 @@
     
     if (self.callState == SWCallStateIncoming) {
         [self createLocalNotification];
+    }
+}
+
+- (void) keepAlive {
+    pjsua_call_info callInfo;
+    pjsua_call_get_info((int)self.callId, &callInfo);
+
+    if (callInfo.state == PJSIP_INV_STATE_CONFIRMED) {
+        const pj_str_t method = pj_str((char *)"OPTIONS");
+        pj_status_t status = pjsua_call_send_request((int)self.callId, &method, nil);
+        if (status == PJ_SUCCESS) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self keepAlive];
+            });
+        }
     }
 }
 
