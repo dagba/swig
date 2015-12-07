@@ -65,30 +65,24 @@ static pj_str_t rhost;
 static int resp_rport;
 static pj_str_t resp_rhost;
 
-
-
-//static void fixContactHeader(pjsip_tx_data *tdata) {
-//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
-//    if (contact) {
-//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-//            NSLog(@"fixContactHeader");
-//
-//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-//            contact_uri->port = tdata->tp_info.transport->local_name.port;
-//            contact_uri->host = tdata->tp_info.transport->local_name.host;
-//            contact->uri = contact_uri;
-//            
-//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-//        }
-//    }
-//}
-
 static void fixContactHeader(pjsip_tx_data *tdata) {
+    //На стороне B фиксим заголовок контакт в INVITE и UPDATE ибо по умолчанию там какая-то левота.
     pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-        if (rport > 0 && tdata->tp_info.transport->remote_name.port == 5060) {
+        
+        pjsip_cseq_hdr *csec_hdr = PJSIP_MSG_CSEQ_HDR(tdata->msg);
+ 
+        pj_bool_t need_fix_contact = PJ_FALSE;
+        
+        pj_str_t invite = pj_str((char *)"INVITE");
+        pj_str_t update = pj_str((char *)"UPDATE");
+        
+        if (csec_hdr && pj_strcmp(&csec_hdr->method.name, &invite) == 0 || pj_strcmp(&csec_hdr->method.name, &update) == 0) {
+            need_fix_contact = PJ_TRUE;
+        }
+        
+        if (need_fix_contact && rport > 0 && tdata->tp_info.transport->remote_name.port == 5060) {
             NSLog(@"fixContactHeader");
             
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
@@ -100,54 +94,6 @@ static void fixContactHeader(pjsip_tx_data *tdata) {
         }
     }
 }
-
-static void fixContactHeaderRdata(pjsip_rx_data *rdata) {
-
-    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL));
-    //pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, &pjsip_invite_method) == 0 &&
-    if (contact) {
-        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-        if (contact_uri->port > 0 && rdata->tp_info.transport->local_name.port != contact_uri->port) {
-            NSLog(@"fixContactHeaderRdata");
-            pjsip_msg_find_remove_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, nil);
-            contact_uri->port = rdata->tp_info.transport->local_name.port;
-            contact->uri = contact_uri;
-            
-            pjsip_msg_add_hdr(rdata->msg_info.msg, (pjsip_hdr*)contact);
-        }
-    }
-}
-
-//static void fixContactHeader(pjsip_tx_data *tdata) {
-//    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
-//    if (contact) {
-//        pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
-//        if (contact_uri->port > 0 && tdata->tp_info.transport->local_name.port != contact_uri->port) {
-//
-//            pj_bool_t is_secure =  PJSIP_URI_SCHEME_IS_SIPS(contact_uri);
-//
-//            pjsip_sip_uri *uri = pjsip_sip_uri_create([SWEndpoint sharedEndpoint].pjPool, is_secure);
-//
-//            uri->user = contact_uri->user;
-//            uri->host = contact_uri->host;
-//
-//            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_CONTACT, nil);
-//            //            contact_uri->port = tdata->tp_info.transport->local_name.port;
-//            contact->uri = uri;
-//
-//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-//
-//            pj_str_t hname = pj_str((char *)"Test");
-//            pj_str_t hvalue = pj_str((char *)"Test");
-//
-//            pjsip_generic_string_hdr* hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-//
-//
-//            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
-//        }
-//    }
-//}
-
 
 static pj_bool_t on_rx_request(pjsip_rx_data *rdata)
 {
@@ -302,6 +248,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     
     [[AFNetworkReachabilityManager sharedManager] startMonitoring];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name: UIApplicationWillEnterForegroundNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredBackground:) name: UIApplicationDidEnterBackgroundNotification object:nil];
     
@@ -322,6 +270,13 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 #pragma Notification Methods
 
+- (void) handleEnteredForeground: (NSNotification *)notification {
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+    SWCall *call = [account firstCall];
+    [call reinvite:^(NSError *error) {
+    }];
+}
+
 -(void)handleEnteredBackground:(NSNotification *)notification {
     UIApplication *application = (UIApplication *)notification.object;
     
@@ -329,6 +284,11 @@ static SWEndpoint *_sharedEndpoint = nil;
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     
     self.ringtone.volume = 0.0;
+    
+    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+    SWCall *call = [account firstCall];
+    [call setHold:^(NSError *error) {
+    }];
     
     //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     
@@ -892,8 +852,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
 //                pj_log_push_indent();
                 
                 status = acquire_call("pjsua_call_update_contact()", call_id, &call, &dlg);
-                
-                NSLog(@"e", e);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"cannot aquire call");
                 }
@@ -1007,7 +965,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         [self incomingMessage:data];
         return PJ_TRUE;
 //    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {
-        //puts("subs");
+//        puts("subs");
+    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_options_method) == 0) {
+        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
+        return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_notify_method) == 0) {
         [self incomingNotify:data];
         return PJ_TRUE;

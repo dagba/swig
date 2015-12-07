@@ -246,9 +246,9 @@
         case PJSIP_INV_STATE_CONFIRMED: {
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self keepAlive];
-            });
+//            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+//                [self keepAlive];
+//            });
             
             self.callState = SWCallStateConnected;
         } break;
@@ -378,8 +378,46 @@
     self.ringback = nil;
 }
 
-//-(void)setHold:(void(^)(NSError *error))handler;
-//-(void)reinvite:(void(^)(NSError *error))handler;
+-(void)setHold:(void(^)(NSError *error))handler {
+    pj_status_t status;
+    NSError *error;
+    
+    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+        
+        status = pjsua_call_set_hold((int)self.callId, NULL);
+        
+        if (status != PJ_SUCCESS) {
+            
+            error = [NSError errorWithDomain:@"Error holding call" code:0 userInfo:nil];
+            
+        }
+    }
+    
+    if (handler) {
+        handler(error);
+    }
+
+}
+-(void)reinvite:(void(^)(NSError *error))handler {
+    pj_status_t status;
+    NSError *error;
+    
+    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+        
+        status = pjsua_call_reinvite((int)self.callId, PJ_TRUE, NULL);
+        
+        if (status != PJ_SUCCESS) {
+            
+            error = [NSError errorWithDomain:@"Error reinvite call" code:0 userInfo:nil];
+            
+        }
+    }
+    
+    if (handler) {
+        handler(error);
+    }
+}
+
 //-(void)transferCall:(NSString *)destination completionHandler:(void(^)(NSError *error))handler;
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
 
@@ -451,19 +489,20 @@
     }
 }
 
-- (void) keepAlive {
-    pjsua_call_info callInfo;
-    pjsua_call_get_info((int)self.callId, &callInfo);
-
-    if (callInfo.state == PJSIP_INV_STATE_CONFIRMED) {
-        const pj_str_t method = pj_str((char *)"OPTIONS");
-        pj_status_t status = pjsua_call_send_request((int)self.callId, &method, nil);
-        if (status == PJ_SUCCESS) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self keepAlive];
-            });
-        }
-    }
-}
+//- (void) keepAlive {
+//    pjsua_call_info callInfo;
+//    pjsua_call_get_info((int)self.callId, &callInfo);
+//
+//    if (callInfo.state == PJSIP_INV_STATE_CONFIRMED) {
+//        const pj_str_t method = pj_str((char *)"OPTIONS");
+//        pj_status_t status = pjsua_call_send_request((int)self.callId, &method, nil);
+//        
+//        if (status == PJ_SUCCESS) {
+//            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+//                [self keepAlive];
+//            });
+//        }
+//    }
+//}
 
 @end
