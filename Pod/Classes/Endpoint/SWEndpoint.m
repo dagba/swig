@@ -818,7 +818,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
         
         if (call) {
 
-            if (callInfo.state == PJSIP_INV_STATE_CONNECTING && call.inbound == NO) {
+            if (callInfo.state == PJSIP_INV_STATE_CONNECTING && callInfo.role == PJSIP_ROLE_UAC) {
                 pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
                 resp_rport = via_hdr->rport_param;
                 resp_rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
@@ -827,19 +827,22 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             }
 
             
-            if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && call.inbound == NO) {
+            if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && callInfo.role == PJSIP_ROLE_UAC) {
                 
-                char contact_buf[256];
+                pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+
+                pjsip_uri* local_contact_uri = pjsip_parse_uri(tempPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
+                pjsip_sip_uri *local_contact_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_contact_uri);
+                
+                local_contact_sip_uri->port = resp_rport;
+                local_contact_sip_uri->host = resp_rhost;
+                
+                pj_pool_release(tempPool);
 
                 pj_str_t new_contact;
-                new_contact.ptr = contact_buf;
-                
-//                :%.*s@%.*s", (int)to->user.slen, to->user.ptr,
-                
-                pj_str_t username = [account.accountConfiguration.username pjString];
-                
-                new_contact.slen = snprintf(contact_buf, 256, "<sips:%.*s@%.*s:%d;transport=TLS;ob>", username.slen, username.ptr, resp_rhost.slen, resp_rhost.ptr, resp_rport);
 
+                pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, new_contact.ptr, 512);
+                
                 pjsip_tx_data *tdata;
                 pjsua_call *call;
                 pjsip_dialog *dlg = NULL;
