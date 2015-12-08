@@ -837,12 +837,24 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 local_contact_sip_uri->port = resp_rport;
                 local_contact_sip_uri->host = resp_rhost;
                 
-                pj_pool_release(tempPool);
+//                pj_str_t new_contact;
 
-                pj_str_t new_contact;
-
-                pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, new_contact.ptr, 512);
+//                new_contact.slen = pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, new_contact.ptr, 512);
                 
+                
+                char contact_buf[256];
+                
+                pj_str_t new_contact;
+                new_contact.ptr = contact_buf;
+                
+                //                :%.*s@%.*s", (int)to->user.slen, to->user.ptr,
+                
+//                pj_str_t username = [account.accountConfiguration.username pjString];
+                
+                new_contact.slen = snprintf(contact_buf, 256, "<sips:%.*s@%.*s:%d;transport=TLS;ob>", local_contact_sip_uri->user.slen, local_contact_sip_uri->user.ptr, resp_rhost.slen, resp_rhost.ptr, resp_rport);
+
+                
+
                 pjsip_tx_data *tdata;
                 pjsua_call *call;
                 pjsip_dialog *dlg = NULL;
@@ -853,6 +865,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
 //                
 //                PJ_LOG(4, (THIS_FILE, "Sending UPDATE Contact on call %d", call_id));
 //                pj_log_push_indent();
+                
+//                new_contact = [[NSString stringWithFormat:@"<%@>", [NSString stringWithPJString:new_contact]] pjString];
+                
                 
                 status = acquire_call("pjsua_call_update_contact()", call_id, &call, &dlg);
                 if (status != PJ_SUCCESS) {
@@ -867,13 +882,16 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 }
                 
 //                / Add additional headers etc /
-//                pjsua_process_msg_data(tdata, msg_data);
+//                pjsua_process_msg_data(tdata, e->body.tx_msg);
                 
 //                / Send the request /
                 status = pjsip_inv_send_msg(call->inv, tdata);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"Unable to send UPDATE");
                 }
+                
+                pj_pool_release(tempPool);
+
                 
                 if (dlg) pjsip_dlg_dec_lock(dlg);
             }
