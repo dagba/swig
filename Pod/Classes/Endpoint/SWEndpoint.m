@@ -78,7 +78,7 @@ static void fixContactHeader(pjsip_tx_data *tdata) {
         pj_str_t invite = pj_str((char *)"INVITE");
         pj_str_t update = pj_str((char *)"UPDATE");
         
-        if (csec_hdr && pj_strcmp(&csec_hdr->method.name, &invite) == 0 || pj_strcmp(&csec_hdr->method.name, &update) == 0) {
+        if (csec_hdr && (pj_strcmp(&csec_hdr->method.name, &invite) == 0 || pj_strcmp(&csec_hdr->method.name, &update) == 0)) {
             need_fix_contact = PJ_TRUE;
         }
         
