@@ -65,4 +65,6 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 -(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler;
 
+-(void)updateBalanceCompletionHandler:(void(^)(NSError *error))handler;
+
 @end

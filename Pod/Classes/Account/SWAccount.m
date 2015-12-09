@@ -605,9 +605,6 @@
     
     pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
     
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -646,6 +643,66 @@
         
         return;
     }
+}
+
+-(void)updateBalanceCompletionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname = pj_str((char *)"Command-Name");
+    
+    pj_str_t hvalue = pj_str((char *)"GetBalance");
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+//    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+//    /* Создаем непосредственно запрос */
+//    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+//                                        &method,
+//                                        &info.acc_uri, //proxy
+//                                        &info.acc_uri, //from
+//                                        NULL, //to
+//                                        &info.acc_uri, //contact
+//                                        NULL,
+//                                        -1,
+//                                        NULL,
+//                                        &tx_msg);
+    
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+    
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    
+    if (status == PJ_SUCCESS) {
+        pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, NULL, NULL);
+    }
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to send balance request" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+
 }
 
 @end

@@ -171,6 +171,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
 @property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
 @property (nonatomic, copy) SWPushServerUpdatedBlock pushServerUpdatedBlock;
+@property (nonatomic, copy) SWBalanceUpdatedBlock balanceUpdatedBlock;
 
 @property (nonatomic) pj_thread_t *thread;
 
@@ -761,6 +762,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _pushServerUpdatedBlock = pushServerUpdatedBlock;
 }
 
+- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock {
+    _balanceUpdatedBlock = balanceUpdatedBlock;
+}
+
 #pragma PJSUA Callbacks
 
 static void SWOnRegState(pjsua_acc_id acc_id) {
@@ -822,10 +827,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
                 resp_rport = via_hdr->rport_param;
 
-                pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-                pj_strdup(tempPool, &resp_rhost, &via_hdr->recvd_param);
-                pj_pool_release(tempPool);
-
+                resp_rhost = pj_str(via_hdr->recvd_param.ptr);
+                resp_rhost.slen = via_hdr->recvd_param.slen;
+                
                 NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:resp_rhost], resp_rport);
             }
 
@@ -1107,6 +1111,22 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                 
             }
         }
+
+//        pj_str_t balance_hdr_str = pj_str((char *)"Balance");
+//        pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &balance_hdr_str, nil);
+//        if (balance_hdr != nil) {
+//            
+//            if (_balanceUpdatedBlock) {
+//                double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
+//                NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
+//                dispatch_async(dispatch_get_main_queue(), ^{
+//                    _balanceUpdatedBlock(balanceNumber);
+//                });
+//                
+//            }
+//            return PJ_TRUE;
+//        }
+//
         
         if (status == PJSIP_SC_NOT_FOUND){
             if (_needConfirmBlock) {
@@ -1138,7 +1158,28 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 //        }
 //    }
 
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
 
+    if (pjsip_method_cmp(&data->msg_info.cseq->method, &method) == 0) {
+
+        pj_str_t balance_hdr_str = pj_str((char *)"Balance");
+        pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &balance_hdr_str, nil);
+        if (balance_hdr != nil) {
+            
+            if (_balanceUpdatedBlock) {
+                double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
+                NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    _balanceUpdatedBlock(balanceNumber);
+                });
+            }
+            return PJ_TRUE;
+        }
+
+    }
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
         /* Смотрим есть ли в сообщении заголовок SmID */
@@ -1348,10 +1389,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         submitTime = [dateFormatter dateFromString:dateString];
     }
     
+    pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+    pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &sync_hdr_str, nil);
     
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, submitTime, fileType, fileHash, fileServer);
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO));
         });
     }
     

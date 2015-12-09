@@ -28,7 +28,7 @@ typedef NS_ENUM(NSUInteger, SWMessageStatus) {
 };
 
 typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status, NSString *fileServer);
-typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, NSDate *date, SWFileType fileType, NSString *fileHash, NSString *fileServer);
+typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, NSDate *date, SWFileType fileType, NSString *fileHash, NSString *fileServer, BOOL sync);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
@@ -37,8 +37,7 @@ typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWP
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWContactServerUpdatedBlock) (NSString *contactsServerUrl);
 typedef void (^SWPushServerUpdatedBlock) (NSString *pushServerUrl);
-
-
+typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
 
 @class SWEndpointConfiguration, SWAccount, SWCall;
@@ -82,7 +81,7 @@ typedef void (^SWPushServerUpdatedBlock) (NSString *pushServerUrl);
 - (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock;
 - (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock;
 - (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock;
-
+- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock;
 
 -(void)keepAlive;
 
