@@ -821,8 +821,11 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             if (callInfo.state == PJSIP_INV_STATE_CONNECTING && callInfo.role == PJSIP_ROLE_UAC) {
                 pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
                 resp_rport = via_hdr->rport_param;
-                resp_rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
-                
+
+                pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+                pj_strdup(tempPool, &resp_rhost, &via_hdr->recvd_param);
+                pj_pool_release(tempPool);
+
                 NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:resp_rhost], resp_rport);
             }
 
