@@ -262,7 +262,7 @@ static SWEndpoint *_sharedEndpoint = nil;
         if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
             SWAccount *account = [self firstAccount];
             SWCall *call = [account firstCall];
-            if (call) {
+            if (call && call.mediaState == SWMediaStateActive) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [call setHold:^(NSError *error) {
                     }];
@@ -272,7 +272,7 @@ static SWEndpoint *_sharedEndpoint = nil;
         } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
             SWAccount *account = [self firstAccount];
             SWCall *call = [account firstCall];
-            if (call) {
+            if (call && call.mediaState == SWMediaStateLocalHold) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [call reinvite:^(NSError *error) {
                     }];
