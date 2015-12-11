@@ -246,9 +246,6 @@
         case PJSIP_INV_STATE_CONFIRMED: {
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
-//            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-//                [self keepAlive];
-//            });
             
             self.callState = SWCallStateConnected;
         } break;
@@ -317,27 +314,7 @@
     pj_status_t status;
     NSError *error;
     
-    //    pjsua_msg_data msg_data;
-    //
-    //    pjsua_msg_data_init(&msg_data);
-    //
-    //    pj_str_t hname = pj_str((char *)"Contact2");
-    ////    char * headerValue=(char *)[(NSString *)[headers objectForKey:key] UTF8String];
-    //
-    //    pjsip_sip_uri *uri = [SWEndpoint sharedEndpoint].fix_contact_uri;
-    //
-    //    //    pj_str_t hvalue = [[NSString stringWithFormat:@"<sips:79220000032@188.234.214.138:%d;transport=TLS;ob>", uri->port] pjString];
-    //    pj_str_t hvalue = pj_str((char *)"Here we need to set fixed contact?");
-    //
-    //    pjsip_generic_string_hdr* add_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-    //    pj_list_push_front(&msg_data.hdr_list, add_hdr);
-    ////    pj_list_push_front(<#pj_list_type *list#>, <#pj_list_type *node#>)
-    //
-    ////    pj_str_t reason = pj_str((char *)"Contact Fix");
-    
     status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
-    //    pjsua_call_setting
-    //    pjsua_call_answer2((int)self.callId, nil, PJSIP_SC_OK, <#const pj_str_t *reason#>, <#const pjsua_msg_data *msg_data#>)
     
     if (status != PJ_SUCCESS) {
         
@@ -383,7 +360,9 @@
     NSError *error;
     
     if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
-        
+
+        pjsua_set_no_snd_dev();
+
         status = pjsua_call_set_hold((int)self.callId, NULL);
         
         if (status != PJ_SUCCESS) {
@@ -391,6 +370,7 @@
             error = [NSError errorWithDomain:@"Error holding call" code:0 userInfo:nil];
             
         }
+        
     }
     
     if (handler) {
@@ -403,13 +383,15 @@
     NSError *error;
     
     if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+        int capture_dev = 0;
+        int playback_dev = 0;
+        pjsua_get_snd_dev(&capture_dev, &playback_dev);
+        pjsua_set_snd_dev(capture_dev, playback_dev);
         
         status = pjsua_call_reinvite((int)self.callId, PJ_TRUE, NULL);
         
         if (status != PJ_SUCCESS) {
-            
             error = [NSError errorWithDomain:@"Error reinvite call" code:0 userInfo:nil];
-            
         }
     }
     
@@ -488,21 +470,5 @@
         [self createLocalNotification];
     }
 }
-
-//- (void) keepAlive {
-//    pjsua_call_info callInfo;
-//    pjsua_call_get_info((int)self.callId, &callInfo);
-//
-//    if (callInfo.state == PJSIP_INV_STATE_CONFIRMED) {
-//        const pj_str_t method = pj_str((char *)"OPTIONS");
-//        pj_status_t status = pjsua_call_send_request((int)self.callId, &method, nil);
-//        
-//        if (status == PJ_SUCCESS) {
-//            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-//                [self keepAlive];
-//            });
-//        }
-//    }
-//}
 
 @end
