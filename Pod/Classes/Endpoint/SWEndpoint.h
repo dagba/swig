@@ -19,6 +19,14 @@ struct Sync {
     NSUInteger lastViev;
 };
 
+struct Settings {
+    __unsafe_unretained NSString *contactServer;
+    __unsafe_unretained NSString *pushServer;
+    __unsafe_unretained NSString *fileServer;
+    BOOL homeAbonent;
+};
+
+
 typedef NS_ENUM(NSUInteger, SWMessageStatus) {
     SWMessageStatusUnknown = 0,
     SWMessageStatusSended = 1,
@@ -35,9 +43,8 @@ typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, 
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
-typedef void (^SWContactServerUpdatedBlock) (NSString *contactsServerUrl);
-typedef void (^SWPushServerUpdatedBlock) (NSString *pushServerUrl);
-typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
+typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
+//typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
 
 @class SWEndpointConfiguration, SWAccount, SWCall;
@@ -79,9 +86,10 @@ typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 //- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 
 - (void) setGetCountersBlock: (SWGetCounterBlock) getCountersBlock;
-- (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock;
-- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock;
-- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock;
+- (void) setSettingsUpdatedBlock: (SWSettingsUpdatedBlock) settingsUpdatedBlock;
+//- (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock;
+//- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock;
+//- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock;
 
 -(void)keepAlive;
 

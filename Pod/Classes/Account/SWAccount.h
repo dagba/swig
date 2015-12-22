@@ -67,8 +67,10 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 -(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler;
 
--(void)updateBalanceCompletionHandler:(void(^)(NSError *error))handler;
+-(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler;
 
--(void)createGroup:(NSArray *) abonents name:(NSString *) name CompletionHandler:(void(^)(NSError *error, NSString *groupID))handler;
+-(void)createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSString *groupID))handler;
+-(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler;
+
 
 @end

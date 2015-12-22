@@ -17,6 +17,11 @@
 
 #define kRegTimeout 800
 
+typedef NS_ENUM(NSInteger, SWGroupAction) {
+    SWGroupActionAdd,
+    SWGroupActionDelete
+};
+
 @interface SWAccount ()
 
 @property (nonatomic, strong) SWAccountConfiguration *configuration;
@@ -479,7 +484,6 @@
 
 static void sendMessageCallback(void *token, pjsip_event *e) {
     NSLog(@"sendMessageCallback");
-//    return;
     void (^handler)(NSError *, NSString *, NSString *) = (__bridge_transfer typeof(handler))(token);
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
@@ -489,6 +493,13 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         handler(error, nil, nil);
         return;
     }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        handler(error, nil, nil);
+        return;
+    }
+    
     pj_str_t smid_hdr_str = pj_str((char *)"SMID");
     pjsip_generic_string_hdr *smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &smid_hdr_str, nil);
     
@@ -696,7 +707,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     }
 }
 
--(void)updateBalanceCompletionHandler:(void(^)(NSError *error))handler {
+-(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -720,7 +731,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
-        handler(error);
+        handler(error, nil);
         
         return;
     }
@@ -729,19 +740,39 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
     if (status == PJ_SUCCESS) {
-        pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, NULL, NULL);
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &updateBalanceCallback);
     }
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to send balance request" code:0 userInfo:nil];
-        handler(error);
+        handler(error, nil);
         
         return;
     }
 
 }
 
--(void) createGroup:(NSArray *) abonents name:(NSString *) name CompletionHandler:(void(^)(NSError *error, NSString *groupID))handler {
+static void updateBalanceCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+
+    pj_str_t balance_hdr_str = pj_str((char *)"Balance");
+    pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &balance_hdr_str, nil);
+    if (balance_hdr != nil) {
+        double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
+        NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(nil, balanceNumber);
+        });
+    } else {
+        NSError *error = [NSError errorWithDomain:@"Failed to update balance" code:0 userInfo:nil];
+        handler(error, nil);
+    }
+}
+
+-(void) createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSString *groupID))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -815,6 +846,186 @@ static void createChatCallback(void *token, pjsip_event *e) {
         handler(error, nil);
     }
 }
+
+-(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetChatInfo");
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [groupID pjString];
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create group info request" code:0 userInfo:nil];
+        handler(error, nil, nil);
+        
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    if (status == PJ_SUCCESS) {
+        status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupInfoCallback);
+    }
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to send group info requst" code:0 userInfo:nil];
+        handler(error, nil, nil);
+        
+        return;
+    }
+
+}
+
+static void groupInfoCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *, NSString *, NSArray *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+
+    NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
+    if (msg == nil) {
+        handler(error, nil, nil);
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        handler(error, nil, nil);
+        return;
+    }
+
+    
+    NSLog(@"Body", msg->body);
+    
+//    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
+//    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
+//    if (group_id_hdr) {
+//        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+//    } else {
+//        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+//        handler(error, nil);
+//    }
+}
+
+- (void) groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionAdd completionHandler:handler];
+}
+
+- (void) groupRemoveAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionDelete completionHandler:handler];
+}
+
+
+-(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name;
+    
+    switch (groupAction) {
+        case SWGroupActionAdd:
+            hvalue_name = pj_str((char *)"AddAbonent");
+            break;
+        case SWGroupActionDelete:
+            hvalue_name = pj_str((char *)"DeleteAbonent");
+            break;
+            
+        default:
+            break;
+    }
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [groupID pjString];
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    if (status == PJ_SUCCESS) {
+        status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
+    }
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to send group modify requst" code:0 userInfo:nil];
+        handler(error);
+        
+        return;
+    }
+    
+}
+
+static void groupModifyCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    
+    NSError *error = [NSError errorWithDomain:@"Failed to modify Group" code:0 userInfo:nil];
+    if (msg == nil) {
+        handler(error);
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    
+//    NSLog(@"Body", msg->body);
+    
+    //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
+    //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
+    //    if (group_id_hdr) {
+    //        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+    //    } else {
+    //        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+    //        handler(error, nil);
+    //    }
+}
+
 
 
 @end

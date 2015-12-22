@@ -173,9 +173,11 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 //@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
-@property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
-@property (nonatomic, copy) SWPushServerUpdatedBlock pushServerUpdatedBlock;
-@property (nonatomic, copy) SWBalanceUpdatedBlock balanceUpdatedBlock;
+//@property (nonatomic, copy) SWContactServerUpdatedBlock contactsServerUpdatedBlock;
+//@property (nonatomic, copy) SWPushServerUpdatedBlock pushServerUpdatedBlock;
+//@property (nonatomic, copy) SWBalanceUpdatedBlock balanceUpdatedBlock;
+@property (nonatomic, copy) SWSettingsUpdatedBlock settingsUpdatedBlock;
+
 
 @property (nonatomic) pj_thread_t *thread;
 
@@ -788,18 +790,18 @@ static SWEndpoint *_sharedEndpoint = nil;
     _getCountersBlock = getCountersBlock;
 }
 
-- (void) setContactServerUpdatedBlock: (SWContactServerUpdatedBlock) contactsServerUpdatedBlock {
-    _contactsServerUpdatedBlock = contactsServerUpdatedBlock;
+- (void) setSettingsUpdatedBlock: (SWSettingsUpdatedBlock) settingsUpdatedBlock {
+    _settingsUpdatedBlock = settingsUpdatedBlock;
 }
 
-- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock {
-    _pushServerUpdatedBlock = pushServerUpdatedBlock;
-}
-
-- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock {
-    _balanceUpdatedBlock = balanceUpdatedBlock;
-}
-
+//- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock {
+//    _pushServerUpdatedBlock = pushServerUpdatedBlock;
+//}
+//
+//- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock {
+//    _balanceUpdatedBlock = balanceUpdatedBlock;
+//}
+//
 #pragma PJSUA Callbacks
 
 static void SWOnRegState(pjsua_acc_id acc_id) {
@@ -1113,32 +1115,39 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
         
+        struct Settings settings;
+        settings.fileServer = nil;
+        settings.contactServer = nil;
+        settings.pushServer = nil;
+        
         pj_str_t contact_server_hdr_str = pj_str((char *)"Contact-Server");
         pjsip_generic_string_hdr* contact_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &contact_server_hdr_str, nil);
         if (contact_server_hdr != nil) {
-            
-            if (_contactsServerUpdatedBlock) {
-                NSString *contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    _contactsServerUpdatedBlock(contactServer);
-                });
-                
-            }
+            settings.contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
         
         pj_str_t push_server_hdr_str = pj_str((char *)"Push-Server");
         pjsip_generic_string_hdr* push_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &push_server_hdr_str, nil);
         if (push_server_hdr != nil) {
-            
-            if (_pushServerUpdatedBlock) {
-                NSString *pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    _pushServerUpdatedBlock(pushServer);
-                });
-                
-            }
+            settings.pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+        }
+
+        pj_str_t file_server_hdr_str = pj_str((char *)"File-Server");
+        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
+        if (push_server_hdr != nil) {
+            settings.fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+        }
+
+        pj_str_t home_abonent_hdr_str = pj_str((char *)"Home-Abonent");
+        pjsip_generic_string_hdr* home_abonent_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &home_abonent_hdr_str, nil);
+        if (home_abonent_hdr != nil) {
+            settings.homeAbonent = (BOOL)atoi(home_abonent_hdr->hvalue.ptr);
         }
         
+        if (_settingsUpdatedBlock && settings.contactServer && settings.pushServer && settings.fileServer) {
+            _settingsUpdatedBlock(settings);
+        }
+
         if (status == PJSIP_SC_NOT_FOUND){
             if (_needConfirmBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -1169,27 +1178,27 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     //        }
     //    }
     
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    if (pjsip_method_cmp(&data->msg_info.cseq->method, &method) == 0) {
-        
-        pj_str_t balance_hdr_str = pj_str((char *)"Balance");
-        pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &balance_hdr_str, nil);
-        if (balance_hdr != nil) {
-            
-            if (_balanceUpdatedBlock) {
-                double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
-                NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    _balanceUpdatedBlock(balanceNumber);
-                });
-            }
-            return PJ_TRUE;
-        }
-    }
+//    pjsip_method method;
+//    pj_str_t method_string = pj_str("COMMAND");
+//    
+//    pjsip_method_init_np(&method, &method_string);
+//    
+//    if (pjsip_method_cmp(&data->msg_info.cseq->method, &method) == 0) {
+//        
+//        pj_str_t balance_hdr_str = pj_str((char *)"Balance");
+//        pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &balance_hdr_str, nil);
+//        if (balance_hdr != nil) {
+//            
+//            if (_balanceUpdatedBlock) {
+//                double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
+//                NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
+//                dispatch_async(dispatch_get_main_queue(), ^{
+//                    _balanceUpdatedBlock(balanceNumber);
+//                });
+//            }
+//            return PJ_TRUE;
+//        }
+//    }
     
 //    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
 //        /* Смотрим есть ли в сообщении заголовок SmID */
