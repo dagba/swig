@@ -355,7 +355,9 @@
     NSError *error;
     
     pjsua_call_id callIdentifier;
-    pj_str_t uri = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+//    pj_str_t uri = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+    
+    pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:YES] pjString];
     
     status = pjsua_call_make_call((int)self.accountId, &uri, 0, NULL, NULL, &callIdentifier);
     
@@ -377,48 +379,52 @@
     }
 }
 
--(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
-    [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI completionHandler:handler];
+-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
+    [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI isGroup:NO completionHandler:handler];
 }
 
--(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler {
+-(void)sendGroupMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
+    [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI isGroup:YES completionHandler:handler];
+}
+
+
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
 
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
-    
     pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
-    pjsua_acc_info info;
+    status = pjsua_acc_create_request((int)self.accountId, &pjsip_message_method, &to, &tx_msg);
     
-    pjsua_acc_get_info((int)self.accountId, &info);
+    pjsip_via_hdr *via_hdr = pjsip_msg_find_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
+    via_hdr->branch_param = pj_str((char *)"z9hG4bK");
+    via_hdr->comment = pj_str((char *)"How to remove Branch?");
+    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
     
-//    NSData *message_data = [message dataUsingEncoding:NSUTF16LittleEndianStringEncoding];
-    NSData *message_data = [message dataUsingEncoding:NSUTF8StringEncoding];
+    pjsip_msg_add_hdr(tx_msg->msg, via_hdr);
 
-    char * a = (char *)[message_data bytes];
 
-    pj_str_t pjMessage;
-
-    pj_strset(&pjMessage, a, (int)[message_data length]);
-
-    /* Создаем непосредственно запрос */
-    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-                                        &pjsip_message_method,
-                                        &info.acc_uri, //proxy
-                                        &info.acc_uri, //local
-                                        &to, //source to
-                                        nil, //contact
-                                        nil,
-                                        -1,
-                                        &pjMessage,
-                                        &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
-        handler(error, nil);
+        handler(error, nil, nil);
         return;
+    }
+
+    pj_str_t pjMessage = [message pjString];
+    
+    pj_str_t type = pj_str((char *)"text");
+    pj_str_t subtype = pj_str((char *)"plain");
+    
+    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    
+    tx_msg->msg->body = body;
+    
+    if (isGroup) {
+        pj_str_t hname = pj_str((char *)"GroupID");
+        pj_str_t hvalue = [URI pjString];
+        pjsip_generic_string_hdr *group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
     }
     
     if (fileType != SWFileTypeNo) {
@@ -439,21 +445,66 @@
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)file_hash_hdr);
     }
     
-    pjsip_cid_hdr *cid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
+//    pjsip_cid_hdr *cid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
+//
 
-//    pj_str_t hname = pj_str((char *)"Location");
-//    pj_str_t hvalue = pj_str((char *)"lat:56.123; lon:62.123; zoom:10;");
-//    pjsip_generic_string_hdr* location_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-//    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)location_hdr);
+//    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_CSEQ, NULL);
+//    
+//    pjsip_cseq_hdr *csec_hdr = pjsip_cseq_hdr_create([SWEndpoint sharedEndpoint].pjPool);
+//    csec_hdr->cseq = 1;
+//    csec_hdr->method = pjsip_message_method;
+//    
+//    pjsip_msg_add_hdr(tx_msg->msg, csec_hdr);
+//    
+//    pjsip_to_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tx_msg->msg);
+//    from_hdr->tag = pj_str((char *)"");
+//
+//    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_FROM, NULL);
+//    pjsip_msg_add_hdr(tx_msg->msg, from_hdr);
+
     
-    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
+    
+    
+    
+    status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageCallback);
+//    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, NULL, &sendMessageCallback);
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Error sending message" code:0 userInfo:nil];
-        handler(error, nil);
+        handler(error, nil, nil);
         return;
     }
     
-    handler(nil, [NSString stringWithPJString:cid_hdr->id]);
+//    handler(nil, [NSString stringWithPJString:cid_hdr->id]);
+}
+
+static void sendMessageCallback(void *token, pjsip_event *e) {
+    NSLog(@"sendMessageCallback");
+//    return;
+    void (^handler)(NSError *, NSString *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+
+    NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
+    if (msg == nil) {
+        handler(error, nil, nil);
+        return;
+    }
+    pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+    pjsip_generic_string_hdr *smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &smid_hdr_str, nil);
+    
+    NSString *fileServer = nil;
+    pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
+    pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &file_server_hdr_str, nil);
+    if (file_server_hdr != nil) {
+        fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+    }
+    
+    if (smid_hdr) {
+        handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer);
+    } else {
+        NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
+        handler(error, nil, nil);
+    }
 }
 
 
@@ -659,8 +710,6 @@
     
     pjsua_acc_get_info((int)self.accountId, &info);
     
-//    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-    
     pjsip_method method;
     pj_str_t method_string = pj_str("COMMAND");
     
@@ -668,19 +717,6 @@
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-//    /* Создаем непосредственно запрос */
-//    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-//                                        &method,
-//                                        &info.acc_uri, //proxy
-//                                        &info.acc_uri, //from
-//                                        NULL, //to
-//                                        &info.acc_uri, //contact
-//                                        NULL,
-//                                        -1,
-//                                        NULL,
-//                                        &tx_msg);
-    
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
@@ -704,5 +740,81 @@
     }
 
 }
+
+-(void) createGroup:(NSArray *) abonents name:(NSString *) name CompletionHandler:(void(^)(NSError *error, NSString *groupID))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"CreateChat");
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [name pjString];
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
+        handler(error, nil);
+        
+        return;
+    }
+    
+    NSString *abonentsString = [abonents componentsJoinedByString:@", "];
+    
+    pj_str_t abonentsPjStr = [abonentsString pjString];
+    
+    pj_str_t type = pj_str((char *)"text");
+    pj_str_t subtype = pj_str((char *)"plain");
+    
+    
+    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &abonentsPjStr);
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    tx_msg->msg->body = body;
+    
+    if (status == PJ_SUCCESS) {
+        status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &createChatCallback);
+    }
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to send balance request" code:0 userInfo:nil];
+        handler(error, nil);
+        
+        return;
+    }
+    
+}
+
+static void createChatCallback(void *token, pjsip_event *e) {
+
+    void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    
+    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
+    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
+    if (group_id_hdr) {
+        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+    } else {
+        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+        handler(error, nil);
+    }
+}
+
 
 @end

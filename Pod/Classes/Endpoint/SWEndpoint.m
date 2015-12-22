@@ -162,7 +162,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
 
-@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
+//@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
 @property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
 @property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
 @property (nonatomic, copy) SWAbonentStatusBlock abonentStatusBlock;
@@ -764,9 +764,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     _callMediaStateChangeBlock = callMediaStateChangeBlock;
 }
 
-- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
-    _messageSentBlock = messageSentBlock;
-}
+//- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
+//    _messageSentBlock = messageSentBlock;
+//}
 
 - (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock {
     _needConfirmBlock = needConfirmBlock;
@@ -1061,10 +1061,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
     
-    
-    //    PJSIP_H_AUTHORIZATION
-    //    PJSIP_MSG_CID_HDR(<#msg#>)
-    
     pjsip_authorization_hdr *auth_header = (pjsip_authorization_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, 0);
     if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && auth_header) {
         pj_str_t hname = pj_str((char *)"SYNC");
@@ -1084,17 +1080,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
-    
-    
-    //    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_ack_method) == 0) {
-    //
-    //        NSLog(@"Ack");
-    //        pjsip_inv_update(pjsip_inv_session *inv, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>);
-    ////        [self incomingAck:tdata];
-    //
-    //    }
-    //
-    //
     return PJ_FALSE;
 }
 
@@ -1206,61 +1191,61 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
     }
     
-    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
-        /* Смотрим есть ли в сообщении заголовок SmID */
-        NSUInteger sm_id = 0;
-        NSString *file_hash = 0;
-        SWFileType file_type = 0;
-        NSString *fileServer = @"http://193.200.21.126:4950/";
-        
-        
-        pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
-        pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
-        if (smid_hdr != nil) {
-            sm_id = atoi(smid_hdr->hvalue.ptr);
-        }
-        
-        pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
-        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
-        if (file_server_hdr != nil) {
-            fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-        }
-        
-        
-        //        pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
-        //        pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
-        //        if (file_type_hdr != nil) {
-        //            file_type = atoi(file_type_hdr->hvalue.ptr);
-        //
-        //            pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
-        //            pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
-        //            if (file_hash_hdr != nil) {
-        //                file_hash = [NSString stringWithPJString:file_hash_hdr->hvalue];
-        //            }
-        //
-        ////            pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-        ////            NSString *URIto = [NSString stringWithPJString:to->user];
-        ////            if (_readyToSendFileBlock) {
-        ////                dispatch_async(dispatch_get_main_queue(), ^{
-        ////                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
-        ////                });
-        ////            }
-        ////
-        ////
-        ////            return PJ_TRUE;
-        //        }
-        //
-        
-        
-        if (_messageSentBlock) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                SWMessageStatus messageStatus = (status == PJSIP_SC_OK ? SWMessageStatusSended : SWMessageStatusNotDelivered);
-                
-                _messageSentBlock(account, call_id, sm_id, messageStatus, fileServer);
-            });
-        }
-        return PJ_TRUE;
-    }
+//    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
+//        /* Смотрим есть ли в сообщении заголовок SmID */
+//        NSUInteger sm_id = 0;
+//        NSString *file_hash = 0;
+//        SWFileType file_type = 0;
+//        NSString *fileServer = @"http://193.200.21.126:4950/";
+//        
+//        
+//        pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
+//        pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+//        if (smid_hdr != nil) {
+//            sm_id = atoi(smid_hdr->hvalue.ptr);
+//        }
+//        
+//        pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
+//        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
+//        if (file_server_hdr != nil) {
+//            fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+//        }
+//        
+//        
+//        //        pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
+//        //        pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
+//        //        if (file_type_hdr != nil) {
+//        //            file_type = atoi(file_type_hdr->hvalue.ptr);
+//        //
+//        //            pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
+//        //            pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
+//        //            if (file_hash_hdr != nil) {
+//        //                file_hash = [NSString stringWithPJString:file_hash_hdr->hvalue];
+//        //            }
+//        //
+//        ////            pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
+//        ////            NSString *URIto = [NSString stringWithPJString:to->user];
+//        ////            if (_readyToSendFileBlock) {
+//        ////                dispatch_async(dispatch_get_main_queue(), ^{
+//        ////                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
+//        ////                });
+//        ////            }
+//        ////
+//        ////
+//        ////            return PJ_TRUE;
+//        //        }
+//        //
+//        
+//        
+//        if (_messageSentBlock) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                SWMessageStatus messageStatus = (status == PJSIP_SC_OK ? SWMessageStatusSended : SWMessageStatusNotDelivered);
+//                
+//                _messageSentBlock(account, call_id, sm_id, messageStatus, fileServer);
+//            });
+//        }
+//        return PJ_TRUE;
+//    }
     
     return PJ_FALSE;
 }

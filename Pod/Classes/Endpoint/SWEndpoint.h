@@ -27,7 +27,7 @@ typedef NS_ENUM(NSUInteger, SWMessageStatus) {
     SWMessageStatusRead = 4
 };
 
-typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status, NSString *fileServer);
+//typedef void (^SWMessageSentBlock)(SWAccount *account, NSString *callID, NSUInteger messageID, SWMessageStatus status, NSString *fileServer);
 typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, NSDate *date, SWFileType fileType, NSString *fileHash, NSString *fileServer, BOOL sync);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
@@ -66,7 +66,7 @@ typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
 
-- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
+//- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
 - (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;

@@ -27,7 +27,7 @@
         urlSchema = @"sips";
     }
     
-    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
+    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"] && ![sipUri hasPrefix:@"tel:"]) {
         sipUri = [NSString stringWithFormat:@"%@:%@", urlSchema, sipUri];
     }
     
@@ -51,6 +51,36 @@
     return sipUri;
 }
 
++(NSString *)sipUriWithPhone:(NSString *)uri fromAccount:(SWAccount *)account toGSM: (BOOL) toGSM {
+
+    pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
+
+    pjsua_acc_info acc_info;
+    pjsua_acc_get_info((int) account.accountId, &acc_info);
+    
+
+    pjsip_uri* local_uri = pjsip_parse_uri(tempPool, acc_info.acc_uri.ptr, acc_info.acc_uri.slen, NULL);
+    pjsip_sip_uri *local_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_uri);
+
+    
+    local_sip_uri->user = [uri pjString];
+    
+    if (toGSM) {
+        local_sip_uri->user_param = pj_str((char *)"phone");
+    }
+    
+    char contact_buf[512];
+    pj_str_t new_contact;
+    new_contact.ptr = contact_buf;
+    
+    new_contact.slen = pjsip_uri_print(PJSIP_URI_IN_FROMTO_HDR, local_sip_uri, contact_buf, 512);
+
+    pj_pool_release(tempPool);
+    
+    return [NSString stringWithPJString:new_contact];
+}
+
+
 
 +(NSString *)sipUri:(NSString *)uri withDisplayName:(NSString *)displayName {
     
@@ -64,7 +94,7 @@
         urlSchema = @"sips";
     }
     
-    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"]) {
+    if (![sipUri hasPrefix:@"sip:"] && ![sipUri hasPrefix:@"sips:"] && ![sipUri hasPrefix:@"tel:"]) {
         sipUri = [NSString stringWithFormat:@"%@:%@", urlSchema, sipUri];
     }
     
@@ -133,16 +163,17 @@
 
 + (NSString *) usernameFromURI: (NSString *) URI {
     
-    NSError *error = nil;
-    NSRegularExpression *regexp = [[NSRegularExpression alloc] initWithPattern:@"^<?(sips|sip)?:?\\+?([0-9a-z]+)" options:NSRegularExpressionCaseInsensitive error:&error];
+    pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
     
-    NSTextCheckingResult *result = [regexp firstMatchInString:URI options:0 range:NSMakeRange(0, [URI length])];
+    pj_str_t localURI = [URI pjString];
     
-    if (result == nil) return nil;
+    pjsip_uri* local_uri = pjsip_parse_uri(tempPool, localURI.ptr, localURI.slen, NULL);
+    pjsip_sip_uri *local_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_uri);
     
-    NSRange range = [result rangeAtIndex:2];
+    NSString *username = [NSString stringWithPJString:local_sip_uri->user];
     
-    return [URI substringWithRange:range];
+    pj_pool_release(tempPool);
+    return username;
 }
 
 @end

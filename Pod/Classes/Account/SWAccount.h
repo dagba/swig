@@ -58,13 +58,17 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 //-(void)answerCall:(NSUInteger)callId completionHandler:(void(^)(NSError *error))handler;
 //-(void)endCall:(NSInteger)callId completionHandler:(void(^)(NSError *error))handler;
 
--(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler;
--(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *callID))handler;
+-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler;
+-(void)sendGroupMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler;
+
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler;
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
 
 -(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler;
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error))handler;
+
+-(void)createGroup:(NSArray *) abonents name:(NSString *) name CompletionHandler:(void(^)(NSError *error, NSString *groupID))handler;
 
 @end
