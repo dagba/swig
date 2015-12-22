@@ -614,26 +614,13 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
     
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
     
     /* Создаем непосредственно запрос */
-    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-                                        &pjsip_publish_method,
-                                        &info.acc_uri, //proxy
-                                        &info.acc_uri, //from
-                                        &info.acc_uri, //to
-                                        &info.acc_uri, //contact
-                                        NULL,
-                                        -1,
-                                        NULL,
-                                        &tx_msg);
     
+    status = pjsua_acc_create_request((int)self.accountId, &pjsip_publish_method, &info.acc_uri, &tx_msg);
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
@@ -646,7 +633,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
     if (status == PJ_SUCCESS) {
-        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &publishCallback);
     }
 
     if (status != PJ_SUCCESS) {
@@ -657,7 +644,29 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     }
 }
 
--(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error))handler {
+static void publishCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    
+    NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
+    if (msg == nil) {
+        handler(error);
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    handler(nil);
+}
+
+
+-(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error, NSDate *date))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -673,22 +682,11 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
-    /* Создаем непосредственно запрос */
-    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-                                        &pjsip_subscribe_method,
-                                        &info.acc_uri, //proxy
-                                        &info.acc_uri, //from
-                                        &target, //to
-                                        &info.acc_uri, //contact
-                                        NULL,
-                                        -1,
-                                        NULL,
-                                        &tx_msg);
-    
-    
+    status = pjsua_acc_create_request((int)self.accountId, &pjsip_subscribe_method, &target, &tx_msg);
+
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create subscribe request" code:0 userInfo:nil];
-        handler(error);
+        handler(error, nil);
         
         return;
     }
@@ -696,16 +694,45 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
     if (status == PJ_SUCCESS) {
-        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &subscribeCallback);
     }
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to send subscribe requesrt" code:0 userInfo:nil];
-        handler(error);
+        handler(error, nil);
         
         return;
     }
 }
+
+static void subscribeCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+
+    NSError *error = [NSError errorWithDomain:@"Failed to subscribe" code:0 userInfo:nil];
+    if (msg == nil) {
+        handler(error, nil);
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        handler(error, nil);
+        return;
+    }
+    
+//    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
+//    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
+//    if (group_id_hdr) {
+//        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+//    } else {
+//        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+//        handler(error, nil);
+//    }
+}
+
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler {
     pj_status_t    status;

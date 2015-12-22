@@ -310,6 +310,9 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 - (void) handleEnteredForeground: (NSNotification *)notification {
     NSLog(@"handleEnteredForeground %@", _callCenter.currentCalls);
+    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
+    }];
+
 }
 
 - (void) handleApplicationWillResignActiveNotification: (NSNotification *)notification {
@@ -327,6 +330,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     self.ringtone.volume = 0.0;
     
     //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+    
+    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
+    }];
     
     [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
         [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
@@ -1169,92 +1175,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
     }
     
-    //    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_invite_method) == 0 && status == 200) {
-    //        pjsip_via_hdr *via_hdr = (pjsip_via_hdr *)data->msg_info.via;
-    //        if (via_hdr) {
-    //            rport = via_hdr->rport_param;
-    //            rhost = [[NSString stringWithPJString:via_hdr->recvd_param] pjString];
-    //            NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:via_hdr->recvd_param], via_hdr->rport_param);
-    //        }
-    //    }
-    
-//    pjsip_method method;
-//    pj_str_t method_string = pj_str("COMMAND");
-//    
-//    pjsip_method_init_np(&method, &method_string);
-//    
-//    if (pjsip_method_cmp(&data->msg_info.cseq->method, &method) == 0) {
-//        
-//        pj_str_t balance_hdr_str = pj_str((char *)"Balance");
-//        pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &balance_hdr_str, nil);
-//        if (balance_hdr != nil) {
-//            
-//            if (_balanceUpdatedBlock) {
-//                double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
-//                NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
-//                dispatch_async(dispatch_get_main_queue(), ^{
-//                    _balanceUpdatedBlock(balanceNumber);
-//                });
-//            }
-//            return PJ_TRUE;
-//        }
-//    }
-    
-//    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_message_method) == 0) {
-//        /* Смотрим есть ли в сообщении заголовок SmID */
-//        NSUInteger sm_id = 0;
-//        NSString *file_hash = 0;
-//        SWFileType file_type = 0;
-//        NSString *fileServer = @"http://193.200.21.126:4950/";
-//        
-//        
-//        pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
-//        pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
-//        if (smid_hdr != nil) {
-//            sm_id = atoi(smid_hdr->hvalue.ptr);
-//        }
-//        
-//        pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
-//        pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
-//        if (file_server_hdr != nil) {
-//            fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
-//        }
-//        
-//        
-//        //        pj_str_t  file_type_hdr_str = pj_str((char *)"FileType");
-//        //        pjsip_generic_string_hdr* file_type_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_type_hdr_str, nil);
-//        //        if (file_type_hdr != nil) {
-//        //            file_type = atoi(file_type_hdr->hvalue.ptr);
-//        //
-//        //            pj_str_t  file_hash_hdr_str = pj_str((char *)"FileHash");
-//        //            pjsip_generic_string_hdr* file_hash_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_hash_hdr_str, nil);
-//        //            if (file_hash_hdr != nil) {
-//        //                file_hash = [NSString stringWithPJString:file_hash_hdr->hvalue];
-//        //            }
-//        //
-//        ////            pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-//        ////            NSString *URIto = [NSString stringWithPJString:to->user];
-//        ////            if (_readyToSendFileBlock) {
-//        ////                dispatch_async(dispatch_get_main_queue(), ^{
-//        ////                    _readyToSendFileBlock(account, URIto, sm_id, file_type, file_hash);
-//        ////                });
-//        ////            }
-//        ////
-//        ////
-//        ////            return PJ_TRUE;
-//        //        }
-//        //
-//        
-//        
-//        if (_messageSentBlock) {
-//            dispatch_async(dispatch_get_main_queue(), ^{
-//                SWMessageStatus messageStatus = (status == PJSIP_SC_OK ? SWMessageStatusSended : SWMessageStatusNotDelivered);
-//                
-//                _messageSentBlock(account, call_id, sm_id, messageStatus, fileServer);
-//            });
-//        }
-//        return PJ_TRUE;
-//    }
+
     
     return PJ_FALSE;
 }
@@ -1417,14 +1338,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         });
     }
     
-    
-    
-    
     [self sendSubmit:data withCode:PJSIP_SC_OK];
-    
-    //    delete abonent;
-    //    delete message_txt;
-    //    delete to;
 }
 
 - (void) incomingRefer:(pjsip_rx_data *)data {
@@ -1562,12 +1476,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
-    pjsip_tx_data       *answer_msg;
-    pj_status_t          status;
-    bool                 ret_value = false;
-    int                   sm_id;
-    
-    
+    pjsip_tx_data *answer_msg;
+    pj_status_t status;
+    bool ret_value = false;
+    int sm_id;
     
     /* Готовим ответ абоненту о результате регистрации */
     status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &answer_msg);
