@@ -1517,6 +1517,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                 if (sumbit_sync_hdr != nil) {
                     pjsip_msg_add_hdr(answer_msg->msg, sumbit_sync_hdr);
                 }
+            } else {
+                return YES;
             }
         }
         

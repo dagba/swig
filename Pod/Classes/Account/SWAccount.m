@@ -403,7 +403,6 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     
     pjsip_via_hdr *via_hdr = pjsip_msg_find_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
     via_hdr->branch_param = pj_str((char *)"z9hG4bK");
-    via_hdr->comment = pj_str((char *)"How to remove Branch?");
     pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
     
     pjsip_msg_add_hdr(tx_msg->msg, via_hdr);
@@ -450,36 +449,15 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)file_hash_hdr);
     }
     
-//    pjsip_cid_hdr *cid_hdr = PJSIP_MSG_CID_HDR(tx_msg->msg);
-//
-
-//    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_CSEQ, NULL);
-//    
-//    pjsip_cseq_hdr *csec_hdr = pjsip_cseq_hdr_create([SWEndpoint sharedEndpoint].pjPool);
-//    csec_hdr->cseq = 1;
-//    csec_hdr->method = pjsip_message_method;
-//    
-//    pjsip_msg_add_hdr(tx_msg->msg, csec_hdr);
-//    
-//    pjsip_to_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tx_msg->msg);
-//    from_hdr->tag = pj_str((char *)"");
-//
-//    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_FROM, NULL);
-//    pjsip_msg_add_hdr(tx_msg->msg, from_hdr);
-
-    
-    
-    
-    
     status = pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageCallback);
-//    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, NULL, &sendMessageCallback);
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Error sending message" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
+
         return;
     }
-    
-//    handler(nil, [NSString stringWithPJString:cid_hdr->id]);
 }
 
 static void sendMessageCallback(void *token, pjsip_event *e) {
@@ -490,13 +468,18 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
 
     NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
     if (msg == nil) {
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
+
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
         return;
     }
     
@@ -511,7 +494,10 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     }
     
     if (smid_hdr) {
-        handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer);
+        });
+
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
         handler(error, nil, nil);

@@ -28,7 +28,7 @@ struct Settings {
 
 
 typedef NS_ENUM(NSUInteger, SWMessageStatus) {
-    SWMessageStatusUnknown = 0,
+    SWMessageStatusSending = 0,
     SWMessageStatusSended = 1,
     SWMessageStatusDelivered = 2,
     SWMessageStatusNotDelivered = 3,
