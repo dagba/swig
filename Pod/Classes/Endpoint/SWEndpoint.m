@@ -63,6 +63,8 @@ static void SWOnDTMFDigit (pjsua_call_id call_id, int digit);
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
+static pjsip_method pjsip_command_method;
+
 static int rport;
 static pj_str_t rhost;
 
@@ -214,6 +216,12 @@ static SWEndpoint *_sharedEndpoint = nil;
     if (!self) {
         return nil;
     }
+    
+    pj_str_t method_string = pj_str("COMMAND");
+    pjsip_method_init_np(&pjsip_command_method, &method_string);
+
+    
+    
     
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     
@@ -1027,6 +1035,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return PJ_FALSE;
     }
     
+    
+    
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
         [self incomingMessage:data];
         return PJ_TRUE;
@@ -1043,6 +1053,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
         [self incomingRefer:data];
         return PJ_TRUE;
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_command_method) == 0) {
+        
+        return [self incomingCommand:data];
     }
     
     return PJ_FALSE;
@@ -1340,7 +1353,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
 }
-
 - (void) incomingRefer:(pjsip_rx_data *)data {
     /* Смотрим о каком абоненте речь в сообщении */
     
@@ -1417,6 +1429,31 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
 }
+
+- (pj_status_t) incomingCommand:(pjsip_rx_data *)data {
+    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    
+    pj_str_t command_name_hdr_str = pj_str((char *)"Command-Name");
+    pjsip_generic_string_hdr *command_name_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &command_name_hdr_str, NULL);
+    
+    pj_str_t command_sync = pj_str((char *)"Sync");
+    
+    pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(_pjPool, &command_name_hdr_str, &command_sync);
+    
+    struct pjsip_hdr hdr_list;
+    
+    pj_list_init(&hdr_list);
+    
+    pj_list_push_back(&hdr_list, new_hdr);
+    
+    if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_sync) == 0) {
+        pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, &hdr_list, NULL);
+        NSLog(@"RespondToCommand %d", status);
+        return PJ_TRUE;
+    }
+    return PJ_FALSE;
+}
+
 
 //- (void) incomingAck:(pjsip_tx_data *)data {
 //    /* Смотрим о каком абоненте речь в сообщении */

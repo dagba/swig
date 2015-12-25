@@ -354,15 +354,21 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     }
 }
 
+-(void)makeCallToGSM:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
+    [self makeCall:URI toGSM:YES completionHandler:handler];
+}
+
 -(void)makeCall:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
-    
+    [self makeCall:URI toGSM:NO completionHandler:handler];
+}
+
+-(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM completionHandler:(void(^)(NSError *error))handler {
     pj_status_t status;
     NSError *error;
     
     pjsua_call_id callIdentifier;
-//    pj_str_t uri = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
-    pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:YES] pjString];
+    pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
     
     status = pjsua_call_make_call((int)self.accountId, &uri, 0, NULL, NULL, &callIdentifier);
     
@@ -515,64 +521,21 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
     
-    pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
     
     hname = pj_str((char *)"SMID");
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
-    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
+    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
 
     
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
-    
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-//    pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-//    pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
-    
-//    char to_string[256];
-//    char from_string[256];
-//    
-//    pj_str_t source;
-//    source.ptr = to_string;
-//    source.slen = snprintf(to_string, 256, "sip:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
-//    
-//    pj_str_t target;
-//    target.ptr = from_string;
-//    target.slen = snprintf(from_string, 256, "sip:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
-
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
 
+    status = pjsua_acc_create_request((int)self.accountId, &pjsip_notify_method, &target, &tx_msg);
 
-    
-    /* Создаем непосредственно запрос */
-    
-    //TODO: Контакт не нужен!
-    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-                                        &pjsip_notify_method,
-                                        &info.acc_uri, //proxy
-                                        &info.acc_uri, //from
-                                        &target, //to
-                                        &info.acc_uri, //contact
-                                        NULL,
-                                        -1,
-                                        NULL,
-                                        &tx_msg);
-    
-
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
         handler(error);
-        pj_pool_release(tempPool);
-    
         return;
     }
     
@@ -581,11 +544,36 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
     
     if (status == PJ_SUCCESS) {
-        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, NULL, NULL);
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageReadNotifyCallback);
     }
-    pj_pool_release(tempPool);
-
 }
+
+static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    
+    NSError *error = [NSError errorWithDomain:@"Failed to Message Read Notify" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
 
 -(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;

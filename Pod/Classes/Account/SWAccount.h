@@ -54,7 +54,12 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 
 -(void)endAllCalls;
 
+-(void)makeCallToGSM:(NSString *)URI completionHandler:(void(^)(NSError *error))handler;
 -(void)makeCall:(NSString *)URI completionHandler:(void(^)(NSError *error))handler;
+-(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM completionHandler:(void(^)(NSError *error))handler;
+
+
+
 //-(void)answerCall:(NSUInteger)callId completionHandler:(void(^)(NSError *error))handler;
 //-(void)endCall:(NSInteger)callId completionHandler:(void(^)(NSError *error))handler;
 
