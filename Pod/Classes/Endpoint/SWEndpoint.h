@@ -76,7 +76,7 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
-- (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
+//- (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);

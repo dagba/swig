@@ -25,6 +25,12 @@ typedef NS_ENUM(NSInteger, SWPresenseState) {
     SWPresenseStateOnline
 };
 
+typedef NS_ENUM(NSInteger, SWPresenseAction) {
+    SWPresenseActionSubscribe,
+    SWPresenseActionUnsubscribe
+};
+
+
 typedef NS_ENUM(NSInteger, SWFileType) {
     SWFileTypeNo,
     SWFileTypeBin,
@@ -69,8 +75,8 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler;
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
 
--(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
--(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error, NSDate *date))handler;
+//-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
+-(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error, NSDate *date))handler;
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler;
 

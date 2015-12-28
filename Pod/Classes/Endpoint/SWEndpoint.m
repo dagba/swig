@@ -318,8 +318,8 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 - (void) handleEnteredForeground: (NSNotification *)notification {
     NSLog(@"handleEnteredForeground %@", _callCenter.currentCalls);
-    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
-    }];
+//    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
+//    }];
 
 }
 
@@ -339,8 +339,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     
-    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
-    }];
+//    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
+//    }];
     
     [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
         [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];

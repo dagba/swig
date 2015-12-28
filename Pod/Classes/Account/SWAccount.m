@@ -637,16 +637,9 @@ static void publishCallback(void *token, pjsip_event *e) {
     handler(nil);
 }
 
-
--(void)subscribeBuddyURI:(NSString *) URI completionHandler:(void(^)(NSError *error, NSDate *date))handler {
+-(void) monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error, NSDate *date))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
-    
-    pj_str_t hname = pj_str((char *)"Event");
-    
-    pj_str_t hvalue = pj_str((char *)"presence");
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
     
     pjsua_acc_info info;
     
@@ -662,8 +655,14 @@ static void publishCallback(void *token, pjsip_event *e) {
         
         return;
     }
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+
+    if (action == SWPresenseActionSubscribe) {
+        pj_str_t hname = pj_str((char *)"Event");
+        pj_str_t hvalue = pj_str((char *)"presence");
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+    }
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &subscribeCallback);
 }
