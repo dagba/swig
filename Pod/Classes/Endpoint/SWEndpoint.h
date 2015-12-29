@@ -40,7 +40,7 @@ typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSStr
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
-typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus);
+typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus, NSDate *lastOnline);
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
@@ -76,7 +76,7 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
-//- (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
+- (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);

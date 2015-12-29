@@ -1220,14 +1220,30 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         memcpy(buf, status_hdr->hvalue.ptr, status_hdr->hvalue.slen);
         status = atoi(buf);
         
+        
+        NSDate *lastOnline = [NSDate date];
+        pj_str_t last_online_hdr_str = pj_str((char *)"LastOnline");
+        pjsip_generic_string_hdr* last_online_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &last_online_hdr_str, nil);
+        if (last_online_hdr != nil) {
+            NSString *dateString = [NSString stringWithPJString:last_online_hdr->hvalue];
+            
+            NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+            [dateFormatter setDateFormat:@"dd.MM.yyyy HH:mm:ss"];
+            
+            NSTimeZone *zone = [[NSTimeZone alloc] initWithName:@"GMT"];
+            
+            [dateFormatter setTimeZone:zone];
+            lastOnline = [dateFormatter dateFromString:dateString];
+        }
+
+        
         if (_abonentStatusBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                _abonentStatusBlock(account, abonent, (SWPresenseState)status);
+                _abonentStatusBlock(account, abonent, (SWPresenseState)status, lastOnline);
             });
         }
         
         [self sendSubmit:data withCode:PJSIP_SC_OK];
-        //        delete abonent;
         return;
     }
     

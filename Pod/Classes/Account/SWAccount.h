@@ -76,7 +76,7 @@ typedef NS_ENUM(NSInteger, SWFileType) {
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
 
 //-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
--(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error, NSDate *date))handler;
+-(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler;
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler;
 
