@@ -219,7 +219,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     pj_str_t method_string = pj_str("COMMAND");
     pjsip_method_init_np(&pjsip_command_method, &method_string);
-
+    
     
     
     
@@ -318,9 +318,9 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 - (void) handleEnteredForeground: (NSNotification *)notification {
     NSLog(@"handleEnteredForeground %@", _callCenter.currentCalls);
-//    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
-//    }];
-
+    //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
+    //    }];
+    
 }
 
 - (void) handleApplicationWillResignActiveNotification: (NSNotification *)notification {
@@ -339,8 +339,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     
-//    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
-//    }];
+    //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
+    //    }];
     
     [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
         [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
@@ -827,7 +827,9 @@ static void SWOnRegState(pjsua_acc_id acc_id) {
         [account accountStateChanged];
         
         if ([SWEndpoint sharedEndpoint].accountStateChangeBlock) {
-            [SWEndpoint sharedEndpoint].accountStateChangeBlock(account);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [SWEndpoint sharedEndpoint].accountStateChangeBlock(account);
+            });
         }
         
         //        if (account.accountState == SWAccountStateDisconnected) {
@@ -851,7 +853,9 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].incomingCallBlock) {
-                [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
+                });
             }
         }
     }
@@ -946,7 +950,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callStateChangeBlock) {
-                [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
+                });
             }
             
             if (call.callState == SWCallStateDisconnected) {
@@ -977,7 +983,9 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
             [call mediaStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callMediaStateChangeBlock) {
-                [SWEndpoint sharedEndpoint].callMediaStateChangeBlock(account, call);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [SWEndpoint sharedEndpoint].callMediaStateChangeBlock(account, call);
+                });
             }
         }
     }
@@ -1087,10 +1095,15 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pj_str_t hname = pj_str((char *)"SYNC");
         
         __block struct Sync counters;
+        NSLog(@"test");
         
-        //        dispatch_sync(dispatch_get_main_queue(), ^{
+        DDLogInfo(@"Need counters");
+        
+        //        dispatch_queue_t q = dispatch_queue_create("com.foo.samplequeue", NULL);
+        //        dispatch_sync(q, ^{
         counters = _getCountersBlock(account);
         //        });
+        DDLogInfo(@"Received counters");
         
         
         pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
@@ -1103,9 +1116,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     return PJ_FALSE;
 }
-
-
-
 
 - (pj_bool_t) txResponsePackageProcessing:(pjsip_tx_data *) tdata {
     
@@ -1150,13 +1160,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         if (push_server_hdr != nil) {
             settings.pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
-
+        
         pj_str_t file_server_hdr_str = pj_str((char *)"File-Server");
         pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
         if (push_server_hdr != nil) {
             settings.fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
-
+        
         pj_str_t home_abonent_hdr_str = pj_str((char *)"Home-Abonent");
         pjsip_generic_string_hdr* home_abonent_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &home_abonent_hdr_str, nil);
         if (home_abonent_hdr != nil) {
@@ -1164,9 +1174,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
         
         if (_settingsUpdatedBlock && settings.contactServer && settings.pushServer && settings.fileServer) {
-            _settingsUpdatedBlock(settings);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                _settingsUpdatedBlock(settings);
+            });
+            
         }
-
+        
         if (status == PJSIP_SC_NOT_FOUND){
             if (_needConfirmBlock) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -1188,7 +1201,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
     }
     
-
+    
     
     return PJ_FALSE;
 }
@@ -1235,7 +1248,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             [dateFormatter setTimeZone:zone];
             lastOnline = [dateFormatter dateFromString:dateString];
         }
-
+        
         
         if (_abonentStatusBlock) {
             dispatch_async(dispatch_get_main_queue(), ^{

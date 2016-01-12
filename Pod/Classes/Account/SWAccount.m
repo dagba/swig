@@ -1,4 +1,4 @@
-    //
+//
 //  SWAccount.m
 //  swig
 //
@@ -90,8 +90,8 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
-//    acc_cfg.reg_delay_before_refresh
-//    acc_cfg.reg_first_retry_interval
+    //    acc_cfg.reg_delay_before_refresh
+    //    acc_cfg.reg_first_retry_interval
     acc_cfg.reg_retry_interval = 5;
     
     acc_cfg.cred_count = 1;
@@ -101,7 +101,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     acc_cfg.cred_info[0].data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
     acc_cfg.cred_info[0].data = [self.accountConfiguration.password pjString];
     acc_cfg.ka_interval = 25;
-
+    
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
     
@@ -147,7 +147,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
         [self connect:^(NSError *error) {
             handler(error);
         }];
-
+        
         return;
     }
     NSError *error = [NSError errorWithDomain:@"Code invalid" code:0 userInfo:nil];
@@ -193,7 +193,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 -(void)connect:(void(^)(NSError *error))handler {
     
     //FIX: registering too often will cause the server to possibly return error
-        
+    
     pj_status_t status;
     
     status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
@@ -380,7 +380,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     else {
         
         SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
-
+        
         
         [self addCall:call];
     }
@@ -402,7 +402,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
-
+    
     pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_message_method, &to, &tx_msg);
@@ -417,9 +417,9 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
     
     pjsip_msg_add_hdr(tx_msg->msg, via_hdr);
-
-
-
+    
+    
+    
     pj_str_t pjMessage = [message pjString];
     
     pj_str_t type = pj_str((char *)"text");
@@ -448,7 +448,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
         hname = pj_str((char *)"FileHash");
         
         hvalue = [fileHash pjString];
-
+        
         pjsip_generic_string_hdr* file_hash_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)filetype_hdr);
@@ -460,7 +460,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 
 static void sendMessageCallback(void *token, pjsip_event *e) {
     void (^handler)(NSError *, NSString *, NSString *) = (__bridge_transfer typeof(handler))(token);
-
+    
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
         handler(error, nil, nil);
@@ -473,7 +473,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil);
         });
-
+        
         return;
     }
     
@@ -499,7 +499,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer);
         });
-
+        
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
         handler(error, nil, nil);
@@ -523,12 +523,12 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
     pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-
+    
     
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-
+    
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_notify_method, &target, &tx_msg);
-
+    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
         handler(error);
@@ -544,13 +544,13 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
 
 static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
-
+    
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
         handler(error);
         return;
     }
-
+    
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to Message Read Notify" code:0 userInfo:nil];
     if (msg == nil) {
@@ -597,7 +597,9 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         
         return;
     }
@@ -611,27 +613,35 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
 static void publishCallback(void *token, pjsip_event *e) {
     
     void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
-
+    
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            
+            handler(error);
+        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
-    
-    handler(nil);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
 }
 
 -(void) monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler {
@@ -645,14 +655,16 @@ static void publishCallback(void *token, pjsip_event *e) {
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_subscribe_method, &target, &tx_msg);
-
+    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create subscribe request" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         
         return;
     }
-
+    
     if (action == SWPresenseActionSubscribe) {
         pj_str_t hname = pj_str((char *)"Event");
         pj_str_t hvalue = pj_str((char *)"presence");
@@ -669,14 +681,18 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
-
+    
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to subscribe" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
@@ -684,12 +700,15 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSLog(@"%@", e);
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
-
-    handler(nil);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
 }
 
 
@@ -717,7 +736,9 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
-        handler(error, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil);
+        });
         
         return;
     }
@@ -733,7 +754,7 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
-
+    
     pj_str_t balance_hdr_str = pj_str((char *)"Balance");
     pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &balance_hdr_str, nil);
     if (balance_hdr != nil) {
@@ -744,7 +765,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
         });
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to update balance" code:0 userInfo:nil];
-        handler(error, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil);
+        });
     }
 }
 
@@ -755,11 +778,11 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     pj_str_t hname_name = pj_str((char *)"Command-Name");
     pj_str_t hvalue_name = pj_str((char *)"CreateChat");
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-
+    
     pj_str_t hname_value = pj_str((char *)"Command-Value");
     pj_str_t hvalue_value = [name pjString];
     pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-
+    
     
     pjsua_acc_info info;
     
@@ -775,7 +798,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
-        handler(error, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil);
+        });
         
         return;
     }
@@ -799,19 +824,22 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
 }
 
 static void createChatCallback(void *token, pjsip_event *e) {
-
+    
     void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     
     pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
-    if (group_id_hdr) {
-        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
-    } else {
-        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
-        handler(error, nil);
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (group_id_hdr) {
+            handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+        } else {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+            handler(error, nil);
+        }
+    });
+    
 }
 
 -(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler {
@@ -841,7 +869,9 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create group info request" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
         
         return;
     }
@@ -858,34 +888,40 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
         return;
     }
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
     if (msg == nil) {
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        handler(error, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil);
+        });
         return;
     }
-
+    
     
     NSLog(@"Body", msg->body);
     
-//    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
-//    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
-//    if (group_id_hdr) {
-//        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
-//    } else {
-//        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
-//        handler(error, nil);
-//    }
+    //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
+    //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
+    //    if (group_id_hdr) {
+    //        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+    //    } else {
+    //        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
+    //        handler(error, nil);
+    //    }
 }
 
 - (void) groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
@@ -936,7 +972,9 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         
         return;
     }
@@ -950,28 +988,34 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
 static void groupModifyCallback(void *token, pjsip_event *e) {
     
     void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
-
+    
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to modify Group" code:0 userInfo:nil];
     if (msg == nil) {
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        handler(error);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
         return;
     }
     
     
-//    NSLog(@"Body", msg->body);
+    //    NSLog(@"Body", msg->body);
     
     //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
