@@ -1472,6 +1472,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_sync) == 0) {
         pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, &hdr_list, NULL);
         NSLog(@"RespondToCommand %d", status);
+        
+        status = pjsua_acc_set_registration(acc_id, PJ_TRUE);
+        if (status != PJ_SUCCESS) {
+            NSLog(@"Failed to reregister");
+        }
+        
         return PJ_TRUE;
     }
     return PJ_FALSE;
