@@ -390,16 +390,16 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     }
 }
 
--(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
+-(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI isGroup:NO completionHandler:handler];
 }
 
--(void)sendGroupMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
+-(void)sendGroupMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI isGroup:YES completionHandler:handler];
 }
 
 
--(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer))handler {
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -408,7 +408,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_message_method, &to, &tx_msg);
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        handler(error, nil, nil, nil);
         return;
     }
     
@@ -459,11 +459,11 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 }
 
 static void sendMessageCallback(void *token, pjsip_event *e) {
-    void (^handler)(NSError *, NSString *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    void (^handler)(NSError *, NSString *, NSString *, NSDate *) = (__bridge_transfer typeof(handler))(token);
     
     if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        handler(error, nil, nil, nil);
         return;
     }
     
@@ -471,7 +471,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
     if (msg == nil) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error, nil, nil);
+            handler(error, nil, nil, nil);
         });
         
         return;
@@ -480,7 +480,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
         dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error, nil, nil);
+            handler(error, nil, nil, nil);
         });
         return;
     }
@@ -491,19 +491,29 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     NSString *fileServer = nil;
     pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
     pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &file_server_hdr_str, nil);
+
+    pj_str_t submit_time_hdr_str = pj_str((char *)"SubmitTime");
+    pjsip_generic_string_hdr* submit_time_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &submit_time_hdr_str, nil);
+    
+    NSDate *date = [NSDate date];
+    if (submit_time_hdr != nil) {
+        NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+        [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss Z"];
+        date = [dateFormatter dateFromString:[NSString stringWithPJString:submit_time_hdr->hvalue]];
+    }
+    
     if (file_server_hdr != nil) {
         fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
     }
-    
+
+    dispatch_async(dispatch_get_main_queue(), ^{
     if (smid_hdr) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer);
-        });
-        
+            handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer, date);
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        handler(error, nil, nil, nil);
     }
+    });
 }
 
 

@@ -853,9 +853,9 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].incomingCallBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+//                dispatch_async(dispatch_get_main_queue(), ^{
                     [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
-                });
+//                });
             }
         }
     }
@@ -950,9 +950,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callStateChangeBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+//                dispatch_async(dispatch_get_main_queue(), ^{
                     [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
-                });
+//                });
             }
             
             if (call.callState == SWCallStateDisconnected) {
@@ -983,9 +983,9 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
             [call mediaStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callMediaStateChangeBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+//                dispatch_async(dispatch_get_main_queue(), ^{
                     [SWEndpoint sharedEndpoint].callMediaStateChangeBlock(account, call);
-                });
+//                });
             }
         }
     }
@@ -1241,11 +1241,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             NSString *dateString = [NSString stringWithPJString:last_online_hdr->hvalue];
             
             NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-            [dateFormatter setDateFormat:@"dd.MM.yyyy HH:mm:ss"];
-            
-            NSTimeZone *zone = [[NSTimeZone alloc] initWithName:@"GMT"];
-            
-            [dateFormatter setTimeZone:zone];
+            [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss Z"];
+
             lastOnline = [dateFormatter dateFromString:dateString];
         }
         
@@ -1363,11 +1360,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         NSString *dateString = [NSString stringWithPJString:submit_time_hdr->hvalue];
         
         NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-        [dateFormatter setDateFormat:@"dd.MM.yyyy HH:mm:ss"];
-        
-        NSTimeZone *zone = [[NSTimeZone alloc] initWithName:@"GMT"];
-        
-        [dateFormatter setTimeZone:zone];
+        [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss Z"];
+
         submitTime = [dateFormatter dateFromString:dateString];
     }
     
