@@ -1542,13 +1542,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
-    pjsip_tx_data *answer_msg;
+    pjsip_tx_data *respomse;
     pj_status_t status;
     bool ret_value = false;
     int sm_id;
     
     /* Готовим ответ абоненту о результате регистрации */
-    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &answer_msg);
+    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &respomse);
     if (status == PJ_SUCCESS) {
         
         pj_str_t smid_hdr_str = pj_str((char *)"SMID");
@@ -1558,7 +1558,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
         
         if (smid_hdr != nil) {
-            pjsip_msg_add_hdr(answer_msg->msg, smid_hdr);
+            pjsip_msg_add_hdr(respomse->msg, smid_hdr);
             sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
         }
         
@@ -1579,10 +1579,24 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                 hvalue.ptr = sync_buf;
                 hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
                 
-                pjsip_generic_string_hdr* sumbit_sync_hdr = pjsip_generic_string_hdr_create(answer_msg->pool, &hname, &hvalue);
+                pjsip_generic_string_hdr* sumbit_sync_hdr = pjsip_generic_string_hdr_create(respomse->pool, &hname, &hvalue);
                 if (sumbit_sync_hdr != nil) {
-                    pjsip_msg_add_hdr(answer_msg->msg, sumbit_sync_hdr);
+                    pjsip_msg_add_hdr(respomse->msg, sumbit_sync_hdr);
                 }
+
+                //Переворот полей from и to. Это какой-то кастыль... Я не знаю как это прокомментировать
+                pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(message->msg_info.msg);
+                pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(message->msg_info.msg);
+                
+                pjsip_from_hdr *new_from_hdr = pjsip_fromto_hdr_set_from(from_hdr);
+                pjsip_to_hdr *new_to_hdr = pjsip_fromto_hdr_set_to(to_hdr);
+                
+                pjsip_msg_find_remove_hdr(respomse->msg, PJSIP_H_FROM, NULL);
+                pjsip_msg_find_remove_hdr(respomse->msg, PJSIP_H_TO, NULL);
+                
+                pjsip_msg_add_hdr(respomse->msg, new_from_hdr);
+                pjsip_msg_add_hdr(respomse->msg, new_to_hdr);
+                
             } else {
                 return YES;
             }
@@ -1591,10 +1605,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         /* Получаем адрес, куда мы должны отправить ответ */
         pjsip_response_addr  response_addr;
-        status = pjsip_get_response_addr(answer_msg->pool, message, &response_addr);
+        status = pjsip_get_response_addr(respomse->pool, message, &response_addr);
         if (status == PJ_SUCCESS) {
             /* Отправляем ответ на регистрацию */
-            status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, answer_msg, nil, nil);
+            status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, respomse, nil, nil);
             if (status == PJ_SUCCESS) {
                 ret_value = true;
             }
