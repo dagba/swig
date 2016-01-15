@@ -104,6 +104,7 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
+
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;

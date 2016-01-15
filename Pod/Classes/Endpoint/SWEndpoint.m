@@ -1584,18 +1584,22 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                     pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
                 }
 
-                //Переворот полей from и to. Это какой-то кастыль... Я не знаю как это прокомментировать
-                pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(message->msg_info.msg);
-                pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(message->msg_info.msg);
+                //В поле TO всегда отвечаем, что это мы. иначе - пизда.
+
+                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(_pjPool);
                 
-                pjsip_from_hdr *new_from_hdr = pjsip_fromto_hdr_set_from(from_hdr);
-                pjsip_to_hdr *new_to_hdr = pjsip_fromto_hdr_set_to(to_hdr);
+                pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(message);
                 
-                pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_FROM, NULL);
+                pjsua_acc_info info;
+                
+                status = pjsua_acc_get_info(acc_id, &info);
+                
+                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(_pjPool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+                
+                to_hdr->uri = uri;
                 pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);
-                
-                pjsip_msg_add_hdr(response->msg, new_from_hdr);
-                pjsip_msg_add_hdr(response->msg, new_to_hdr);
+//
+                pjsip_msg_add_hdr(response->msg, to_hdr);
                 
             } else {
                 return YES;
