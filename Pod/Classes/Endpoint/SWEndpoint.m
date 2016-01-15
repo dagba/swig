@@ -1095,16 +1095,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pj_str_t hname = pj_str((char *)"SYNC");
         
         __block struct Sync counters;
-        NSLog(@"test");
-        
-        DDLogInfo(@"Need counters");
-        
         //        dispatch_queue_t q = dispatch_queue_create("com.foo.samplequeue", NULL);
         //        dispatch_sync(q, ^{
         counters = _getCountersBlock(account);
         //        });
-        DDLogInfo(@"Received counters");
-        
         
         pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
         
