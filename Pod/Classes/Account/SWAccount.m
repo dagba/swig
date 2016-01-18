@@ -17,10 +17,6 @@
 
 #define kRegTimeout 800
 
-typedef NS_ENUM(NSInteger, SWGroupAction) {
-    SWGroupActionAdd,
-    SWGroupActionDelete
-};
 
 @interface SWAccount ()
 
@@ -970,16 +966,15 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     //    }
 }
 
-- (void) groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
-    [self modifyGroup:groupID action:SWGroupActionAdd completionHandler:handler];
+-(void)groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionAdd uri:uri completionHandler:handler];
 }
 
-- (void) groupRemoveAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
-    [self modifyGroup:groupID action:SWGroupActionDelete completionHandler:handler];
+-(void)groupRemoveAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionDelete uri:uri completionHandler:handler];
 }
 
-
--(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction completionHandler:(void(^)(NSError *error))handler {
+-(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction uri:(NSString *)uri completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -1028,6 +1023,15 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
+    pj_str_t pjMessage = [uri pjString];
+    
+    pj_str_t type = pj_str((char *)"text");
+    pj_str_t subtype = pj_str((char *)"plain");
+    
+    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    
+    tx_msg->msg->body = body;
+    
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
 }
 
@@ -1059,7 +1063,11 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         });
         return;
     }
-    
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+
     
     //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
