@@ -838,6 +838,16 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
     void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
     
+    if (e->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil);
+        });
+        return;
+    }
+    
+
+    
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     
     pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
@@ -921,9 +931,34 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         });
         return;
     }
+
+    NSString *message_txt = @"";
     
+    if (msg->body != nil) {
+        //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+        message_txt = [[NSString alloc] initWithBytes:msg->body->data length:(NSUInteger)msg->body->len encoding:NSUTF8StringEncoding];
+    }
+
+    NSArray *rawResponse = [message_txt componentsSeparatedByString:@"\n"];
     
-    NSLog(@"Body", msg->body);
+    NSString *chatName = [rawResponse objectAtIndex:0];
+
+    NSString *stringContacts = [rawResponse objectAtIndex:1];
+
+    NSArray *rawContacts = [stringContacts componentsSeparatedByString:@","];
+    
+    NSMutableArray *array = [[NSMutableArray alloc] initWithCapacity:rawContacts.count];
+    
+    for (NSString *object in rawContacts) {
+        NSString *trimmedObject = [object stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        [array addObject:trimmedObject];
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil, chatName, array);
+    });
+    
+//    NSLog(@"Body %@", message_txt);
     
     //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
@@ -1025,8 +1060,6 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         return;
     }
     
-    
-    //    NSLog(@"Body", msg->body);
     
     //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
