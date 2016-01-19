@@ -1080,7 +1080,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
         pj_str_t hname = pj_str((char *)"Auth");
-        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@, UID=%@", account.accountConfiguration.code, account.accountConfiguration.password] pjString];
+        
+        NSString *devID = [[UIDevice currentDevice] identifierForVendor].UUIDString;
+        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@ UID=%@ DevID=%@", account.accountConfiguration.code, account.accountConfiguration.password, devID] pjString];
         [account.accountConfiguration setCode:@""];
         
         pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
