@@ -88,8 +88,8 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 -(void)createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSString *groupID))handler;
 -(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler;
 
--(void)groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
--(void)groupRemoveAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
--(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction uri:(NSString *)uri completionHandler:(void(^)(NSError *error))handler;
+-(void)groupAddAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
+-(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
+-(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
 
 @end

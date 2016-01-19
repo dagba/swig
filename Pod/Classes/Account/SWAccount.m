@@ -953,28 +953,17 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil, chatName, array);
     });
-    
-//    NSLog(@"Body %@", message_txt);
-    
-    //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
-    //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
-    //    if (group_id_hdr) {
-    //        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
-    //    } else {
-    //        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
-    //        handler(error, nil);
-    //    }
 }
 
--(void)groupAddAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
-    [self modifyGroup:groupID action:SWGroupActionAdd uri:uri completionHandler:handler];
+-(void)groupAddAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionAdd abonents:abonents completionHandler:handler];
 }
 
--(void)groupRemoveAbonent: (NSString *) uri groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
-    [self modifyGroup:groupID action:SWGroupActionDelete uri:uri completionHandler:handler];
+-(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+    [self modifyGroup:groupID action:SWGroupActionDelete abonents:abonents completionHandler:handler];
 }
 
--(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction uri:(NSString *)uri completionHandler:(void(^)(NSError *error))handler {
+-(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -1023,7 +1012,9 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
-    pj_str_t pjMessage = [uri pjString];
+    NSString *message = [abonents componentsJoinedByString:@","];
+    
+    pj_str_t pjMessage = [message pjString];
     
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
@@ -1067,16 +1058,6 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
     });
-
-    
-    //    pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
-    //    pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
-    //    if (group_id_hdr) {
-    //        handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
-    //    } else {
-    //        NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
-    //        handler(error, nil);
-    //    }
 }
 
 
