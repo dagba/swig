@@ -618,11 +618,22 @@ static SWEndpoint *_sharedEndpoint = nil;
         thread = pj_thread_this();
     }
     
-    if (!_pjPool) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            _pjPool = pjsua_pool_create("swig-pjsua", 512, 512);
-        });
-    }
+//    if (!_pjPool) {
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            _pjPool = pjsua_pool_create("swig-pjsua", 512, 512);
+//        });
+//    }
+}
+
+- (pj_pool_t *) pjPool {
+    static dispatch_once_t onceToken;
+    static pj_pool_t *pool = nil;
+    
+    dispatch_once(&onceToken, ^{
+        pool = pjsua_pool_create("swig-pjsua", 512, 512);
+    });
+    
+    return pool;
 }
 
 -(void)start:(void(^)(NSError *error))handler {
@@ -1025,10 +1036,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 #pragma Setters/Getters
 
--(void)setPjPool:(pj_pool_t *)pjPool {
-    
-    _pjPool = pjPool;
-}
+//-(void)setPjPool:(pj_pool_t *)pjPool {
+//    
+//    _pjPool = pjPool;
+//}
 
 -(void)setAccounts:(NSArray *)accounts {
     
@@ -1390,7 +1401,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pj_str_t hname = pj_str((char *)"Event");
     pj_str_t hvalue = pj_str((char *)"Ready");
     
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(_pjPool, &hname, &hvalue);
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(self.pjPool, &hname, &hvalue);
     
     
     pjsua_transport_info transport_info;
@@ -1457,7 +1468,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     pj_str_t command_sync = pj_str((char *)"Sync");
     
-    pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(_pjPool, &command_name_hdr_str, &command_sync);
+    pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(self.pjPool, &command_name_hdr_str, &command_sync);
     
     struct pjsip_hdr hdr_list;
     
@@ -1582,7 +1593,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
                 //В поле TO всегда отвечаем, что это мы. иначе - пизда.
 
-                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(_pjPool);
+                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(self.pjPool);
                 
                 pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(message);
                 
@@ -1590,7 +1601,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
                 
                 status = pjsua_acc_get_info(acc_id, &info);
                 
-                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(_pjPool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(self.pjPool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
                 
                 to_hdr->uri = uri;
                 pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);

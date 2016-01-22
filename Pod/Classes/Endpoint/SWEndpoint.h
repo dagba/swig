@@ -52,11 +52,13 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 @interface SWEndpoint : NSObject
 
 @property (nonatomic, strong, readonly) SWEndpointConfiguration *endpointConfiguration;
-@property (nonatomic, readonly) pj_pool_t *pjPool;
+//@property (nonatomic, readonly) pj_pool_t *pjPool;
 @property (nonatomic, strong, readonly) NSArray *accounts;
 @property (nonatomic, strong) SWRingtone *ringtone;
 
 +(instancetype)sharedEndpoint;
+
+- (pj_pool_t *) pjPool;
 
 -(void)configure:(SWEndpointConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler; //configure and start endpoint
 -(BOOL)hasTCPConfiguration;
