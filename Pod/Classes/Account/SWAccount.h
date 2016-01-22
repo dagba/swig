@@ -58,6 +58,8 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 -(void)connect:(void(^)(NSError *error))handler;
 -(void)disconnect:(void(^)(NSError *error))handler;
 
+- (void) accountStateConnecting;
+
 -(void)addCall:(SWCall *)call;
 -(void)removeCall:(NSUInteger)callId;
 -(SWCall *)lookupCall:(NSInteger)callId;

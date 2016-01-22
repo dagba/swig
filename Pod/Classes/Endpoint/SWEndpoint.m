@@ -53,7 +53,9 @@ static void SWOnCallTransferStatus(pjsua_call_id call_id, int st_code, const pj_
 
 static void SWOnCallReplaced(pjsua_call_id old_call_id, pjsua_call_id new_call_id);
 
-static void SWOnRegState(pjsua_acc_id acc_id);
+static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info);
+
+static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew);
 
 static void SWOnNatDetect(const pj_stun_nat_detect_result *res);
 
@@ -220,8 +222,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     pj_str_t method_string = pj_str("COMMAND");
     pjsip_method_init_np(&pjsip_command_method, &method_string);
     
-    
-    
+    self.accountStateChangeBlockObservers = [[NSMutableDictionary alloc] initWithCapacity:10];
     
     [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     
@@ -248,7 +249,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
         SWAccount *account = [SWEndpoint sharedEndpoint].firstAccount;
-        if (account) {
+        if (account && account.accountState == SWAccountStateConnected) {
             pjsua_acc_set_registration((int)account.accountId, PJ_TRUE);
         }
 
@@ -487,7 +488,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_call_state = &SWOnCallState;
     ua_cfg.cb.on_call_transfer_status = &SWOnCallTransferStatus;
     ua_cfg.cb.on_call_replaced = &SWOnCallReplaced;
-    ua_cfg.cb.on_reg_state = &SWOnRegState;
+    ua_cfg.cb.on_reg_state2 = &SWOnRegState2;
+    ua_cfg.cb.on_reg_started = &SWOnRegStarted;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
@@ -774,7 +776,7 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 -(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock forObserver: (id) observer {
     NSString *key = [NSString stringWithFormat:@"%p", observer];
-    [_accountStateChangeBlockObservers setObject:accountStateChangeBlock forKey:key];
+    [_accountStateChangeBlockObservers setObject:[accountStateChangeBlock copy] forKey:key];
 }
 
 -(void)removeAccountStateChangeBlockForObserver: (id) observer {
@@ -836,14 +838,28 @@ static SWEndpoint *_sharedEndpoint = nil;
 //
 #pragma PJSUA Callbacks
 
-static void SWOnRegState(pjsua_acc_id acc_id) {
+static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     
     if (account) {
         [account accountStateChanged];
         
-        for (SWAccountStateChangeBlock observer in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+        for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+            observer(account);
+        }
+    }
+}
+
+static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
+    
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+    
+    if (account) {
+        [account accountStateConnecting];
+        for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
             observer(account);
         }
     }

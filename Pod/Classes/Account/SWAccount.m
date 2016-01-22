@@ -259,6 +259,10 @@
     }
 }
 
+- (void) accountStateConnecting {
+    [self setAccountState:SWAccountStateConnecting];
+}
+
 -(void)accountStateChanged {
     
     pjsua_acc_info accountInfo;
