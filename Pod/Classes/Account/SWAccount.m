@@ -705,7 +705,6 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     
     
     if (msg->line.status.code != PJSIP_SC_OK) {
-        NSLog(@"%@", e);
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);

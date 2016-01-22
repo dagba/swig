@@ -247,19 +247,20 @@ static SWEndpoint *_sharedEndpoint = nil;
     //IP Change logic
     
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
-        
-        if ([AFNetworkReachabilityManager sharedManager].reachableViaWiFi) {
-            
-            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+        SWAccount *account = [SWEndpoint sharedEndpoint].firstAccount;
+        if (account) {
+            pjsua_acc_set_registration((int)account.accountId, PJ_TRUE);
         }
-        
-        else if ([AFNetworkReachabilityManager sharedManager].reachableViaWWAN) {
-            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
-        }
-        
-        else {
-            //offline
-        }
+
+//        if ([AFNetworkReachabilityManager sharedManager].reachableViaWiFi) {
+//            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+//        }
+//        else if ([AFNetworkReachabilityManager sharedManager].reachableViaWWAN) {
+//            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+//        }
+//        else {
+//            //offline
+//        }
     }];
     
     
@@ -901,9 +902,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             
             if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && callInfo.role == PJSIP_ROLE_UAC) {
                 
-                pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-                
-                pjsip_uri* local_contact_uri = pjsip_parse_uri(tempPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
+                pjsip_uri* local_contact_uri = pjsip_parse_uri([SWEndpoint sharedEndpoint].pjPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
                 pjsip_sip_uri *local_contact_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_contact_uri);
                 
                 local_contact_sip_uri->port = resp_rport;
@@ -949,9 +948,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 if (status != PJ_SUCCESS) {
                     NSLog(@"Unable to send UPDATE");
                 }
-                
-                pj_pool_release(tempPool);
-                
                 
                 if (dlg) pjsip_dlg_dec_lock(dlg);
             }
@@ -1096,9 +1092,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@ UID=%@ DevID=%@", account.accountConfiguration.code, account.accountConfiguration.password, devID] pjString];
         [account.accountConfiguration setCode:@""];
         
-        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
-        pj_pool_release(tempPool);
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(self.pjPool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
@@ -1115,9 +1109,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
         
-        pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
-        pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(tempPool, &hname, &hvalue);
-        pj_pool_release(tempPool);
+        pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(self.pjPool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
