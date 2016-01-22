@@ -70,7 +70,8 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 -(SWAccount *)lookupAccount:(NSInteger)accountId;
 -(SWAccount *)firstAccount;
 
--(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock;
+-(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock forObserver: (id) observer;
+-(void)removeAccountStateChangeBlockForObserver: (id) observer;
 -(void)setIncomingCallBlock:(void(^)(SWAccount *account, SWCall *call))incomingCallBlock;
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;

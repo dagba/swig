@@ -160,7 +160,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @interface SWEndpoint ()
 
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
-@property (nonatomic, copy) SWAccountStateChangeBlock accountStateChangeBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
 
@@ -180,6 +179,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 //@property (nonatomic, copy) SWBalanceUpdatedBlock balanceUpdatedBlock;
 @property (nonatomic, copy) SWSettingsUpdatedBlock settingsUpdatedBlock;
 
+@property (nonatomic, strong) NSMutableDictionary *accountStateChangeBlockObservers;
 
 @property (nonatomic) pj_thread_t *thread;
 
@@ -772,10 +772,16 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 #pragma Block Parameters
 
--(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock {
-    
-    _accountStateChangeBlock = accountStateChangeBlock;
+-(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock forObserver: (id) observer {
+    NSString *key = [NSString stringWithFormat:@"%p", observer];
+    [_accountStateChangeBlockObservers setObject:accountStateChangeBlock forKey:key];
 }
+
+-(void)removeAccountStateChangeBlockForObserver: (id) observer {
+    NSString *key = [NSString stringWithFormat:@"%p", observer];
+    [_accountStateChangeBlockObservers removeObjectForKey:key];
+}
+
 
 -(void)setIncomingCallBlock:(void(^)(SWAccount *account, SWCall *call))incomingCallBlock {
     
@@ -835,18 +841,11 @@ static void SWOnRegState(pjsua_acc_id acc_id) {
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     
     if (account) {
-        
         [account accountStateChanged];
         
-        if ([SWEndpoint sharedEndpoint].accountStateChangeBlock) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [SWEndpoint sharedEndpoint].accountStateChangeBlock(account);
-            });
+        for (SWAccountStateChangeBlock observer in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+            observer(account);
         }
-        
-        //        if (account.accountState == SWAccountStateDisconnected) {
-        //            [[SWEndpoint sharedEndpoint] removeAccount:account];
-        //        }
     }
 }
 
@@ -865,9 +864,7 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].incomingCallBlock) {
-//                dispatch_async(dispatch_get_main_queue(), ^{
-                    [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
-//                });
+                [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
             }
         }
     }
@@ -878,9 +875,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
-    
-    
-    //    pjsip_inv_update(pjsip_inv_session *inv, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>)
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:callInfo.acc_id];
     
     if (account) {
@@ -919,15 +913,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 pjsip_dialog *dlg = NULL;
                 pj_status_t status;
                 
-                //                PJ_ASSERT_RETURN(call_id >= 0 && call_id < (int)pjsua_var.ua_cfg.max_calls,
-                //                                 PJ_EINVAL);
-                //
-                //                PJ_LOG(4, (THIS_FILE, "Sending UPDATE Contact on call %d", call_id));
-                //                pj_log_push_indent();
-                
-                //                new_contact = [[NSString stringWithFormat:@"<%@>", [NSString stringWithPJString:new_contact]] pjString];
-                
-                
                 status = acquire_call("pjsua_call_update_contact()", call_id, &call, &dlg);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"cannot aquire call");
@@ -957,9 +942,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callStateChangeBlock) {
-//                dispatch_async(dispatch_get_main_queue(), ^{
-                    [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
-//                });
+                [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
             }
             
             if (call.callState == SWCallStateDisconnected) {
@@ -990,9 +973,7 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
             [call mediaStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callMediaStateChangeBlock) {
-//                dispatch_async(dispatch_get_main_queue(), ^{
                     [SWEndpoint sharedEndpoint].callMediaStateChangeBlock(account, call);
-//                });
             }
         }
     }
@@ -1032,11 +1013,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
 #pragma Setters/Getters
 
-//-(void)setPjPool:(pj_pool_t *)pjPool {
-//    
-//    _pjPool = pjPool;
-//}
-
 -(void)setAccounts:(NSArray *)accounts {
     
     [self willChangeValueForKey:@"accounts"];
@@ -1049,8 +1025,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (data == nil) {
         return PJ_FALSE;
     }
-    
-    
     
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
         [self incomingMessage:data];
@@ -1481,63 +1455,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     return PJ_FALSE;
 }
-
-
-//- (void) incomingAck:(pjsip_tx_data *)data {
-//    /* Смотрим о каком абоненте речь в сообщении */
-//
-//    pj_status_t    status;
-//    pjsip_tx_data *tx_msg;
-//
-//    pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
-//    pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
-//
-//    char to_string[256];
-//    char from_string[256];
-//
-//    pj_str_t source;
-//    source.ptr = to_string;
-//    source.slen = snprintf(to_string, 256, "sips:%.*s@%.*s", (int)to->user.slen, to->user.ptr, (int)to->host.slen,to->host.ptr);
-//
-//    pj_str_t target;
-//    target.ptr = from_string;
-//    target.slen = snprintf(from_string, 256, "sips:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
-//
-//    pjsip_inv_update(<#pjsip_inv_session *inv#>, <#const pj_str_t *new_contact#>, <#const pjmedia_sdp_session *offer#>, <#pjsip_tx_data **p_tdata#>)
-//
-//    /* Создаем непосредственно запрос */
-//    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
-//                                        &pjsip_notify_method,
-//                                        &refer_to->hvalue, //proxy
-//                                        &source, //from
-//                                        &target, //to
-//                                        &info.acc_uri, //contact
-//                                        &data->msg_info.cid->id,
-//                                        data->msg_info.cseq->cseq,
-//                                        nil,
-//                                        &tx_msg);
-//
-//
-//    if (status != PJ_SUCCESS) {
-//        return;
-//    }
-//
-//
-//    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
-//
-//    if (status != PJ_SUCCESS) {
-//        return;
-//    }
-//
-//    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, nil, &refer_notify_callback);
-//
-//    //    status = pjsip_endpt_send_request_stateless(pjsua_get_pjsip_endpt(), tx_msg, nil, nil);
-//
-//    if (status != PJ_SUCCESS) {
-//        return;
-//    }
-//}
-
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
