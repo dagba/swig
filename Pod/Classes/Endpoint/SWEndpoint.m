@@ -844,11 +844,12 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     if (account) {
         [account accountStateChanged];
-        
-        for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
-            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
-            observer(account);
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+                SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+                observer(account);
+            }
+        });
     }
 }
 
@@ -858,10 +859,12 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
     
     if (account) {
         [account accountStateConnecting];
-        for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
-            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
-            observer(account);
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
+                SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+                observer(account);
+            }
+        });
     }
 }
 
