@@ -421,14 +421,6 @@
         return;
     }
     
-    pjsip_via_hdr *via_hdr = pjsip_msg_find_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
-    via_hdr->branch_param = pj_str((char *)"z9hG4bK");
-    pjsip_msg_find_remove_hdr(tx_msg->msg, PJSIP_H_VIA, NULL);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, via_hdr);
-    
-    
-    
     pj_str_t pjMessage = [message pjString];
     
     pj_str_t type = pj_str((char *)"text");
