@@ -37,7 +37,8 @@ typedef NS_ENUM(NSInteger, SWFileType) {
     SWFileTypePicture,
     SWFileTypeAudio,
     SWFileTypeVideo,
-    SWFileTypeLocation
+    SWFileTypeLocation,
+    SWFileTypeContact
 };
 
 typedef NS_ENUM(NSInteger, SWGroupAction) {
