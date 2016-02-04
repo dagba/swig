@@ -686,10 +686,15 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         [account disconnect:^(NSError *error) {
             dispatch_semaphore_signal(sema);
+            [self removeAccount:account];
         }];
         
         dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
     }
+
+//    for (SWAccount *account in self.accounts) {
+//        [self removeAccount:account];
+//    }
     
     //    NSMutableArray *mutableArray = [self.accounts mutableCopy];
     //
@@ -1130,8 +1135,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     int status = data->msg_info.msg->line.status.code;
     
     //    NSUInteger cseq = data->msg_info.cseq->cseq;
-    
-    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    pjsua_acc_id acc_id;
+
+    if (pjsua_acc_get_count() == 0) return PJ_FALSE;
+    acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
@@ -1173,7 +1180,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
         
         if (status == PJSIP_SC_NOT_FOUND){
-            if (_needConfirmBlock) {
+            if (_needConfirmBlock && account.accountState == SWAccountStateConnecting) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _needConfirmBlock(account, PJSIP_SC_NOT_FOUND);
                 });
@@ -1182,7 +1189,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
         
         if (status == PJSIP_SC_OK) {
-            if (_confirmationBlock && account.accountState != SWAccountStateConnected) {
+            if (_confirmationBlock && (account.accountState == SWAccountStateConnected || account.accountState == SWAccountStateConnecting)) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _confirmationBlock(nil);
                 });

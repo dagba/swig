@@ -254,6 +254,8 @@
         return;
     }
     
+    pjsua_acc_del((int)self.accountId);
+    
     if (handler) {
         handler(nil);
     }
