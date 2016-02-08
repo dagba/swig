@@ -1322,6 +1322,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     /* Выдираем Sm_ID */
     NSUInteger sm_id = 0;
+    NSInteger group_id = 0;
     
     /* Смотрим есть ли в сообщении заголовок SmID */
     pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
@@ -1329,6 +1330,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (smid_hdr != nil) {
         sm_id = atoi(smid_hdr->hvalue.ptr);
     }
+
+    pj_str_t  groupid_hdr_str = pj_str((char *)"GroupID");
+    pjsip_generic_string_hdr* groupid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &groupid_hdr_str, nil);
+    if (groupid_hdr != nil) {
+        group_id = atoi(groupid_hdr->hvalue.ptr);
+    }
+
     
     SWFileType fileType = SWFileTypeNo;
     NSString *fileHash = @"";
@@ -1369,7 +1377,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO));
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO));
         });
     }
     

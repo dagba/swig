@@ -88,11 +88,11 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler;
 
--(void)createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSString *groupID))handler;
--(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler;
+-(void)createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSInteger groupID))handler;
+-(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler;
 
--(void)groupAddAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
--(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler;
--(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
+-(void)groupAddAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
+-(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
+-(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
 
 @end

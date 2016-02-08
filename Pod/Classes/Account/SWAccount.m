@@ -15,6 +15,9 @@
 
 #import "pjsua.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #define kRegTimeout 800
 
 
@@ -811,7 +814,7 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     }
 }
 
--(void) createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSString *groupID))handler {
+-(void) createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSInteger groupID))handler {
     if (self.accountState != SWAccountStateConnected) {
         NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
         handler(error, nil);
@@ -868,7 +871,7 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
 
 static void createChatCallback(void *token, pjsip_event *e) {
     
-    void (^handler)(NSError *, NSString *) = (__bridge_transfer typeof(handler))(token);
+    void (^handler)(NSError *, NSInteger) = (__bridge_transfer typeof(handler))(token);
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
@@ -884,7 +887,8 @@ static void createChatCallback(void *token, pjsip_event *e) {
     pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
     dispatch_async(dispatch_get_main_queue(), ^{
         if (group_id_hdr) {
-            handler(nil, [NSString stringWithPJString:group_id_hdr->hvalue]);
+            NSInteger group_id = atoi(group_id_hdr->hvalue.ptr);
+            handler(nil, group_id);
         } else {
             NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
             handler(error, nil);
@@ -893,7 +897,7 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
 }
 
--(void)groupInfo:(NSString *) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler {
+-(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler {
     if (self.accountState != SWAccountStateConnected) {
         NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
         handler(error, nil, nil);
@@ -908,7 +912,13 @@ static void createChatCallback(void *token, pjsip_event *e) {
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
     
     pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [groupID pjString];
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", (int)groupID);
+    
+    
     pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
     
     
@@ -992,15 +1002,15 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     });
 }
 
--(void)groupAddAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+-(void)groupAddAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
     [self modifyGroup:groupID action:SWGroupActionAdd abonents:abonents completionHandler:handler];
 }
 
--(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSString *) groupID completionHandler:(void(^)(NSError *error))handler {
+-(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
     [self modifyGroup:groupID action:SWGroupActionDelete abonents:abonents completionHandler:handler];
 }
 
--(void)modifyGroup:(NSString *) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler {
+-(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler {
     if (self.accountState != SWAccountStateConnected) {
         NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
         handler(error);
@@ -1027,7 +1037,12 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
     
     pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [groupID pjString];
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+
     pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
     
     
