@@ -1374,10 +1374,24 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
     pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &sync_hdr_str, nil);
+    BOOL lastMessageInPack = NO;
+    if (sync_hdr) {
+        int num = 0;
+        int total = 0;
+        int seq = 0;
+        int type = 0;
+        
+        sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+        
+        
+        if (total == seq) {
+            lastMessageInPack = YES;
+        }
+    }
     
     if (_messageReceivedBlock) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO));
+            _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO), lastMessageInPack);
         });
     }
     
