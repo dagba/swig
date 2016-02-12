@@ -1065,6 +1065,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         //        [self incomingInvite:data];
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
         [self incomingRefer:data];
+        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_command_method) == 0) {
         
@@ -1440,7 +1441,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pj_str_t target;
     target.ptr = from_string;
     target.slen = snprintf(from_string, 256, "sips:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
-    
     /* Создаем непосредственно запрос */
     status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
                                         &pjsip_notify_method,

@@ -20,6 +20,7 @@
 
 #define kRegTimeout 800
 
+void * refToSelf;
 
 @interface SWAccount ()
 
@@ -39,6 +40,8 @@
     }
     
     _calls = [NSMutableArray new];
+    
+    refToSelf = (__bridge void *)(self);
     
     return self;
 }
@@ -469,7 +472,12 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error, nil, nil, nil);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+
         return;
     }
     
@@ -482,6 +490,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         
         return;
     }
+
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
@@ -573,6 +582,9 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+
         return;
     }
     
@@ -644,6 +656,9 @@ static void publishCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+
         return;
     }
     
@@ -712,6 +727,10 @@ static void subscribeCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+
         return;
     }
     
@@ -787,6 +806,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+
         return;
     }
     
@@ -878,6 +900,8 @@ static void createChatCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -955,6 +979,8 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1090,6 +1116,8 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
         });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
