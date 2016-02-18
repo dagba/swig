@@ -95,4 +95,8 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 -(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 -(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
 
+- (void) logoutCompletitionHandler:(void(^)(NSError *error))handler;
+- (void) deleteAccountCompletitionHandler:(void(^)(NSError *error))handler;
+- (void) logoutAll:(BOOL) all completionHandler:(void(^)(NSError *error))handler;
+
 @end
