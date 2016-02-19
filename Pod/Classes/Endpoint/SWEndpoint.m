@@ -850,8 +850,9 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     if (account) {
         [account accountStateChanged];
 //        dispatch_async(dispatch_get_main_queue(), ^{
-            for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
-                SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+        NSDictionary *observers = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers copy];
+            for (NSString *key in observers) {
+                SWAccountStateChangeBlock observer = [observers objectForKey:key];
                 observer(account);
             }
 //        });
@@ -1260,9 +1261,29 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
     
+    
+    
     /* Event? */
     pjsip_generic_string_hdr *event_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &delivered_str, nil);
     if (event_hdr != nil) {
+        
+        pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+        pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &sync_hdr_str, nil);
+        BOOL lastMessageInPack = NO;
+        if (sync_hdr) {
+            int num = 0;
+            int total = 0;
+            int seq = 0;
+            int type = 0;
+            
+            sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+            
+            
+            if (total == seq) {
+                lastMessageInPack = YES;
+            }
+        }
+
         
         /* Получаем SmID */
         NSUInteger sm_id = 0;
@@ -1275,7 +1296,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             /* Передаем идентификатор и статус сообщения в GUI */
             if (_messageStatusBlock) {
 //                dispatch_async(dispatch_get_main_queue(), ^{
-                    _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
+                    _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value, (sync_hdr?YES:NO), lastMessageInPack);
 //                });
             }
             

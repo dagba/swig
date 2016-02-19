@@ -39,7 +39,7 @@ typedef NS_ENUM(NSUInteger, SWMessageStatus) {
 typedef void (^SWMessageReceivedBlock)(SWAccount *account, NSString *from, NSString *to, NSString *message, NSUInteger messageID, NSInteger groupID, NSDate *date, SWFileType fileType, NSString *fileHash, NSString *fileServer, BOOL sync, BOOL lastMessageInPack);
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
-typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status);
+typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status, BOOL sync, BOOL lastMessageInPack);
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus, NSDate *lastOnline);
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
