@@ -1210,7 +1210,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 - (void) incomingNotify:(pjsip_rx_data *)data {
     /* Смотрим о каком абоненте речь в сообщении */
     
-    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    pjsua_acc_id acc_id;
+    if (pjsua_acc_get_count() == 0) return;
+
+    acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     
@@ -1299,7 +1302,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         return;
     }
     
-    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    pjsua_acc_id acc_id;
+    if (pjsua_acc_get_count() == 0) return;
+
+    acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     
@@ -1401,7 +1407,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 - (void) incomingRefer:(pjsip_rx_data *)data {
     /* Смотрим о каком абоненте речь в сообщении */
     
-    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    pjsua_acc_id acc_id;
+    if (pjsua_acc_get_count() == 0) return;
+
+    acc_id = pjsua_acc_find_for_incoming(data);
     
     pj_str_t  smid_hdr_str = pj_str((char *)"Refer-To");
     pjsip_generic_string_hdr* refer_to = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
@@ -1475,7 +1484,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 }
 
 - (pj_status_t) incomingCommand:(pjsip_rx_data *)data {
-    pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(data);
+    
+    pjsua_acc_id acc_id;
+    if (pjsua_acc_get_count() == 0) return PJ_FALSE;
+    acc_id = pjsua_acc_find_for_incoming(data);
     
     pj_str_t command_name_hdr_str = pj_str((char *)"Command-Name");
     pjsip_generic_string_hdr *command_name_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &command_name_hdr_str, NULL);
@@ -1552,7 +1564,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 
                 pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(self.pjPool);
                 
-                pjsua_acc_id acc_id = pjsua_acc_find_for_incoming(message);
+                pjsua_acc_id acc_id;
+                if (pjsua_acc_get_count() == 0) return PJ_FALSE;
+
+                acc_id = pjsua_acc_find_for_incoming(message);
                 
                 pjsua_acc_info info;
                 
