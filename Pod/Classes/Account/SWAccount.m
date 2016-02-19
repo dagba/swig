@@ -472,9 +472,9 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil, nil);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
 
@@ -484,9 +484,9 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
     if (msg == nil) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil, nil);
-        });
+//        });
         
         return;
     }
@@ -494,9 +494,9 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil, nil);
-        });
+//        });
         return;
     }
     
@@ -521,14 +521,14 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         fileServer = [[NSString stringWithPJString:file_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
     if (smid_hdr) {
             handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer, date);
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
         handler(error, nil, nil, nil);
     }
-    });
+//    });
 }
 
 
@@ -579,9 +579,9 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
 
@@ -591,23 +591,23 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to Message Read Notify" code:0 userInfo:nil];
     if (msg == nil) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
-    });
+//    });
 }
 
 
@@ -634,9 +634,9 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         
         return;
     }
@@ -653,9 +653,9 @@ static void publishCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
 
@@ -665,23 +665,23 @@ static void publishCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            
+//        dispatch_async(dispatch_get_main_queue(), ^{
+        
             handler(error);
-        });
+//        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
-    });
+//    });
 }
 
 -(void) monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler {
@@ -724,9 +724,9 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
         
@@ -737,24 +737,24 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to subscribe" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
     
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
     
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
-    });
+//    });
 }
 
 
@@ -803,9 +803,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
 
@@ -815,9 +815,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
-        });
+//        });
         return;
     }
     pj_str_t balance_hdr_str = pj_str((char *)"Balance");
@@ -825,14 +825,14 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     if (balance_hdr != nil) {
         double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
         NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(nil, balanceNumber);
-        });
+//        });
     } else {
         NSError *error = [NSError errorWithDomain:@"Failed to update balance" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
-        });
+//        });
     }
 }
 
@@ -897,9 +897,9 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
@@ -909,7 +909,7 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
     pj_str_t group_id_hdr_str = pj_str((char *)"GroupID");
     pjsip_generic_string_hdr *group_id_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &group_id_hdr_str, nil);
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         if (group_id_hdr) {
             NSInteger group_id = atoi(group_id_hdr->hvalue.ptr);
             handler(nil, group_id);
@@ -917,7 +917,7 @@ static void createChatCallback(void *token, pjsip_event *e) {
             NSError *error = [NSError errorWithDomain:@"Failed to create group" code:0 userInfo:nil];
             handler(error, nil);
         }
-    });
+//    });
     
 }
 
@@ -976,9 +976,9 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
@@ -987,17 +987,17 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil);
-        });
+//        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error, nil, nil);
-        });
+//        });
         return;
     }
 
@@ -1023,9 +1023,9 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         [array addObject:trimmedObject];
     }
     
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil, chatName, array);
-    });
+//    });
 }
 
 -(void)groupAddAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
@@ -1113,9 +1113,9 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
@@ -1124,23 +1124,23 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
     NSError *error = [NSError errorWithDomain:@"Failed to modify Group" code:0 userInfo:nil];
     if (msg == nil) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-        });
+//        });
         return;
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
+//    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
-    });
+//    });
 }
 
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler {

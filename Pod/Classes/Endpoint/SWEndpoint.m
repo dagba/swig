@@ -849,12 +849,12 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     if (account) {
         [account accountStateChanged];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
                 SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
                 observer(account);
             }
-        });
+//        });
     }
 }
 
@@ -864,12 +864,12 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
     
     if (account) {
         [account accountStateConnecting];
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             for (NSString *key in [SWEndpoint sharedEndpoint].accountStateChangeBlockObservers) {
                 SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
                 observer(account);
             }
-        });
+//        });
     }
 }
 
@@ -1174,9 +1174,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         }
         
         if (_settingsUpdatedBlock && settings.contactServer && settings.pushServer && settings.fileServer) {
-            dispatch_async(dispatch_get_main_queue(), ^{
+//            dispatch_async(dispatch_get_main_queue(), ^{
                 _settingsUpdatedBlock(settings);
-            });
+//            });
             
         }
         
@@ -1248,9 +1248,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         
         if (_abonentStatusBlock) {
-            dispatch_async(dispatch_get_main_queue(), ^{
+//            dispatch_async(dispatch_get_main_queue(), ^{
                 _abonentStatusBlock(account, abonent, (SWPresenseState)status, lastOnline);
-            });
+//            });
         }
         
         [self sendSubmit:data withCode:PJSIP_SC_OK];
@@ -1271,9 +1271,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             
             /* Передаем идентификатор и статус сообщения в GUI */
             if (_messageStatusBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+//                dispatch_async(dispatch_get_main_queue(), ^{
                     _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value);
-                });
+//                });
             }
             
             [self sendSubmit:data withCode:PJSIP_SC_OK];
@@ -1391,9 +1391,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     
     if (_messageReceivedBlock) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+//        dispatch_async(dispatch_get_main_queue(), ^{
             _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO), lastMessageInPack);
-        });
+//        });
     }
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
