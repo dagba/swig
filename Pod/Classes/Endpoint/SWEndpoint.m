@@ -26,6 +26,9 @@
 
 #include <pjsua-lib/pjsua.h>
 #include <pjsua-lib/pjsua_internal.h>
+
+#import "UIDevice+FCUUID.h"
+
 @import CoreTelephony;
 
 #define KEEP_ALIVE_INTERVAL 600
@@ -1088,7 +1091,10 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
         pj_str_t hname = pj_str((char *)"Auth");
         
-        NSString *devID = [[UIDevice currentDevice] identifierForVendor].UUIDString;
+//        NSString *devID = [[UIDevice currentDevice] identifierForVendor].UUIDString;
+        
+        NSString *devID = [[UIDevice currentDevice] uuid];
+        
         pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@ UID=%@ DevID=%@", account.accountConfiguration.code, account.accountConfiguration.password, devID] pjString];
         [account.accountConfiguration setCode:@""];
         
@@ -1418,9 +1424,9 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     
     if (_messageReceivedBlock) {
-//        dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_async(dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO), lastMessageInPack);
-//        });
+        });
     }
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
