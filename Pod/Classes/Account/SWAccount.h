@@ -46,6 +46,12 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
     SWGroupActionDelete
 };
 
+typedef NS_ENUM(NSInteger, SWCallRoute) {
+    SWCallRouteGSM,
+    SWCallRouteSIP
+};
+
+
 @interface SWAccount : NSObject <SWAccountProtocol>
 
 @property (nonatomic, readonly) NSInteger accountId;
@@ -99,4 +105,6 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 - (void) deleteAccountCompletitionHandler:(void(^)(NSError *error))handler;
 - (void) logoutAll:(BOOL) all completionHandler:(void(^)(NSError *error))handler;
 
+- (void) setCallRoute:(SWCallRoute) callRoute completionHandler:(void(^)(NSError *error))handler;
+- (void) getCallRouteCompletionHandler:(void(^)(SWCallRoute callRoute, NSError *error))handler;
 @end

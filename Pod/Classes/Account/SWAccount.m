@@ -92,6 +92,10 @@ void * refToSelf;
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
+    acc_cfg.allow_contact_rewrite = 0;
+    acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_NO_UNREG;
+    acc_cfg.allow_via_rewrite = 0;
+
     //    acc_cfg.reg_delay_before_refresh
     //    acc_cfg.reg_first_retry_interval
     acc_cfg.reg_retry_interval = 5;
@@ -1231,6 +1235,160 @@ static void logoutCallback(void *token, pjsip_event *e) {
     });
 }
 
+- (void) setCallRoute:(SWCallRoute) callRoute completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"SetRoute");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    char to_string[256];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = to_string;
+    hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)callRoute);
+
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &setRouteCallback);
+
+}
+
+static void setRouteCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to Set route" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
+
+- (void) getCallRouteCompletionHandler:(void(^)(SWCallRoute callRoute, NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetRoute");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+        handler(-1, error);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getRouteCallback);
+}
+
+static void getRouteCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(SWCallRoute, NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(-1, error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to Get route" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(-1, error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(0, error);
+        });
+        return;
+    }
+    
+    pj_str_t value_hdr_str = pj_str((char *)"Command-Value");
+    pjsip_hdr *value_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &value_hdr_str, nil);
+    
+    SWCallRoute callRoute = -1;
+    if (value_hdr != nil) {
+        callRoute = atoi(((pjsip_generic_string_hdr *)value_hdr)->hvalue.ptr);
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(callRoute, nil);
+    });
+}
 
 
 @end
