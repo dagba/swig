@@ -69,6 +69,7 @@ static void SWOnDTMFDigit (pjsua_call_id call_id, int digit);
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
 static pjsip_method pjsip_command_method;
+static pjsip_method pjsip_syncdone_method;
 
 static int rport;
 static pj_str_t rhost;
@@ -167,6 +168,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
+@property (nonatomic, copy) SWSyncDoneBlock syncDoneBlock;
 
 //@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
 @property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
@@ -222,8 +224,12 @@ static SWEndpoint *_sharedEndpoint = nil;
         return nil;
     }
     
-    pj_str_t method_string = pj_str("COMMAND");
-    pjsip_method_init_np(&pjsip_command_method, &method_string);
+    pj_str_t method_string_command = pj_str("COMMAND");
+    pjsip_method_init_np(&pjsip_command_method, &method_string_command);
+
+    pj_str_t method_string_syncdone = pj_str("SYNCDONE");
+    pjsip_method_init_np(&pjsip_syncdone_method, &method_string_syncdone);
+
     
     self.accountStateChangeBlockObservers = [[NSMutableDictionary alloc] initWithCapacity:10];
     
@@ -808,6 +814,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _callMediaStateChangeBlock = callMediaStateChangeBlock;
 }
 
+-(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock {
+    _syncDoneBlock = syncDoneBlock;
+}
+
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
 //    _messageSentBlock = messageSentBlock;
 //}
@@ -1072,10 +1082,11 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_command_method) == 0) {
-        
         return [self incomingCommand:data];
+    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_syncdone_method) == 0) {
+        return [self incomingSyncDone:data];
     }
-    
+
     return PJ_FALSE;
 }
 
@@ -1540,6 +1551,24 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     return PJ_FALSE;
 }
+
+- (pj_status_t) incomingSyncDone:(pjsip_rx_data *)data {
+    pjsua_acc_id acc_id;
+    if (pjsua_acc_get_count() == 0) return PJ_FALSE;
+    acc_id = pjsua_acc_find_for_incoming(data);
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+
+    if (_syncDoneBlock) {
+        _syncDoneBlock(account);
+    }
+    pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
+
+    if (status == PJ_SUCCESS) {
+        return PJ_TRUE;
+    }
+    return PJ_FALSE;
+}
+
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {

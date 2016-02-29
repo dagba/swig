@@ -44,6 +44,8 @@ typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWP
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
+typedef void (^SWSyncDoneBlock) (SWAccount *account);
+
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
 
@@ -75,6 +77,7 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 -(void)setIncomingCallBlock:(void(^)(SWAccount *account, SWCall *call))incomingCallBlock;
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
+-(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock;
 
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
