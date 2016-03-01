@@ -95,11 +95,12 @@ typedef NS_ENUM(NSInteger, SWCallRoute) {
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler;
 
 -(void)createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSInteger groupID))handler;
--(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler;
+-(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents, NSString *avatarPath))handler;
 
 -(void)groupAddAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 -(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 -(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
+-(void)modifyGroup:(NSInteger) groupID avatarPath:(NSString *) avatarPath completionHandler:(void(^)(NSError *error))handler;
 
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler;
 - (void) deleteAccountCompletitionHandler:(void(^)(NSError *error))handler;

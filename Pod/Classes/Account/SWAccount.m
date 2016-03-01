@@ -936,10 +936,10 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
 }
 
--(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents))handler {
+-(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents, NSString *avatarPath))handler {
     if (self.accountState != SWAccountStateConnected) {
         NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        handler(error, nil, nil, nil);
         return;
     }
 
@@ -975,7 +975,7 @@ static void createChatCallback(void *token, pjsip_event *e) {
     
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create group info request" code:0 userInfo:nil];
-        handler(error, nil, nil);
+        handler(error, nil, nil, nil);
         return;
     }
     
@@ -987,12 +987,12 @@ static void createChatCallback(void *token, pjsip_event *e) {
 
 static void groupInfoCallback(void *token, pjsip_event *e) {
     
-    void (^handler)(NSError *, NSString *, NSArray *) = (__bridge_transfer typeof(handler))(token);
+    void (^handler)(NSError *, NSString *, NSArray *, NSString *) = (__bridge_transfer typeof(handler))(token);
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
 //        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error, nil, nil);
+            handler(error, nil, nil, nil);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
@@ -1003,7 +1003,7 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     if (msg == nil) {
         NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
 //        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error, nil, nil);
+            handler(error, nil, nil, nil);
 //        });
         return;
     }
@@ -1011,7 +1011,7 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
 //        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error, nil, nil);
+            handler(error, nil, nil, nil);
 //        });
         return;
     }
@@ -1038,9 +1038,12 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         [array addObject:trimmedObject];
     }
     
-//    dispatch_async(dispatch_get_main_queue(), ^{
-        handler(nil, chatName, array);
-//    });
+    NSString *avatarPath = nil;
+    if (rawResponse.count == 3) {
+        avatarPath = [rawResponse objectAtIndex:2];
+    }
+    
+    handler(nil, chatName, array, avatarPath);
 }
 
 -(void)groupAddAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
@@ -1156,6 +1159,64 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
 //    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
 //    });
+}
+
+-(void)modifyGroup:(NSInteger) groupID avatarPath:(NSString *) avatarPath completionHandler:(void(^)(NSError *error))handler {
+    if (self.accountState != SWAccountStateConnected) {
+        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"SetGroupAvatar");
+
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    pj_str_t pjMessage = [avatarPath pjString];
+    
+    pj_str_t type = pj_str((char *)"text");
+    pj_str_t subtype = pj_str((char *)"plain");
+    
+    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    
+    tx_msg->msg->body = body;
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
 }
 
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler {
