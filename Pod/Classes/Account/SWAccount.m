@@ -318,7 +318,7 @@ void * refToSelf;
     return pjsua_acc_is_valid((int)self.accountId);
 }
 
-#pragma Call Management
+#pragma mark - Call Management
 
 -(void)addCall:(SWCall *)call {
     
@@ -413,6 +413,8 @@ void * refToSelf;
         handler(error);
     }
 }
+
+#pragma mark - Send Message
 
 -(void)sendMessage:(NSString *)message to:(NSString *)URI completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     [self sendMessage:message fileType:SWFileTypeNo fileHash:nil to:URI isGroup:NO completionHandler:handler];
@@ -546,6 +548,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
 //    });
 }
 
+#pragma mark - Message Notify
 
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler {
     if (self.accountState != SWAccountStateConnected) {
@@ -625,79 +628,151 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
 //    });
 }
 
+#pragma mark - Delete Message
 
--(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {
+- (void) deleteMessage:(NSInteger *) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname = pj_str((char *)"Event");
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
     
-    char to_string[256];
-    pj_str_t hvalue;
-    hvalue.ptr = to_string;
-    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)state);
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
     
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
     
-    /* Создаем непосредственно запрос */
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
     
-    status = pjsua_acc_create_request((int)self.accountId, &pjsip_publish_method, &info.acc_uri, &tx_msg);
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
     
     if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
-//        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error);
-//        });
-        
+        NSError *error = [NSError errorWithDomain:@"Failed to delete message" code:0 userInfo:nil];
+        handler(error);
         return;
     }
     
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &publishCallback);
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteMessageCallback);
 }
 
-static void publishCallback(void *token, pjsip_event *e) {
+static void deleteMessageCallback(void *token, pjsip_event *e) {
     
     void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
     
     if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
         NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
-//        dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-//        });
+        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
         pjsua_acc_set_registration(accountID, PJ_TRUE);
-
         return;
     }
     
     pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to Delete Message" code:0 userInfo:nil];
     if (msg == nil) {
-        NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
-//        dispatch_async(dispatch_get_main_queue(), ^{
-        
+        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-//        });
+        });
         return;
     }
     
     if (msg->line.status.code != PJSIP_SC_OK) {
         NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
-//        dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_async(dispatch_get_main_queue(), ^{
             handler(error);
-//        });
+        });
         return;
     }
-//    dispatch_async(dispatch_get_main_queue(), ^{
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
         handler(nil);
-//    });
+    });
 }
+
+
+//-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {
+//    pj_status_t    status;
+//    pjsip_tx_data *tx_msg;
+//    
+//    pj_str_t hname = pj_str((char *)"Event");
+//    
+//    char to_string[256];
+//    pj_str_t hvalue;
+//    hvalue.ptr = to_string;
+//    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)state);
+//    
+//    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+//    
+//    pjsua_acc_info info;
+//    
+//    pjsua_acc_get_info((int)self.accountId, &info);
+//    
+//    /* Создаем непосредственно запрос */
+//    
+//    status = pjsua_acc_create_request((int)self.accountId, &pjsip_publish_method, &info.acc_uri, &tx_msg);
+//    
+//    if (status != PJ_SUCCESS) {
+//        NSError *error = [NSError errorWithDomain:@"Failed to create publish status" code:0 userInfo:nil];
+////        dispatch_async(dispatch_get_main_queue(), ^{
+//            handler(error);
+////        });
+//        
+//        return;
+//    }
+//    
+//    
+//    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+//    
+//    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &publishCallback);
+//}
+//
+//static void publishCallback(void *token, pjsip_event *e) {
+//    
+//    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+//    
+//    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+//        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+////        dispatch_async(dispatch_get_main_queue(), ^{
+//            handler(error);
+////        });
+//        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+//        pjsua_acc_set_registration(accountID, PJ_TRUE);
+//
+//        return;
+//    }
+//    
+//    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+//    if (msg == nil) {
+//        NSError *error = [NSError errorWithDomain:@"Failed to publish status" code:0 userInfo:nil];
+////        dispatch_async(dispatch_get_main_queue(), ^{
+//        
+//            handler(error);
+////        });
+//        return;
+//    }
+//    
+//    if (msg->line.status.code != PJSIP_SC_OK) {
+//        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+////        dispatch_async(dispatch_get_main_queue(), ^{
+//            handler(error);
+////        });
+//        return;
+//    }
+////    dispatch_async(dispatch_get_main_queue(), ^{
+//        handler(nil);
+////    });
+//}
+
+#pragma mark - Subscribe for abonent status
 
 -(void) monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler {
     if (self.accountState != SWAccountStateConnected) {
@@ -772,6 +847,7 @@ static void subscribeCallback(void *token, pjsip_event *e) {
 //    });
 }
 
+#pragma mark - Get Balance
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler {
     if (self.accountState != SWAccountStateConnected) {
@@ -850,6 +926,8 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
 //        });
     }
 }
+
+#pragma mark - Groups
 
 -(void) createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSInteger groupID))handler {
     if (self.accountState != SWAccountStateConnected) {
@@ -1219,6 +1297,8 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
 }
 
+#pragma mark - Logout
+
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler {
     [self logoutAll:NO completionHandler:handler];
 }
@@ -1306,6 +1386,8 @@ static void logoutCallback(void *token, pjsip_event *e) {
         handler(nil);
     });
 }
+
+#pragma mark - Call Route
 
 - (void) setCallRoute:(SWCallRoute) callRoute completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
@@ -1461,6 +1543,5 @@ static void getRouteCallback(void *token, pjsip_event *e) {
         handler(callRoute, nil);
     });
 }
-
 
 @end

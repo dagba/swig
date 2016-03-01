@@ -51,6 +51,12 @@ typedef NS_ENUM(NSInteger, SWCallRoute) {
     SWCallRouteSIP
 };
 
+typedef NS_ENUM(NSInteger, SWMessageDirection) {
+    SWMessageDirectionIncoming,
+    SWMessageDirectionOutgoing
+};
+
+
 
 @interface SWAccount : NSObject <SWAccountProtocol>
 
@@ -88,6 +94,8 @@ typedef NS_ENUM(NSInteger, SWCallRoute) {
 
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler;
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
+
+-(void)deleteMessage:(NSInteger *) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler;
 
 //-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler;
