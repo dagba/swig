@@ -165,6 +165,8 @@ void * refToSelf;
 
 - (void) setPhone: (NSString *) phone completionHandler:(void(^)(NSError *error))handler {
     self.accountConfiguration.username = phone;
+    self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
+
     pjsua_acc_config acc_cfg;
     pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
     
@@ -177,6 +179,15 @@ void * refToSelf;
         return;
     }
     
+    NSString *suffix = @"";
+    
+    pjsua_transport_info transport_info;
+    pjsua_transport_get_info(0, &transport_info);
+    
+    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+
+    acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
+
     acc_cfg.cred_info[0].username = [phone pjString];
     
     status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
