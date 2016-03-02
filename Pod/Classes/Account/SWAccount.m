@@ -93,7 +93,7 @@ void * refToSelf;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
     acc_cfg.allow_contact_rewrite = 0;
-    acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_NO_UNREG;
+    acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
 
     //    acc_cfg.reg_delay_before_refresh
@@ -300,11 +300,11 @@ void * refToSelf;
         self.accountState = SWAccountStateDisconnected;
     }
     
-    else if (PJSIP_IS_STATUS_IN_CLASS(code, 100) || PJSIP_IS_STATUS_IN_CLASS(code, 300)) {
+    else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_TRYING) || PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_MULTIPLE_CHOICES)) {
         self.accountState = SWAccountStateConnecting;
     }
     
-    else if (PJSIP_IS_STATUS_IN_CLASS(code, 200)) {
+    else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
         self.accountState = SWAccountStateConnected;
     }
     
@@ -630,7 +630,7 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
 
 #pragma mark - Delete Message
 
-- (void) deleteMessage:(NSInteger *) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler {
+- (void) deleteMessage:(NSInteger) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -638,6 +638,16 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
     
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[255];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d Type=%d FileFlag=%d", (int)smid, (int)direction, (int)fileFlag);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+
     
     pjsua_acc_info info;
     
@@ -658,6 +668,7 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     }
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteMessageCallback);
 }

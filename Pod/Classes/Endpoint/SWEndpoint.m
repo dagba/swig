@@ -172,6 +172,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 
 //@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
 @property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
+@property (nonatomic, copy) SWMessageDeletedBlock messageDeletedBlock;
 @property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
 @property (nonatomic, copy) SWAbonentStatusBlock abonentStatusBlock;
 
@@ -834,6 +835,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _messageStatusBlock = messageStatusBlock;
 }
 
+- (void) setMessageDeletedBlock: (SWMessageDeletedBlock) messageDeletedBlock {
+    _messageDeletedBlock = messageDeletedBlock;
+}
+
 //- (void) setReadyToSendFileBlock:(SWReadyToSendFileBlock)readyToSendFileBlock {
 //    _readyToSendFileBlock = readyToSendFileBlock;
 //}
@@ -1070,7 +1075,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         //    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {
         //        puts("subs");
     } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_options_method) == 0) {
-        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
+        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, NULL, NULL);
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_notify_method) == 0) {
         [self incomingNotify:data];
@@ -1079,7 +1084,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         //        [self incomingInvite:data];
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
         [self incomingRefer:data];
-        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
+        pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, NULL, NULL);
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_command_method) == 0) {
         return [self incomingCommand:data];
@@ -1529,26 +1534,57 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pjsip_generic_string_hdr *command_name_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &command_name_hdr_str, NULL);
     
     pj_str_t command_sync = pj_str((char *)"Sync");
+    pj_str_t command_delete_message = pj_str((char *)"DeleteMessage");
     
-    pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(self.pjPool, &command_name_hdr_str, &command_sync);
+    pjsip_generic_string_hdr* new_name_hdr = pjsip_generic_string_hdr_create(self.pjPool, &command_name_hdr->name, &command_name_hdr->hvalue);
     
     struct pjsip_hdr hdr_list;
     
     pj_list_init(&hdr_list);
     
-    pj_list_push_back(&hdr_list, new_hdr);
+    pj_list_push_back(&hdr_list, new_name_hdr);
     
     if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_sync) == 0) {
         pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, &hdr_list, NULL);
         NSLog(@"RespondToCommand %d", status);
-        
+
         status = pjsua_acc_set_registration(acc_id, PJ_TRUE);
         if (status != PJ_SUCCESS) {
             NSLog(@"Failed to reregister");
         }
-        
         return PJ_TRUE;
     }
+
+    if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_delete_message) == 0) {
+
+
+        pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+        pjsip_generic_string_hdr *smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+        
+        pjsip_generic_string_hdr* new_smid_hdr = pjsip_generic_string_hdr_create(self.pjPool, &smid_hdr->name, &smid_hdr->hvalue);
+
+        
+        pj_list_push_back(&hdr_list, new_smid_hdr);
+
+        if (smid_hdr != nil) {
+            NSInteger messageID = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+            SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+            if (_messageDeletedBlock) {
+                _messageDeletedBlock(account, messageID);
+            }
+        }
+        
+        pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, &hdr_list, NULL);
+
+        
+        if (status != PJ_SUCCESS) {
+            NSLog(@"Failed to respond");
+        }
+
+        return PJ_TRUE;
+    }
+
+    
     return PJ_FALSE;
 }
 
@@ -1561,7 +1597,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     if (_syncDoneBlock) {
         _syncDoneBlock(account);
     }
-    pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, 200, NULL, NULL, NULL);
+    pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, NULL, NULL);
 
     if (status == PJ_SUCCESS) {
         return PJ_TRUE;

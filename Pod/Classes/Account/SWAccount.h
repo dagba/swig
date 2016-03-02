@@ -47,13 +47,13 @@ typedef NS_ENUM(NSInteger, SWGroupAction) {
 };
 
 typedef NS_ENUM(NSInteger, SWCallRoute) {
-    SWCallRouteGSM,
-    SWCallRouteSIP
+    SWCallRouteGSM = 0,
+    SWCallRouteSIP = 1
 };
 
 typedef NS_ENUM(NSInteger, SWMessageDirection) {
-    SWMessageDirectionIncoming,
-    SWMessageDirectionOutgoing
+    SWMessageDirectionOutgoing = 0,
+    SWMessageDirectionIncoming = 1
 };
 
 
@@ -95,7 +95,7 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler;
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler;
 
--(void)deleteMessage:(NSInteger *) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler;
+-(void)deleteMessage:(NSInteger) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler;
 
 //-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler;
