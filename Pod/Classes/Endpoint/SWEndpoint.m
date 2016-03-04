@@ -883,7 +883,7 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     
     if (account) {
-        [account accountStateChanged];
+        [account accountStateConnecting];
         NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
         for (NSString *key in observersKeys) {
             SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
