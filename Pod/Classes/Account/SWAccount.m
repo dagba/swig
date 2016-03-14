@@ -710,6 +710,76 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
 }
 
 
+-(void)deleteChat:(NSString *) partner completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
+
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+
+    pjsua_acc_info info;
+
+    pjsua_acc_get_info((int)self.accountId, &info);
+
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+
+    pjsip_method_init_np(&method, &method_string);
+
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to delete chat" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteChatCallback);
+}
+
+static void deleteChatCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to Delete Chat" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
+
+
 //-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler {
 //    pj_status_t    status;
 //    pjsip_tx_data *tx_msg;

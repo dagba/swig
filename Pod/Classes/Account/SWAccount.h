@@ -97,6 +97,8 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 -(void)deleteMessage:(NSInteger) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler;
 
+-(void)deleteChat:(NSString *) partner completionHandler:(void(^)(NSError *error))handler;
+
 //-(void)setPresenseStatusOnline:(SWPresenseState) state completionHandler:(void(^)(NSError *error))handler;
 -(void)monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler;
 
