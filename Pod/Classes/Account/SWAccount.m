@@ -430,10 +430,12 @@ void * refToSelf;
 
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup forceOffline:(BOOL) forceOffline completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     
-    if (!forceOffline || self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
-        return;
+    if (!forceOffline) {
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error, nil, nil, nil);
+            return;
+        }
     }
 
     
