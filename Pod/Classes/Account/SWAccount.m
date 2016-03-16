@@ -425,10 +425,10 @@ void * refToSelf;
 }
 
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
-    [self sendMessage:message fileType:fileType fileHash:fileHash to:URI isGroup:isGroup forceOffline:NO completionHandler:handler];
+    [self sendMessage:message fileType:fileType fileHash:fileHash to:URI isGroup:isGroup forceOffline:NO isGSM:NO completionHandler:handler];
 }
 
--(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup forceOffline:(BOOL) forceOffline completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup forceOffline:(BOOL) forceOffline isGSM:(BOOL) isGSM completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     
     if (!forceOffline) {
         if (self.accountState != SWAccountStateConnected) {
@@ -442,8 +442,8 @@ void * refToSelf;
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t to = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-    
+    pj_str_t to = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
+
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_message_method, &to, &tx_msg);
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
@@ -544,12 +544,13 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     }
 
 //    dispatch_async(dispatch_get_main_queue(), ^{
-    if (smid_hdr) {
-            handler(nil, [NSString stringWithPJString:smid_hdr->hvalue], fileServer, date);
-    } else {
-        NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
-    }
+//    if (smid_hdr) {
+
+    handler(nil, smid_hdr?[NSString stringWithPJString:smid_hdr->hvalue]:nil, fileServer, date);
+//    } else {
+//        NSError *error = [NSError errorWithDomain:@"Failed to SendMessage" code:0 userInfo:nil];
+//        handler(error, nil, nil, nil);
+//    }
 //    });
 }
 

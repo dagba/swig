@@ -35,7 +35,7 @@
 
 typedef void (^SWAccountStateChangeBlock)(SWAccount *account);
 typedef void (^SWIncomingCallBlock)(SWAccount *account, SWCall *call);
-typedef void (^SWCallStateChangeBlock)(SWAccount *account, SWCall *call);
+typedef void (^SWCallStateChangeBlock)(SWAccount *account, SWCall *call, pjsip_status_code statusCode);
 typedef void (^SWCallMediaStateChangeBlock)(SWAccount *account, SWCall *call);
 
 
@@ -805,7 +805,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     _incomingCallBlock = incomingCallBlock;
 }
 
--(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock {
+-(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call, pjsip_status_code statusCode))callStateChangeBlock {
     
     _callStateChangeBlock = callStateChangeBlock;
 }
@@ -988,7 +988,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             [call callStateChanged];
             
             if ([SWEndpoint sharedEndpoint].callStateChangeBlock) {
-                [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call);
+                [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call, callInfo.last_status);
             }
             
             if (call.callState == SWCallStateDisconnected) {

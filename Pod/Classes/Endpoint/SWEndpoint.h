@@ -76,7 +76,7 @@ typedef void (^SWSyncDoneBlock) (SWAccount *account);
 -(void)setAccountStateChangeBlock:(void(^)(SWAccount *account))accountStateChangeBlock forObserver: (id) observer;
 -(void)removeAccountStateChangeBlockForObserver: (id) observer;
 -(void)setIncomingCallBlock:(void(^)(SWAccount *account, SWCall *call))incomingCallBlock;
--(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callStateChangeBlock;
+-(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call, pjsip_status_code statusCode))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
 -(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock;
 
