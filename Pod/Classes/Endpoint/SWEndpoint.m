@@ -258,9 +258,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     //IP Change logic
     
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
-        SWAccount *account = [SWEndpoint sharedEndpoint].firstAccount;
-        if (account && account.accountState == SWAccountStateConnected) {
-            pjsua_acc_set_registration((int)account.accountId, PJ_TRUE);
+        if (status > AFNetworkReachabilityStatusNotReachable) {
+            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+            }];
         }
         
         //        if ([AFNetworkReachabilityManager sharedManager].reachableViaWiFi) {
@@ -728,6 +728,69 @@ static SWEndpoint *_sharedEndpoint = nil;
     //    if (handler) {
     //        handler(nil);
     //    }
+}
+
+-(void)restart:(void(^)(NSError *error))handler {
+    
+//    NSMutableArray *tempAccounts = [NSMutableArray new];
+
+    for (SWAccount *account in self.accounts) {
+//        [tempAccounts addObject:[account copy]];
+        
+        [account endAllCalls];
+        
+        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        
+        [account disconnect:^(NSError *error) {
+            dispatch_semaphore_signal(sema);
+//            [self removeAccount:account];
+        }];
+        
+        dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+    }
+    
+    //    for (SWAccount *account in self.accounts) {
+    //        [self removeAccount:account];
+    //    }
+    
+    //    NSMutableArray *mutableArray = [self.accounts mutableCopy];
+    //
+    
+    
+//    self.accounts = [NSArray new];
+    //
+    //    self.accounts = mutableArray;
+    
+        pj_status_t status = pjsua_destroy();
+    
+    
+    
+    [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
+        for (SWAccount *account in self.accounts) {
+            [account configure:account.accountConfiguration completionHandler:^(NSError *error) {
+            }];
+//            [account connect:nil];
+        }
+    }];
+    
+    
+    
+    //
+    //    if (status != PJ_SUCCESS) {
+    //
+    //        NSError *error = [NSError errorWithDomain:@"Error destroying pjsua" code:status userInfo:nil];
+    //
+    //        if (handler) {
+    //            handler(error);
+    //        }
+    //
+    //        return;
+    //    }
+    //
+    //    if (handler) {
+    //        handler(nil);
+    //    }
+
 }
 
 #pragma Account Management

@@ -67,6 +67,7 @@ typedef void (^SWSyncDoneBlock) (SWAccount *account);
 -(BOOL)hasTCPConfiguration;
 -(void)start:(void(^)(NSError *error))handler;
 -(void)reset:(void(^)(NSError *error))handler; //reset endpoint
+-(void)restart:(void(^)(NSError *error))handler;
 
 -(void)addAccount:(SWAccount *)account;
 -(void)removeAccount:(SWAccount *)account;

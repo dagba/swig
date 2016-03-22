@@ -249,6 +249,8 @@ void * refToSelf;
     
     pj_status_t status;
     
+    if (pjsua_acc_get_count() == 0) return;
+    
     status = pjsua_acc_set_online_status((int)self.accountId, PJ_FALSE);
     
     if (status != PJ_SUCCESS) {
