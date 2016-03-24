@@ -193,7 +193,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 
 @property (nonatomic, strong) CTCallCenter *callCenter;
 
-
 @end
 
 @implementation SWEndpoint
@@ -258,10 +257,6 @@ static SWEndpoint *_sharedEndpoint = nil;
     //IP Change logic
     
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
-        if (status > AFNetworkReachabilityStatusNotReachable) {
-            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
-            }];
-        }
         
         //        if ([AFNetworkReachabilityManager sharedManager].reachableViaWiFi) {
         //            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
@@ -631,11 +626,11 @@ static SWEndpoint *_sharedEndpoint = nil;
         thread = pj_thread_this();
     }
     
-    //    if (!_pjPool) {
-    //        dispatch_async(dispatch_get_main_queue(), ^{
-    //            _pjPool = pjsua_pool_create("swig-pjsua", 512, 512);
-    //        });
-    //    }
+    //        if (!_pjPool) {
+    //            dispatch_async(dispatch_get_main_queue(), ^{
+    //                _pjPool = pjsua_pool_create("swig-pjsua", 512, 512);
+    //            });
+    //        }
 }
 
 - (pj_pool_t *) pjPool {
@@ -732,65 +727,14 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 -(void)restart:(void(^)(NSError *error))handler {
     
-//    NSMutableArray *tempAccounts = [NSMutableArray new];
-
-    for (SWAccount *account in self.accounts) {
-//        [tempAccounts addObject:[account copy]];
-        
-        [account endAllCalls];
-        
-        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
-        
-        [account disconnect:^(NSError *error) {
-            dispatch_semaphore_signal(sema);
-//            [self removeAccount:account];
-        }];
-        
-        dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
-    }
-    
-    //    for (SWAccount *account in self.accounts) {
-    //        [self removeAccount:account];
-    //    }
-    
-    //    NSMutableArray *mutableArray = [self.accounts mutableCopy];
-    //
-    
-    
-//    self.accounts = [NSArray new];
-    //
-    //    self.accounts = mutableArray;
-    
-        pj_status_t status = pjsua_destroy();
-    
-    
+    pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
     
     [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
         for (SWAccount *account in self.accounts) {
             [account configure:account.accountConfiguration completionHandler:^(NSError *error) {
             }];
-//            [account connect:nil];
         }
     }];
-    
-    
-    
-    //
-    //    if (status != PJ_SUCCESS) {
-    //
-    //        NSError *error = [NSError errorWithDomain:@"Error destroying pjsua" code:status userInfo:nil];
-    //
-    //        if (handler) {
-    //            handler(error);
-    //        }
-    //
-    //        return;
-    //    }
-    //
-    //    if (handler) {
-    //        handler(nil);
-    //    }
-
 }
 
 #pragma Account Management
@@ -924,9 +868,23 @@ static SWEndpoint *_sharedEndpoint = nil;
 //
 #pragma PJSUA Callbacks
 
+static pjsip_transport *the_transport;
+
 static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
+    
+    struct pjsip_regc_cbparam *rp = info->cbparam;
+    
+    
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+    if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+            }];
+        });
+    }
+    
     
     if (account) {
         [account accountStateChanged];
@@ -1107,6 +1065,11 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
 }
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
+    if (state == PJSIP_TP_STATE_DISCONNECTED && the_transport == tp) {
+        NSLog(@"xxx: Releasing transport..");
+        pjsip_transport_dec_ref(the_transport);
+        the_transport = NULL;
+    }
     
     //    NSLog(@"%@ %@", tp, info);
 }
@@ -1164,6 +1127,8 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 - (pj_bool_t) txRequestPackageProcessing:(pjsip_tx_data *) tdata {
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
     
+    //    int status = tdata->msg_info.msg->line.status.code;
+    
     pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);
     
     pjsua_acc_id acc_id = pjsua_acc_find_for_outgoing(&uri->user);
@@ -1201,6 +1166,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
     }
+    
     return PJ_FALSE;
 }
 
@@ -1286,7 +1252,6 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             }
             return PJ_FALSE;
         }
-        
         
     }
     
