@@ -169,6 +169,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
 @property (nonatomic, copy) SWSyncDoneBlock syncDoneBlock;
+@property (nonatomic, copy) SWGroupCreatedBlock groupCreatedBlock;
 
 //@property (nonatomic, copy) SWMessageSentBlock messageSentBlock;
 @property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
@@ -824,6 +825,10 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 -(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock {
     _syncDoneBlock = syncDoneBlock;
+}
+
+-(void)setGroupCreatedBlock:(void (^)(SWAccount *account, NSInteger groupID, NSString *groupName))groupCreatedBlock {
+    _groupCreatedBlock = groupCreatedBlock;
 }
 
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
@@ -1566,6 +1571,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     
     pj_str_t command_sync = pj_str((char *)"Sync");
     pj_str_t command_delete_message = pj_str((char *)"DeleteMessage");
+    pj_str_t command_create_chat = pj_str((char *)"CreateChat");
     
     pjsip_generic_string_hdr* new_name_hdr = pjsip_generic_string_hdr_create(self.pjPool, &command_name_hdr->name, &command_name_hdr->hvalue);
     
@@ -1614,7 +1620,35 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         return PJ_TRUE;
     }
-    
+
+    if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_create_chat) == 0) {
+        NSString *groupName;
+        
+        pj_str_t  name_hdr_str = pj_str((char *)"Command-Value");
+        pjsip_generic_string_hdr* name_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &name_hdr_str, nil);
+        if (name_hdr != nil) {
+            groupName = [NSString stringWithPJString:name_hdr->hvalue];
+        }
+        
+        
+        NSInteger group_id = 0;
+        pj_str_t  groupid_hdr_str = pj_str((char *)"GroupID");
+        pjsip_generic_string_hdr* groupid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &groupid_hdr_str, nil);
+        if (groupid_hdr != nil) {
+            group_id = atoi(groupid_hdr->hvalue.ptr);
+        }
+
+        
+        
+        if (group_id > 0) {
+            SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+            if (_groupCreatedBlock) {
+                _groupCreatedBlock(account, group_id, groupName);
+            }
+        }
+        return PJ_TRUE;
+    }
+
     
     return PJ_FALSE;
 }

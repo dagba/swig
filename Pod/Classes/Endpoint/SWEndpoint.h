@@ -46,6 +46,7 @@ typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWP
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 typedef void (^SWSyncDoneBlock) (SWAccount *account);
+typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSString *groupName);
 
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
@@ -80,6 +81,8 @@ typedef void (^SWSyncDoneBlock) (SWAccount *account);
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call, pjsip_status_code statusCode))callStateChangeBlock;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
 -(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock;
+-(void)setGroupCreatedBlock:(void(^)(SWAccount *account, NSInteger groupID, NSString *groupName))groupCreatedBlock;
+
 
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock;
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
