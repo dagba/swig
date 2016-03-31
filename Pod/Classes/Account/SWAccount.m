@@ -727,17 +727,19 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
 
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
 
-    pjsua_acc_info info;
-
-    pjsua_acc_get_info((int)self.accountId, &info);
-
+//    pjsua_acc_info info;
+//
+//    pjsua_acc_get_info((int)self.accountId, &info);
+//
     pjsip_method method;
     pj_str_t method_string = pj_str("COMMAND");
 
     pjsip_method_init_np(&method, &method_string);
 
+    pj_str_t target = [[SWUriFormatter sipUri:partner fromAccount:self] pjString];
+    
     /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    status = pjsua_acc_create_request((int)self.accountId, &method, &target, &tx_msg);
 
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to delete chat" code:0 userInfo:nil];
