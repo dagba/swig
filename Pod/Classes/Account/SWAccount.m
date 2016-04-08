@@ -558,7 +558,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
 
 #pragma mark - Message Notify
 
--(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid completionHandler:(void(^)(NSError *error))handler {
+-(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid groupID:(NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
     if (self.accountState != SWAccountStateConnected) {
         NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
         handler(error);
@@ -581,6 +581,7 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     hvalue.ptr = to_string;
     hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
     pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+
     
     
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
@@ -593,9 +594,22 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         return;
     }
     
+
+    if (groupID > 0) {
+        hname = pj_str((char *)"GroupID");
+        char buffer[50];
+        hvalue.ptr = buffer;
+        hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
+        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
+    }
     
+
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
+    
+
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageReadNotifyCallback);
 }
