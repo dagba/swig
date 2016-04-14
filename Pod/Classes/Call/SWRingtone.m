@@ -51,8 +51,6 @@
         DDLogDebug(@"%@", [error description]);
     }
     
-    self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
-
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredBackground:) name: UIApplicationDidEnterBackgroundNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -106,6 +104,8 @@
         [self.audioPlayer play];
         
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
+        self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
+        
         [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
 //        [self.virbateTimer s];
     }
@@ -115,7 +115,9 @@
     
     if (self.audioPlayer.isPlaying) {
         [self.audioPlayer stop];
+        
         [self.virbateTimer invalidate];
+        self.virbateTimer = nil;
     }
     
     [self.audioPlayer setCurrentTime:0];
