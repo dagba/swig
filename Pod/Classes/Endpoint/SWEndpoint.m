@@ -1403,8 +1403,13 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     NSString *message_txt = @"";
     
     if (data->msg_info.msg->body != nil) {
-        //    NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
+//        NSString *message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF16LittleEndianStringEncoding];
         message_txt = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
+        message_txt = [message_txt stringByReplacingPercentEscapesUsingEncoding:NSNonLossyASCIIStringEncoding];
+        message_txt = [message_txt stringByReplacingOccurrencesOfString:@"\\n" withString:@"\n"];
+        
+//
+        message_txt = [message_txt stringByApplyingTransform:@"Any-Hex/Java" reverse:YES];
     }
     /* Выдираем Sm_ID */
     NSUInteger sm_id = 0;

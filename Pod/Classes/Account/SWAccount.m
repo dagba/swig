@@ -453,7 +453,12 @@ void * refToSelf;
         return;
     }
     
-    pj_str_t pjMessage = [message pjString];
+//    message = [message stringByApplyingTransform:NSStringTransformToUnicodeName reverse:NO];
+
+    
+    pj_str_t pjMessage = pj_str((char *)[message cStringUsingEncoding:NSNonLossyASCIIStringEncoding]);
+    
+//    pj_str_t pjMessage = [message pjString];
     
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
