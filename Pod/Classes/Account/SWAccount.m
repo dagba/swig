@@ -732,18 +732,23 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
 }
 
 
--(void)deleteChat:(NSString *) partner completionHandler:(void(^)(NSError *error))handler {
+-(void)deleteChat:(NSString *) partner withSMID:(NSInteger) smid groupId:(NSInteger) groupId completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
 
     pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
+    pj_str_t hvalue_name = pj_str((char *)"DeleteChat");
 
     pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
 
-//    pjsua_acc_info info;
-//
-//    pjsua_acc_get_info((int)self.accountId, &info);
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[255];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d ChatID=%d", (int)smid, (int)groupId);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
 //
     pjsip_method method;
     pj_str_t method_string = pj_str("COMMAND");
@@ -762,6 +767,7 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
     }
 
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
 
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteChatCallback);
 }
