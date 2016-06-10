@@ -743,11 +743,14 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
 
     pj_str_t hname_value = pj_str((char *)"Command-Value");
     
-    char buffer[255];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d ChatID=%d", (int)smid, (int)groupId);
     
+    NSString *hvalue = [NSString stringWithFormat:@"SMID=%d", (int)smid];
+    
+    if (groupId > 0) {
+        hvalue = [hvalue stringByAppendingString:[NSString stringWithFormat:@" ChatID=%d", (int)groupId]];
+    }
+    
+    pj_str_t hvalue_value = [hvalue pjString];
     pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
 //
     pjsip_method method;
