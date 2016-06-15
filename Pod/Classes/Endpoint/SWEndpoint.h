@@ -42,6 +42,7 @@ typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status);
 typedef void (^SWConfirmationBlock)(NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status, BOOL sync, BOOL lastMessageInPack);
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus, NSDate *lastOnline);
+typedef void (^SWGroupMembersUpdatedBlock) (SWAccount *account, NSString *abonent, NSString *admin, NSInteger groupID, BOOL abonentAdded);
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
 typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
@@ -89,6 +90,8 @@ typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSSt
 - (void) setMessageDeletedBlock: (SWMessageDeletedBlock) messageDeletedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
 - (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
+- (void) setGroupMembersUpdatedBlock: (SWGroupMembersUpdatedBlock) groupMembersUpdatedBlock;
+
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);

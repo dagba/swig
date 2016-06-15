@@ -176,6 +176,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWMessageDeletedBlock messageDeletedBlock;
 @property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
 @property (nonatomic, copy) SWAbonentStatusBlock abonentStatusBlock;
+@property (nonatomic, copy) SWGroupMembersUpdatedBlock groupMembersUpdatedBlock;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
@@ -871,6 +872,12 @@ static SWEndpoint *_sharedEndpoint = nil;
 //    _balanceUpdatedBlock = balanceUpdatedBlock;
 //}
 //
+
+- (void) setGroupMembersUpdatedBlock: (SWGroupMembersUpdatedBlock) groupMembersUpdatedBlock {
+    _groupMembersUpdatedBlock = groupMembersUpdatedBlock;
+}
+
+
 #pragma PJSUA Callbacks
 
 static pjsip_transport *the_transport;
@@ -1564,13 +1571,17 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     pjsua_acc_id acc_id;
     if (pjsua_acc_get_count() == 0) return PJ_FALSE;
     acc_id = pjsua_acc_find_for_incoming(data);
-    
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     pj_str_t command_name_hdr_str = pj_str((char *)"Command-Name");
     pjsip_generic_string_hdr *command_name_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &command_name_hdr_str, NULL);
     
     pj_str_t command_sync = pj_str((char *)"Sync");
     pj_str_t command_delete_message = pj_str((char *)"DeleteMessage");
     pj_str_t command_create_chat = pj_str((char *)"CreateChat");
+
+    pj_str_t command_add_abonent = pj_str((char *)"AddAbonent");
+    pj_str_t command_delete_abonent = pj_str((char *)"DeleteAbonent");
+
     
     pjsip_generic_string_hdr* new_name_hdr = pjsip_generic_string_hdr_create(self.pjPool, &command_name_hdr->name, &command_name_hdr->hvalue);
     
@@ -1604,7 +1615,7 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         if (smid_hdr != nil) {
             NSInteger messageID = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
-            SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+            
             if (_messageDeletedBlock) {
                 _messageDeletedBlock(account, messageID);
             }
@@ -1640,11 +1651,39 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
         
         
         if (group_id > 0) {
-            SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
             if (_groupCreatedBlock) {
                 _groupCreatedBlock(account, group_id, groupName);
             }
         }
+        return PJ_TRUE;
+    }
+    
+    if (command_name_hdr != nil && (pj_strcmp(&command_name_hdr->hvalue, &command_add_abonent) == 0 || pj_strcmp(&command_name_hdr->hvalue, &command_delete_abonent) == 0)) {
+        
+        NSInteger groupID = 0;
+        pj_str_t  groupid_hdr_str = pj_str((char *)"Command-Value");
+        pjsip_generic_string_hdr* groupid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &groupid_hdr_str, nil);
+        if (groupid_hdr != nil) {
+            groupID = atoi(groupid_hdr->hvalue.ptr);
+        }
+
+        BOOL abonentAdded = NO;
+        if (pj_strcmp(&command_name_hdr->hvalue, &command_add_abonent) == 0) {
+            abonentAdded = YES;
+        }
+        
+        NSString *abonent = @"";
+        
+        if (data->msg_info.msg->body != nil) {
+            abonent = [[NSString alloc] initWithBytes:data->msg_info.msg->body->data length:(NSUInteger)data->msg_info.msg->body->len encoding:NSUTF8StringEncoding];
+        }
+        
+        pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+        
+        NSString *admin = [NSString stringWithPJString:fromUri->user];
+        
+        
+        _groupMembersUpdatedBlock(account, abonent, admin, groupID, abonentAdded);
         return PJ_TRUE;
     }
 
