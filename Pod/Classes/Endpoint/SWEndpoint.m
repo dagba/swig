@@ -1247,10 +1247,20 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
             
         }
         
-        if (status == PJSIP_SC_NOT_FOUND){
+        if (status == PJSIP_SC_NOT_FOUND || status == PJSIP_SC_MOVED_TEMPORARILY){
             if (_needConfirmBlock && account.accountState == SWAccountStateConnecting) {
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    _needConfirmBlock(account, PJSIP_SC_NOT_FOUND);
+                    NSMutableDictionary *dict = [NSMutableDictionary new];
+                    
+                    pj_str_t register_server_hdr_str = pj_str((char *)"Register-Server");
+                    pjsip_generic_string_hdr* register_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &register_server_hdr_str, nil);
+                    if (register_server_hdr != nil) {
+                        
+                        NSString *registerServer = [[NSString stringWithPJString:register_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+                        [dict setValue:registerServer forKey:@"Register-Server"];
+                    }
+
+                    _needConfirmBlock(account, status, dict);
                 });
             }
             return PJ_FALSE;

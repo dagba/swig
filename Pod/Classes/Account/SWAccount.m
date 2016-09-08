@@ -1658,4 +1658,324 @@ static void getRouteCallback(void *token, pjsip_event *e) {
     });
 }
 
+- (void) blockUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"BlockUser");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [abonent pjString];
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &blockUserCallback);
+    
+}
+
+static void blockUserCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to block user" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
+- (void) releaseUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"ReleaseUser");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [abonent pjString];
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &releaseUserCallback);
+    
+}
+
+static void releaseUserCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to release user" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
+- (void) getBlackListCompletionHandler:(void(^)(NSError *error, NSArray *blackListed))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetBlackList");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+//    pj_str_t hname_value = pj_str((char *)"Command-Value");
+//    pj_str_t hvalue_value = [abonent pjString];
+//    
+//    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    pjsua_acc_info info;
+    
+    pjsua_acc_get_info((int)self.accountId, &info);
+    
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+    
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+        handler(error, nil);
+        return;
+    }
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getBlacklistCallback);
+}
+
+static void getBlacklistCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *,NSArray *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+                dispatch_async(dispatch_get_main_queue(), ^{
+        handler(error, nil);
+                });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    if (msg == nil) {
+        NSError *error = [NSError errorWithDomain:@"Failed to get Group info" code:0 userInfo:nil];
+                dispatch_async(dispatch_get_main_queue(), ^{
+        handler(error, nil);
+                });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+                dispatch_async(dispatch_get_main_queue(), ^{
+        handler(error, nil);
+                });
+        return;
+    }
+    
+    NSString *message_txt = @"";
+    
+    if (msg->body != nil) {
+        message_txt = [[NSString alloc] initWithBytes:msg->body->data length:(NSUInteger)msg->body->len encoding:NSUTF8StringEncoding];
+    }
+    
+    NSArray *rawContacts = [message_txt componentsSeparatedByString:@","];
+    
+    NSMutableArray *array = [[NSMutableArray alloc] initWithCapacity:rawContacts.count];
+    
+    for (NSString *object in rawContacts) {
+        NSString *trimmedObject = [object stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        [array addObject:trimmedObject];
+    }
+    
+    handler(nil, array);
+}
+
+- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler {
+    pj_status_t    status;
+    pjsip_tx_data *tx_msg;
+    
+    pj_str_t to = [[SWUriFormatter sipUriWithPhone:abonent fromAccount:self toGSM:NO] pjString];
+
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+    
+    pjsip_method_init_np(&method, &method_string);
+    
+
+    status = pjsua_acc_create_request((int)self.accountId, &method, &to, &tx_msg);
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"IsSpam");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    char to_string[256];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = to_string;
+    hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)SMID);
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    
+    pj_str_t pjMessage = [text pjString];
+    
+    pj_str_t type = pj_str((char *)"text");
+    pj_str_t subtype = pj_str((char *)"plain");
+    
+    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    
+    tx_msg->msg->body = body;
+
+    
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+    
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getBlacklistCallback);
+}
+
+static void reportUserCallback(void *token, pjsip_event *e) {
+    
+    void (^handler)(NSError *) = (__bridge_transfer typeof(handler))(token);
+    
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        NSError *error = [NSError errorWithDomain:@"Transport Error" code:0 userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        int accountID = ((__bridge SWAccount *)refToSelf).accountId;
+        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        return;
+    }
+    
+    pjsip_msg *msg = e->body.rx_msg.rdata->msg_info.msg;
+    NSError *error = [NSError errorWithDomain:@"Failed to report user" code:0 userInfo:nil];
+    if (msg == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    if (msg->line.status.code != PJSIP_SC_OK) {
+        NSError *error = [NSError errorWithDomain:[NSString stringWithPJString:msg->line.status.reason] code:msg->line.status.code userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+        return;
+    }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+    });
+}
+
 @end

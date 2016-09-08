@@ -119,4 +119,11 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 - (void) setCallRoute:(SWCallRoute) callRoute completionHandler:(void(^)(NSError *error))handler;
 - (void) getCallRouteCompletionHandler:(void(^)(SWCallRoute callRoute, NSError *error))handler;
+
+- (void) blockUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler;
+- (void) releaseUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler;
+- (void) getBlackListCompletionHandler:(void(^)(NSError *error, NSArray *blackListed))handler;
+
+- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler;
+
 @end
