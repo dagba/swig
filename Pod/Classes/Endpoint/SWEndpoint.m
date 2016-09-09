@@ -68,6 +68,9 @@ static void SWOnDTMFDigit (pjsua_call_id call_id, int digit);
 
 static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_uri *target, const pjsip_event *e);
 
+static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_str_t *to, const pj_str_t *contact, pj_bool_t is_typing, pjsip_rx_data *rdata, pjsua_acc_id acc_id);
+
+
 static pjsip_method pjsip_command_method;
 static pjsip_method pjsip_syncdone_method;
 
@@ -177,6 +180,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
 @property (nonatomic, copy) SWAbonentStatusBlock abonentStatusBlock;
 @property (nonatomic, copy) SWGroupMembersUpdatedBlock groupMembersUpdatedBlock;
+@property (nonatomic, copy) SWTypingBlock typingBlock;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
@@ -501,6 +505,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
     ua_cfg.cb.on_dtmf_digit = &SWOnDTMFDigit;
+    ua_cfg.cb.on_typing2 = &SWOnTyping;
     
     
     //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
@@ -877,6 +882,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     _groupMembersUpdatedBlock = groupMembersUpdatedBlock;
 }
 
+- (void) setTypingBlock: (SWTypingBlock) typingBlock {
+    _typingBlock = typingBlock;
+}
+
 
 #pragma PJSUA Callbacks
 
@@ -1095,6 +1104,17 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     return PJSIP_REDIRECT_ACCEPT;
 }
 
+static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_str_t *to, const pj_str_t *contact, pj_bool_t is_typing, pjsip_rx_data *rdata, pjsua_acc_id acc_id) {
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+    
+    if (account && [SWEndpoint sharedEndpoint].typingBlock) {
+        pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
+        NSString *fromUser = [NSString stringWithPJString:fromUri->user];
+        [SWEndpoint sharedEndpoint].typingBlock(account, fromUser, (BOOL)is_typing);
+    }
+
+}
+
 #pragma Setters/Getters
 
 -(void)setAccounts:(NSArray *)accounts {
@@ -1111,6 +1131,12 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
     }
     
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
+        pjsip_ctype_hdr* content_type_hdr = (pjsip_ctype_hdr *)pjsip_msg_find_hdr(&data->msg_info.msg, PJSIP_H_CONTENT_TYPE, nil);
+        pj_str_t subtype = pj_str((char *)"im-iscomposing+xml");
+        int result = pj_strcmp(&content_type_hdr->media.subtype, &subtype);
+        if (content_type_hdr != nil &&  result == 0) {
+            return PJ_FALSE;
+        }
         [self incomingMessage:data];
         return PJ_TRUE;
         //    } else if(pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_subscribe_method) == 0) {

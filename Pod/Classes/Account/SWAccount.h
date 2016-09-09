@@ -126,4 +126,6 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 - (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler;
 
+- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler;
+
 @end

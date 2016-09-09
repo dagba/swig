@@ -48,6 +48,7 @@ typedef struct Sync (^SWGetCounterBlock) (SWAccount *account);
 typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 typedef void (^SWSyncDoneBlock) (SWAccount *account);
 typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSString *groupName);
+typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, BOOL typing);
 
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
@@ -91,6 +92,8 @@ typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSSt
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
 - (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
 - (void) setGroupMembersUpdatedBlock: (SWGroupMembersUpdatedBlock) groupMembersUpdatedBlock;
+- (void) setTypingBlock: (SWTypingBlock) typingBlock;
+
 
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);

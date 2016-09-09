@@ -1978,4 +1978,26 @@ static void reportUserCallback(void *token, pjsip_event *e) {
     });
 }
 
+- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
+//    status = pjsua_acc_create_request((int)self.accountId, &method, &to, &tx_msg);
+    pj_str_t to = [[SWUriFormatter sipUriWithPhone:abonent fromAccount:self toGSM:NO] pjString];
+    pj_status_t status = pjsua_im_typing((int)self.accountId, &to, typing, nil);
+    if (status == PJ_SUCCESS) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(nil);
+        });
+    }
+    else {
+        char errbuf[256];
+        pjsip_strerror(status, errbuf, sizeof(errbuf));
+        NSError *error = [NSError errorWithDomain:[NSString stringWithFormat:@"%c", errbuf] code:status userInfo:nil];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler(error);
+        });
+
+    }
+}
+
+
+
 @end
