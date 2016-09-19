@@ -574,9 +574,12 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         pjsua_transport_config_default(&transportConfig);
         transportConfig.tls_setting = tls_setting;
-        transportConfig.port = transport.port;
-        
-        
+        int port_range = 1024 + (rand() % (int)(65535 - 1024 + 1));
+
+        transportConfig.port = port_range;
+//        transportConfig.port_range = port_range;
+//        transportConfig.public_addr = pj_str((char *)"127.0.0.1:31337");
+
         
         pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
         
