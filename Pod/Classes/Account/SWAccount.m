@@ -79,22 +79,30 @@ void * refToSelf;
     
     NSString *suffix = @"";
     
+    pjsua_transport_id *transports_id;
+    int transports_count;
+    pjsua_enum_transports(&transports_id, &transports_count);
+    
     pjsua_transport_info transport_info;
+
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
-    
+    acc_cfg.transport_id = 0;
     acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
     acc_cfg.reg_uri = [[SWUriFormatter sipUri:[self.accountConfiguration.domain stringByAppendingString:suffix]] pjString];
-    acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
-    acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
+//    acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
+    acc_cfg.register_on_acc_add = PJ_TRUE;
+//    acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
+    acc_cfg.publish_enabled = PJ_TRUE;
     acc_cfg.reg_timeout = kRegTimeout;
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
+    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
 
     //    acc_cfg.reg_delay_before_refresh
     //    acc_cfg.reg_first_retry_interval
@@ -123,11 +131,17 @@ void * refToSelf;
     pj_status_t status;
     
     int accountId = (int)self.accountId;
-    
+
+    [[SWEndpoint sharedEndpoint] addAccount:self];
     status = pjsua_acc_add(&acc_cfg, PJ_TRUE, &accountId);
     
+//    pjsua_acc_add(<#const pjsua_acc_config *acc_cfg#>, <#pj_bool_t is_default#>, <#pjsua_acc_id *p_acc_id#>);
+//    pjsua_acc_add_local(0, PJ_TRUE, &accountId);
+//    pjsua_acc_set_default(&accountId);
+    
     if (status != PJ_SUCCESS) {
-        
+        [[SWEndpoint sharedEndpoint] removeAccount:self];
+
         NSError *error = [NSError errorWithDomain:@"Error adding account" code:status userInfo:nil];
         
         if (handler) {
@@ -135,16 +149,10 @@ void * refToSelf;
         }
         
         return;
-    } else {
-        [[SWEndpoint sharedEndpoint] addAccount:self];
     }
     
-    if (!self.accountConfiguration.registerOnAdd) {
-        [self connect:handler];
-    } else {
-        if (handler) {
-            handler(nil);
-        }
+    if (handler) {
+        handler(nil);
     }
 }
 
@@ -184,7 +192,7 @@ void * refToSelf;
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
 
     acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
 
@@ -2065,7 +2073,6 @@ static void clearCallsCallback(void *token, pjsip_event *e) {
         handler(nil);
     });
 }
-
 
 
 @end

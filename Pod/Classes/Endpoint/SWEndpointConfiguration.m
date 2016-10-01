@@ -52,7 +52,7 @@
     if (!transportConfigurations || transportConfigurations.count == 0) {
     
         // DDLogDebug(@"A transport configuration needs to be specified. Created a basic UDP configuration for you.");
-        SWTransportConfiguration *configuration = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeUDP];
+        SWTransportConfiguration *configuration = [SWTransportConfiguration configurationWithTransportType:SWTransportTypeTLS6];
         
         transportConfigurations = @[configuration];
     }

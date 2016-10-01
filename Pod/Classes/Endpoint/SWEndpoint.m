@@ -500,6 +500,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_call_transfer_status = &SWOnCallTransferStatus;
     ua_cfg.cb.on_call_replaced = &SWOnCallReplaced;
     ua_cfg.cb.on_reg_state2 = &SWOnRegState2;
+    ua_cfg.cb.on_reg_state = &SWOnRegState;
     ua_cfg.cb.on_reg_started = &SWOnRegStarted;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
@@ -522,6 +523,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.console_level = (unsigned int)self.endpointConfiguration.logConsoleLevel;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
+//    log_cfg.decor = 2;
+    log_cfg.msg_logging = PJ_TRUE;
+    log_cfg.cb = &printLogs;
     
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
@@ -560,8 +564,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     //TODO autodetect port by checking transportId!!!!
     
-    for (SWTransportConfiguration *transport in self.endpointConfiguration.transportConfigurations) {
-        
+//    for (SWTransportConfiguration *transport in self.endpointConfiguration.transportConfigurations) {
+        NSLog(@"Create transport %@", self.endpointConfiguration.transportConfigurations);
         pjsua_transport_config transportConfig;
         pjsua_transport_id transportId;
         
@@ -571,9 +575,13 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         tls_setting.verify_server = PJ_FALSE;
         tls_setting.method = PJSIP_TLSV1_METHOD;
+    pj_time_val timeout = {10,0};
+//    timeout.sec = 10;
+//    timeout.msec = 0;
+    tls_setting.timeout = timeout;
         
         pjsua_transport_config_default(&transportConfig);
-        transportConfig.tls_setting = tls_setting;
+//        transportConfig.tls_setting = tls_setting;
         int port_range = 1024 + (rand() % (int)(65535 - 1024 + 1));
 
         transportConfig.port = port_range;
@@ -581,9 +589,9 @@ static SWEndpoint *_sharedEndpoint = nil;
 //        transportConfig.public_addr = pj_str((char *)"127.0.0.1:31337");
 
         
-        pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
-        
-        status = pjsua_transport_create(transportType, &transportConfig, &transportId);
+//        pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
+    
+        status = pjsua_transport_create(PJSIP_TRANSPORT_TLS6, &transportConfig, &transportId);
         if (status != PJ_SUCCESS) {
             
             NSError *error = [NSError errorWithDomain:@"Error creating pjsua transport" code:status userInfo:nil];
@@ -594,9 +602,17 @@ static SWEndpoint *_sharedEndpoint = nil;
             
             return;
         }
-    }
+//    }
     
     [self start:handler];
+}
+
+
+static void printLogs(int level, const char *data, int len) {
+    NSString *theString =[NSString stringWithUTF8String:data];
+
+    NSLog(@"PJSIP %d: %@", level, theString);
+    
 }
 
 -(BOOL)hasTCPConfiguration {
@@ -648,7 +664,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     static pj_pool_t *pool = nil;
     
     dispatch_once(&onceToken, ^{
-        pool = pjsua_pool_create("swig-pjsua", 512, 512);
+        pool = pjsua_pool_create("swig-pjsua", 1024, 1024);
     });
     
     return pool;
@@ -900,14 +916,15 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     struct pjsip_regc_cbparam *rp = info->cbparam;
     
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-    if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
-            }];
-        });
-    }
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+#warning ЧТО-ТО ПАДАЛО!!! протестить потом
+//    if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
+//        
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+//            }];
+//        });
+//    }
     
     
     if (account) {
@@ -923,9 +940,35 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     }
 }
 
+static void SWOnRegState(pjsua_acc_id acc_id) {
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
+#warning ЧТО-ТО ПАДАЛО!!! протестить потом
+    //    if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
+    //
+    //        dispatch_async(dispatch_get_main_queue(), ^{
+    //            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+    //            }];
+    //        });
+    //    }
+    
+    
+    if (account) {
+        [account accountStateChanged];
+        NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
+        for (NSString *key in observersKeys) {
+            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                observer(account);
+            });
+            
+        }
+    }
+}
+
+
 static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (account) {
         [account accountStateConnecting];
@@ -1085,7 +1128,7 @@ static void SWOnCallReplaced(pjsua_call_id old_call_id, pjsua_call_id new_call_i
 
 static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
     
-    NSLog(@"Nat detect: %s", res->nat_type_name);
+//    NSLog(@"Nat detect: %s", res->nat_type_name);
 }
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
@@ -1232,10 +1275,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     int status = data->msg_info.msg->line.status.code;
     
     //    NSUInteger cseq = data->msg_info.cseq->cseq;
-    pjsua_acc_id acc_id;
+    pjsua_acc_id acc_id = 0;
     
     if (pjsua_acc_get_count() == 0) return PJ_FALSE;
-    acc_id = pjsua_acc_find_for_incoming(data);
+//    acc_id = pjsua_acc_find_for_incoming(&data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
@@ -1731,9 +1774,9 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 }
 
 - (pj_status_t) incomingSyncDone:(pjsip_rx_data *)data {
-    pjsua_acc_id acc_id;
+    pjsua_acc_id acc_id = 0;
     if (pjsua_acc_get_count() == 0) return PJ_FALSE;
-    acc_id = pjsua_acc_find_for_incoming(data);
+//    acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
     if (_syncDoneBlock) {
