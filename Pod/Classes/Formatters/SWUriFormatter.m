@@ -77,7 +77,7 @@
 
     pj_pool_release(tempPool);
     
-    return [NSString stringWithPJString:new_contact];
+    return [NSString stringWithFormat:@"<%@>", [NSString stringWithPJString:new_contact]];
 }
 
 

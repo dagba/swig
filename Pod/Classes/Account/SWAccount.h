@@ -38,7 +38,8 @@ typedef NS_ENUM(NSInteger, SWFileType) {
     SWFileTypeAudio,
     SWFileTypeVideo,
     SWFileTypeLocation,
-    SWFileTypeContact
+    SWFileTypeContact,
+    SWFileTypeSticker
 };
 
 typedef NS_ENUM(NSInteger, SWGroupAction) {
@@ -126,7 +127,7 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 - (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler;
 
-- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler;
+- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID  completionHandler:(void(^)(NSError *error))handler;
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler;
 
 

@@ -1,4 +1,4 @@
-//
+ //
 //  SWEndpoint.m
 //  swig
 //
@@ -157,6 +157,9 @@ static pjsip_module sipgate_module =
 };
 
 static void refer_notify_callback(void *token, pjsip_event *e) {
+    if (e->body.tsx_state.type != PJSIP_EVENT_RX_MSG) {
+        return;
+    }
     pjsip_via_hdr *via_hdr = (pjsip_via_hdr *)e->body.rx_msg.rdata->msg_info.via;
     if (via_hdr) {
         rport = via_hdr->rport_param;
@@ -569,11 +572,11 @@ static SWEndpoint *_sharedEndpoint = nil;
         pjsip_tls_setting_default(&tls_setting);
         
         
-        tls_setting.verify_server = PJ_FALSE;
-        tls_setting.method = PJSIP_TLSV1_METHOD;
+//        tls_setting.verify_server = PJ_FALSE;
+//        tls_setting.method = PJSIP_TLSV1_METHOD;
         
         pjsua_transport_config_default(&transportConfig);
-        transportConfig.tls_setting = tls_setting;
+//        transportConfig.tls_setting = tls_setting;
         int port_range = 1024 + (rand() % (int)(65535 - 1024 + 1));
 
         transportConfig.port = port_range;
@@ -1110,10 +1113,20 @@ static pjsip_redirect_op SWOnCallRedirected(pjsua_call_id call_id, const pjsip_u
 static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_str_t *to, const pj_str_t *contact, pj_bool_t is_typing, pjsip_rx_data *rdata, pjsua_acc_id acc_id) {
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     
+    NSInteger group_id = 0;
+    
+    pj_str_t  groupid_hdr_str = pj_str((char *)"GroupID");
+    
+    
+    pjsip_generic_string_hdr* groupid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &groupid_hdr_str, nil);
+    if (groupid_hdr != nil) {
+        group_id = atoi(groupid_hdr->hvalue.ptr);
+    }
+    
     if (account && [SWEndpoint sharedEndpoint].typingBlock) {
         pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
         NSString *fromUser = [NSString stringWithPJString:fromUri->user];
-        [SWEndpoint sharedEndpoint].typingBlock(account, fromUser, (BOOL)is_typing);
+        [SWEndpoint sharedEndpoint].typingBlock(account, fromUser, group_id, (BOOL)is_typing);
     }
 
 }

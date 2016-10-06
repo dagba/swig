@@ -82,7 +82,7 @@ void * refToSelf;
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
@@ -95,6 +95,8 @@ void * refToSelf;
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
+    acc_cfg.transport_id = transport_info.id;
+    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
 
     //    acc_cfg.reg_delay_before_refresh
     //    acc_cfg.reg_first_retry_interval
@@ -184,7 +186,7 @@ void * refToSelf;
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
+//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
 
     acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
 
@@ -1978,16 +1980,30 @@ static void reportUserCallback(void *token, pjsip_event *e) {
     });
 }
 
-- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
+- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID  completionHandler:(void(^)(NSError *error))handler {
 //    status = pjsua_acc_create_request((int)self.accountId, &method, &to, &tx_msg);
     pj_str_t to = [[SWUriFormatter sipUriWithPhone:abonent fromAccount:self toGSM:NO] pjString];
-    pj_status_t status = pjsua_im_typing((int)self.accountId, &to, typing, nil);
-    if (status == PJ_SUCCESS) {
+
+    pjsua_msg_data msg_data;
+    pjsua_msg_data_init(&msg_data);
+
+    if (groupID) {
+        pj_str_t hname = pj_str((char *)"GroupID");
+        pj_str_t hvalue;
+
+        char buffer[50];
+        hvalue.ptr = buffer;
+        hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
+        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pj_list_push_back(&msg_data.hdr_list, (pjsip_hdr*)group_id_hdr);
+    }
+    pj_status_t status = pjsua_im_typing((int)self.accountId, &to, typing, &msg_data);
+    if (status == PJ_SUCCESS && handler) {
         dispatch_async(dispatch_get_main_queue(), ^{
             handler(nil);
         });
     }
-    else {
+    else if (handler) {
         char errbuf[256];
         pjsip_strerror(status, errbuf, sizeof(errbuf));
         NSError *error = [NSError errorWithDomain:[NSString stringWithFormat:@"%c", errbuf] code:status userInfo:nil];
