@@ -135,7 +135,10 @@
     }
     
     if (_callState != SWCallStateDisconnected && _callId != PJSUA_INVALID_ID) {
-        pjsua_call_hangup((int)_callId, 0, NULL, NULL);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            pjsua_call_hangup((int)_callId, 0, NULL, NULL);
+        });
+
     }
     
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];

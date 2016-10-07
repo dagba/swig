@@ -525,6 +525,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.console_level = (unsigned int)self.endpointConfiguration.logConsoleLevel;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
+//    log_cfg.cb = &logCallback;
+//    log_cfg.decor = PJ_FALSE;
+    
+
     
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
@@ -555,11 +559,11 @@ static SWEndpoint *_sharedEndpoint = nil;
     }
     
     
-    //    status = pjmedia_srtp_init_lib(pjsua_get_pjmedia_endpt());
-    //    if (status != PJ_SUCCESS) {
-    //        NSLog(@"Cannot start srtp");
-    //        return;
-    //    }
+    status = pjmedia_srtp_init_lib(pjsua_get_pjmedia_endpt());
+    if (status != PJ_SUCCESS) {
+        NSLog(@"Cannot start srtp");
+        return;
+    }
     
     //TODO autodetect port by checking transportId!!!!
     
@@ -571,18 +575,16 @@ static SWEndpoint *_sharedEndpoint = nil;
         pjsip_tls_setting tls_setting;
         pjsip_tls_setting_default(&tls_setting);
         
+        tls_setting.method = PJSIP_TLSV1_METHOD;
+        tls_setting.verify_client = PJ_FALSE;
+        tls_setting.verify_server = PJ_FALSE;
+        tls_setting.require_client_cert = PJ_FALSE;
         
-//        tls_setting.verify_server = PJ_FALSE;
-//        tls_setting.method = PJSIP_TLSV1_METHOD;
-        
+        transportConfig.tls_setting = tls_setting;
         pjsua_transport_config_default(&transportConfig);
-//        transportConfig.tls_setting = tls_setting;
-        int port_range = 1024 + (rand() % (int)(65535 - 1024 + 1));
+        int random_port = 1024 + (rand() % (int)(65535 - 1024 + 1));
 
-        transportConfig.port = port_range;
-//        transportConfig.port_range = port_range;
-//        transportConfig.public_addr = pj_str((char *)"127.0.0.1:31337");
-
+        transportConfig.port = random_port;
         
         pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
         
@@ -600,6 +602,12 @@ static SWEndpoint *_sharedEndpoint = nil;
     }
     
     [self start:handler];
+}
+
+void logCallback (int level, const char *data, int len) {
+    NSString *logMessage = [NSString stringWithUTF8String:data];
+    
+    NSLog(@"SIP: %@", [logMessage stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]);
 }
 
 -(BOOL)hasTCPConfiguration {
@@ -1215,10 +1223,18 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         //        });
         
         pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
+
+//        pj_pool_alloc(&pool, <#pj_size_t size#>)
+//        pj_pool_t *pool = pj_pool_create(<#pj_pool_factory *factory#>, <#const char *name#>, <#pj_size_t initial_size#>, <#pj_size_t increment_size#>, <#pj_pool_callback *callback#>)
+
+
+        pj_pool_t *pool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
         
-        pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(self.pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(tdata->pool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)sync_hdr);
+        
+        pj_pool_release(pool);
     }
     
     return PJ_FALSE;
@@ -1557,12 +1573,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname = pj_str((char *)"Event");
-    pj_str_t hvalue = pj_str((char *)"Ready");
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(self.pjPool, &hname, &hvalue);
-    
-    
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
@@ -1597,6 +1607,11 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                                         nil,
                                         &tx_msg);
     
+    pj_str_t hname = pj_str((char *)"Event");
+    pj_str_t hvalue = pj_str((char *)"Ready");
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+
     
     if (status != PJ_SUCCESS) {
         return;
@@ -1807,7 +1822,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 
                 //В поле TO всегда отвечаем, что это мы. иначе - пизда.
                 
-                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(self.pjPool);
+                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
                 
                 pjsua_acc_id acc_id;
                 if (pjsua_acc_get_count() == 0) return PJ_FALSE;
@@ -1818,7 +1833,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 
                 status = pjsua_acc_get_info(acc_id, &info);
                 
-                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(self.pjPool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
                 
                 to_hdr->uri = uri;
                 pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);

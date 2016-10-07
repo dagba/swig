@@ -77,18 +77,14 @@ void * refToSelf;
         self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
     }
     
-    NSString *suffix = @"";
-    
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
-    
-//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
     
-    acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
-    acc_cfg.reg_uri = [[SWUriFormatter sipUri:[self.accountConfiguration.domain stringByAppendingString:suffix]] pjString];
+    acc_cfg.id = [[SWUriFormatter sipUri:self.accountConfiguration.address withDisplayName:self.accountConfiguration.displayName] pjString];
+    acc_cfg.reg_uri = [[SWUriFormatter sipUri:self.accountConfiguration.domain] pjString];
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
@@ -96,7 +92,7 @@ void * refToSelf;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
     acc_cfg.transport_id = transport_info.id;
-    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
+//    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
 
     //    acc_cfg.reg_delay_before_refresh
     //    acc_cfg.reg_first_retry_interval
@@ -118,7 +114,7 @@ void * refToSelf;
         acc_cfg.proxy_cnt = 0;
     } else {
         acc_cfg.proxy_cnt = 1;
-        acc_cfg.proxy[0] = [[SWUriFormatter sipUri:[self.accountConfiguration.proxy stringByAppendingString:suffix]] pjString];
+        acc_cfg.proxy[0] = [[SWUriFormatter sipUri:self.accountConfiguration.proxy] pjString];
     }
     
     
@@ -181,14 +177,10 @@ void * refToSelf;
         return;
     }
     
-    NSString *suffix = @"";
-    
     pjsua_transport_info transport_info;
     pjsua_transport_get_info(0, &transport_info);
     
-//    suffix = [NSString stringWithFormat:@";transport=%@", [NSString stringWithPJString:transport_info.type_name]];
-
-    acc_cfg.id = [[SWUriFormatter sipUri:[self.accountConfiguration.address stringByAppendingString:suffix] withDisplayName:self.accountConfiguration.displayName] pjString];
+    acc_cfg.id = [[SWUriFormatter sipUri:self.accountConfiguration.address withDisplayName:self.accountConfiguration.displayName] pjString];
 
     acc_cfg.cred_info[0].username = [phone pjString];
     
@@ -460,14 +452,14 @@ void * refToSelf;
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
     
-    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
     
     tx_msg->msg->body = body;
     
     if (isGroup) {
         pj_str_t hname = pj_str((char *)"GroupID");
         pj_str_t hvalue = [URI pjString];
-        pjsip_generic_string_hdr *group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr *group_id_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
     }
@@ -478,13 +470,13 @@ void * refToSelf;
         pj_str_t hvalue;
         hvalue.ptr = to_string;
         hvalue.slen = sprintf(to_string, "%lu",(unsigned long)fileType);
-        pjsip_generic_string_hdr* filetype_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr* filetype_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         hname = pj_str((char *)"FileHash");
         
         hvalue = [fileHash pjString];
         
-        pjsip_generic_string_hdr* file_hash_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr* file_hash_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)filetype_hdr);
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)file_hash_hdr);
@@ -571,21 +563,6 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname = pj_str((char *)"Event");
-    char to_string[256];
-    pj_str_t hvalue;
-    hvalue.ptr = to_string;
-    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-    
-    hname = pj_str((char *)"SMID");
-    hvalue.ptr = to_string;
-    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
-    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-
-    
-    
     pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
     
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_notify_method, &target, &tx_msg);
@@ -595,24 +572,31 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
         handler(error);
         return;
     }
+    pj_str_t hname = pj_str((char *)"Event");
+    char to_string[256];
+    pj_str_t hvalue;
+    hvalue.ptr = to_string;
+    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
     
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+    
+    hname = pj_str((char *)"SMID");
+    hvalue.ptr = to_string;
+    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
+    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
 
     if (groupID > 0) {
         hname = pj_str((char *)"GroupID");
         char buffer[50];
         hvalue.ptr = buffer;
         hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
-        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
     }
     
-
-
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
-    
 
-    
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageReadNotifyCallback);
 }
 
@@ -658,21 +642,6 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[255];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d Type=%d FileFlag=%d", (int)smid, (int)direction, (int)fileFlag);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -684,12 +653,25 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to delete message" code:0 userInfo:nil];
         handler(error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[255];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d Type=%d FileFlag=%d", (int)smid, (int)direction, (int)fileFlag);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -738,11 +720,26 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
 
+    pjsip_method method;
+    pj_str_t method_string = pj_str("COMMAND");
+
+    pjsip_method_init_np(&method, &method_string);
+
+    pj_str_t target = [[SWUriFormatter sipUri:partner fromAccount:self] pjString];
+    
+    /* Создаем непосредственно запрос */
+    status = pjsua_acc_create_request((int)self.accountId, &method, &target, &tx_msg);
+    if (status != PJ_SUCCESS) {
+        NSError *error = [NSError errorWithDomain:@"Failed to delete chat" code:0 userInfo:nil];
+        handler(error);
+        return;
+    }
+
     pj_str_t hname_name = pj_str((char *)"Command-Name");
     pj_str_t hvalue_name = pj_str((char *)"DeleteChat");
-
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
     pj_str_t hname_value = pj_str((char *)"Command-Value");
     
     
@@ -753,23 +750,7 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
     }
     
     pj_str_t hvalue_value = [hvalue pjString];
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-//
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-
-    pjsip_method_init_np(&method, &method_string);
-
-    pj_str_t target = [[SWUriFormatter sipUri:partner fromAccount:self] pjString];
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &target, &tx_msg);
-
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to delete chat" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
 
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -917,7 +898,7 @@ static void deleteChatCallback(void *token, pjsip_event *e) {
     if (action == SWPresenseActionSubscribe) {
         pj_str_t hname = pj_str((char *)"Event");
         pj_str_t hvalue = pj_str((char *)"presence");
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     }
@@ -975,12 +956,6 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname = pj_str((char *)"Command-Name");
-    
-    pj_str_t hvalue = pj_str((char *)"GetBalance");
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -992,13 +967,18 @@ static void subscribeCallback(void *token, pjsip_event *e) {
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
         handler(error, nil);
         return;
     }
+
+    pj_str_t hname = pj_str((char *)"Command-Name");
     
+    pj_str_t hvalue = pj_str((char *)"GetBalance");
+    
+    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &updateBalanceCallback);
@@ -1055,15 +1035,6 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"CreateChat");
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [name pjString];
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1081,6 +1052,16 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
         handler(error, nil);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"CreateChat");
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [name pjString];
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+    
+
     
     NSString *abonentsString = [abonents componentsJoinedByString:@", "];
     
@@ -1090,7 +1071,7 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
     pj_str_t subtype = pj_str((char *)"plain");
     
     
-    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &abonentsPjStr);
+    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &abonentsPjStr);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -1140,21 +1121,6 @@ static void createChatCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetChatInfo");
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", (int)groupID);
-    
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1172,6 +1138,20 @@ static void createChatCallback(void *token, pjsip_event *e) {
         handler(error, nil, nil, nil);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetChatInfo");
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", (int)groupID);
+    
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -1258,32 +1238,6 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name;
-    
-    switch (groupAction) {
-        case SWGroupActionAdd:
-            hvalue_name = pj_str((char *)"AddAbonent");
-            break;
-        case SWGroupActionDelete:
-            hvalue_name = pj_str((char *)"DeleteAbonent");
-            break;
-            
-        default:
-            break;
-    }
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
-
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1301,6 +1255,31 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         handler(error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name;
+    
+    switch (groupAction) {
+        case SWGroupActionAdd:
+            hvalue_name = pj_str((char *)"AddAbonent");
+            break;
+        case SWGroupActionDelete:
+            hvalue_name = pj_str((char *)"DeleteAbonent");
+            break;
+            
+        default:
+            break;
+    }
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -1312,7 +1291,7 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
     
-    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
     
     tx_msg->msg->body = body;
     
@@ -1365,21 +1344,6 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"SetGroupAvatar");
-
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1397,6 +1361,19 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         handler(error);
         return;
     }
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"SetGroupAvatar");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    
+    char buffer[50];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = buffer;
+    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
@@ -1406,7 +1383,7 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
     
-    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
     
     tx_msg->msg->body = body;
     
@@ -1433,16 +1410,6 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"Logout");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = pj_str((char *)(all?"All":"Current"));
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1461,6 +1428,16 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         return;
     }
     
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"Logout");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = pj_str((char *)(all?"All":"Current"));
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
@@ -1509,19 +1486,6 @@ static void logoutCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"SetRoute");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    char to_string[256];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = to_string;
-    hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)callRoute);
-
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1540,6 +1504,19 @@ static void logoutCallback(void *token, pjsip_event *e) {
         return;
     }
     
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"SetRoute");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    char to_string[256];
+    pj_str_t hvalue_value;
+    hvalue_value.ptr = to_string;
+    hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)callRoute);
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
@@ -1588,11 +1565,6 @@ static void setRouteCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetRoute");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1604,13 +1576,18 @@ static void setRouteCallback(void *token, pjsip_event *e) {
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
         handler(-1, error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetRoute");
     
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getRouteCallback);
@@ -1664,16 +1641,6 @@ static void getRouteCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"BlockUser");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [abonent pjString];
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1685,13 +1652,22 @@ static void getRouteCallback(void *token, pjsip_event *e) {
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
         handler(error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"BlockUser");
     
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [abonent pjString];
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
@@ -1739,16 +1715,6 @@ static void blockUserCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"ReleaseUser");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [abonent pjString];
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1760,13 +1726,23 @@ static void blockUserCallback(void *token, pjsip_event *e) {
     
     /* Создаем непосредственно запрос */
     status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
     if (status != PJ_SUCCESS) {
         NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
         handler(error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"ReleaseUser");
     
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    pj_str_t hvalue_value = [abonent pjString];
+    
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+    
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
     
@@ -1814,16 +1790,6 @@ static void releaseUserCallback(void *token, pjsip_event *e) {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetBlackList");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
-//    pj_str_t hname_value = pj_str((char *)"Command-Value");
-//    pj_str_t hvalue_value = [abonent pjString];
-//    
-//    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -1841,6 +1807,16 @@ static void releaseUserCallback(void *token, pjsip_event *e) {
         handler(error, nil);
         return;
     }
+    
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"GetBlackList");
+    
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+    //    pj_str_t hname_value = pj_str((char *)"Command-Value");
+    //    pj_str_t hvalue_value = [abonent pjString];
+    //
+    //    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     
@@ -1878,7 +1854,7 @@ static void getBlacklistCallback(void *token, pjsip_event *e) {
         return;
     }
     
-    NSString *message_txt = @"";
+    NSString *message_txt;
     
     if (msg->body != nil) {
         message_txt = [[NSString alloc] initWithBytes:msg->body->data length:(NSUInteger)msg->body->len encoding:NSUTF8StringEncoding];
@@ -1915,25 +1891,24 @@ static void getBlacklistCallback(void *token, pjsip_event *e) {
         return;
     }
 
-    
     pj_str_t hname_name = pj_str((char *)"Command-Name");
     pj_str_t hvalue_name = pj_str((char *)"IsSpam");
     
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
     
     pj_str_t hname_value = pj_str((char *)"Command-Value");
     char to_string[256];
     pj_str_t hvalue_value;
     hvalue_value.ptr = to_string;
     hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)SMID);
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
     
     pj_str_t pjMessage = [text pjString];
     
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
     
-    pjsip_msg_body *body = pjsip_msg_body_create([SWEndpoint sharedEndpoint].pjPool, &type, &subtype, &pjMessage);
+    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
     
     tx_msg->msg->body = body;
 
@@ -2023,11 +1998,6 @@ static void reportUserCallback(void *token, pjsip_event *e) {
     
     pjsip_method_init_np(&method, &method_string);
     
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"ClearCalls");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_name, &hvalue_name);
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info((int)self.accountId, &info);
@@ -2040,7 +2010,13 @@ static void reportUserCallback(void *token, pjsip_event *e) {
         handler(error);
         return;
     }
+
+    pj_str_t hname_name = pj_str((char *)"Command-Name");
+    pj_str_t hvalue_name = pj_str((char *)"ClearCalls");
     
+    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+    
+
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     
     pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &clearCallsCallback);
