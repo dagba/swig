@@ -70,15 +70,13 @@ void * refToSelf;
 }
 
 -(void)configure:(SWAccountConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler {
-    
+    pj_status_t status;
+
     self.accountConfiguration = configuration;
     
     if (!self.accountConfiguration.address) {
         self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
     }
-    
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
     
     pjsua_acc_config acc_cfg;
     pjsua_acc_config_default(&acc_cfg);
@@ -91,7 +89,6 @@ void * refToSelf;
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
-    acc_cfg.transport_id = transport_info.id;
 //    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
 
     //    acc_cfg.reg_delay_before_refresh
@@ -117,8 +114,6 @@ void * refToSelf;
         acc_cfg.proxy[0] = [[SWUriFormatter sipUri:self.accountConfiguration.proxy] pjString];
     }
     
-    
-    pj_status_t status;
     
     int accountId = (int)self.accountId;
     
@@ -176,9 +171,6 @@ void * refToSelf;
         }
         return;
     }
-    
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
     
     acc_cfg.id = [[SWUriFormatter sipUri:self.accountConfiguration.address withDisplayName:self.accountConfiguration.displayName] pjString];
 
@@ -1872,7 +1864,7 @@ static void getBlacklistCallback(void *token, pjsip_event *e) {
     handler(nil, array);
 }
 
-- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler {
+- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID completionHandler:(void(^)(NSError *error))handler {
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
@@ -1902,16 +1894,6 @@ static void getBlacklistCallback(void *token, pjsip_event *e) {
     hvalue_value.ptr = to_string;
     hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)SMID);
     pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-    pj_str_t pjMessage = [text pjString];
-    
-    pj_str_t type = pj_str((char *)"text");
-    pj_str_t subtype = pj_str((char *)"plain");
-    
-    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
-    
-    tx_msg->msg->body = body;
-
     
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
     pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);

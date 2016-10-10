@@ -1573,10 +1573,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pjsua_transport_info transport_info;
-    pjsua_transport_get_info(0, &transport_info);
-    
-    
     pjsua_acc_info info;
     
     pjsua_acc_get_info(acc_id, &info);

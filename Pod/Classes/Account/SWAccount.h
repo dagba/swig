@@ -125,9 +125,9 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 - (void) releaseUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler;
 - (void) getBlackListCompletionHandler:(void(^)(NSError *error, NSArray *blackListed))handler;
 
-- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID text:(NSString *) text completionHandler:(void(^)(NSError *error))handler;
+- (void) reportUser:(NSString *)abonent SMID:(NSUInteger) SMID completionHandler:(void(^)(NSError *error))handler;
 
-- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID  completionHandler:(void(^)(NSError *error))handler;
+- (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler;
 
 
