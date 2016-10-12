@@ -270,6 +270,81 @@ void * refToSelf;
     }
 }
 
+-(void)pause:(void(^)(NSError *error))handler {
+    
+    pj_status_t status;
+    
+    if (pjsua_acc_get_count() == 0) return;
+    
+//    status = pjsua_acc_set_online_status((int)self.accountId, PJ_FALSE);
+//    
+//    if (status != PJ_SUCCESS) {
+//        
+//        NSError *error = [NSError errorWithDomain:@"Error setting online status" code:status userInfo:nil];
+//        
+//        if (handler) {
+//            handler(error);
+//        }
+//        
+//        return;
+//    }
+//    
+    status = pjsua_acc_set_registration((int)self.accountId, PJ_FALSE);
+    
+    if (status != PJ_SUCCESS) {
+        
+        NSError *error = [NSError errorWithDomain:@"Error setting registration" code:status userInfo:nil];
+        
+        if (handler) {
+            handler(error);
+        }
+        
+        return;
+    }
+    
+    if (handler) {
+        handler(nil);
+    }
+}
+
+-(void)resume:(void(^)(NSError *error))handler {
+    
+    //FIX: registering too often will cause the server to possibly return error
+    
+    pj_status_t status;
+    
+    status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+    
+    if (status != PJ_SUCCESS) {
+        
+        NSError *error = [NSError errorWithDomain:@"Error setting registration" code:status userInfo:nil];
+        
+        if (handler) {
+            handler(error);
+        }
+        
+        return;
+    }
+    
+//    status = pjsua_acc_set_online_status((int)self.accountId, PJ_TRUE);
+//    
+//    if (status != PJ_SUCCESS) {
+//        
+//        NSError *error = [NSError errorWithDomain:@"Error setting online status" code:status userInfo:nil];
+//        
+//        if (handler) {
+//            handler(error);
+//        }
+//        
+//        return;
+//    }
+//    
+    if (handler) {
+        handler(nil);
+    }
+}
+
+
 - (void) accountStateConnecting {
     [self setAccountState:SWAccountStateConnecting];
 }

@@ -71,6 +71,8 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 -(void)setPhone: (NSString *)phone completionHandler:(void(^)(NSError *error))handler;
 -(void)connect:(void(^)(NSError *error))handler;
 -(void)disconnect:(void(^)(NSError *error))handler;
+-(void)pause:(void(^)(NSError *error))handler;
+-(void)resume:(void(^)(NSError *error))handler;
 
 - (void) accountStateConnecting;
 

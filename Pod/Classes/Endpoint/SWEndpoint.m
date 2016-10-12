@@ -337,6 +337,25 @@ static SWEndpoint *_sharedEndpoint = nil;
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
     //    }];
     
+    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        for (int i = 0; i < [self.accounts count]; ++i) {
+            
+            SWAccount *account = [self.accounts objectAtIndex:i];
+            
+            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
+            
+//            @weakify(account);
+            [account resume:^(NSError *error) {
+                
+//                @strongify(account);
+//                account = nil;
+                
+                dispatch_semaphore_signal(semaphone);
+            }];
+            
+            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
+        }
+    });
 }
 
 - (void) handleApplicationWillResignActiveNotification: (NSNotification *)notification {
@@ -348,19 +367,39 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
-    [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:NULL];
-    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
+//    [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:NULL];
+//    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     
     self.ringtone.volume = 0.0;
-    
     //    [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOffline completionHandler:^(NSError *error) {
     //    }];
     
-    [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
-        [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
-    }];
+//    [application setKeepAliveTimeout:KEEP_ALIVE_INTERVAL handler: ^{
+//        [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
+//    }];
+    
+    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        for (int i = 0; i < [self.accounts count]; ++i) {
+            
+            SWAccount *account = [self.accounts objectAtIndex:i];
+            if (account.firstCall) continue;
+            
+            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
+            
+//            @weakify(account);
+            [account pause:^(NSError *error) {
+                
+//                @strongify(account);
+//                account = nil;
+                
+                dispatch_semaphore_signal(semaphone);
+            }];
+            
+            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
+        }
+    });
 }
 
 -(void)handleApplicationWillTeminate:(NSNotification *)notification {
@@ -404,41 +443,41 @@ static SWEndpoint *_sharedEndpoint = nil;
     
 }
 
--(void)keepAlive {
-    
-    if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
-        return;
-    }
-    
-    [self registerThread];
-    
-    for (SWAccount *account in self.accounts) {
-        
-        if (account.isValid) {
-            
-            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
-            
-            [account connect:^(NSError *error) {
-                
-                dispatch_semaphore_signal(semaphone);
-            }];
-            
-            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
-        }
-        
-        else {
-            
-            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
-            
-            [account disconnect:^(NSError *error) {
-                
-                dispatch_semaphore_signal(semaphone);
-            }];
-            
-            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
-        }
-    }
-}
+//-(void)keepAlive {
+//    
+//    if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
+//        return;
+//    }
+//    
+//    [self registerThread];
+//    
+//    for (SWAccount *account in self.accounts) {
+//        
+//        if (account.isValid) {
+//            
+//            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
+//            
+//            [account connect:^(NSError *error) {
+//                
+//                dispatch_semaphore_signal(semaphone);
+//            }];
+//            
+//            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
+//        }
+//        
+//        else {
+//            
+//            dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
+//            
+//            [account disconnect:^(NSError *error) {
+//                
+//                dispatch_semaphore_signal(semaphone);
+//            }];
+//            
+//            dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
+//        }
+//    }
+//}
 
 #pragma Endpoint Methods
 

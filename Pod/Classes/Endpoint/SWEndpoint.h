@@ -109,7 +109,7 @@ typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, NSInteger 
 //- (void) setPushServerUpdatedBlock: (SWPushServerUpdatedBlock) pushServerUpdatedBlock;
 //- (void) setBalanceUpdatedBlock: (SWBalanceUpdatedBlock) balanceUpdatedBlock;
 
--(void)keepAlive;
+//-(void)keepAlive;
 
 - (pj_bool_t) rxRequestPackageProcessing: (pjsip_rx_data *)data;
 - (pj_bool_t) rxResponsePackageProcessing: (pjsip_rx_data *)data;
