@@ -62,6 +62,12 @@ void * refToSelf;
     [self didChangeValueForKey:@"accountState"];
 }
 
+- (void) setIsPaused:(BOOL)isPaused {
+    [self willChangeValueForKey:@"isPaused"];
+    _isPaused = isPaused;
+    [self didChangeValueForKey:@"isPaused"];
+}
+
 -(void)setAccountConfiguration:(SWAccountConfiguration *)accountConfiguration {
     
     [self willChangeValueForKey:@"accountConfiguration"];
@@ -302,6 +308,8 @@ void * refToSelf;
         return;
     }
     
+    self.isPaused = YES;
+    
     if (handler) {
         handler(nil);
     }
@@ -338,7 +346,9 @@ void * refToSelf;
 //        
 //        return;
 //    }
-//    
+//
+    
+    self.isPaused = NO;
     if (handler) {
         handler(nil);
     }
@@ -365,10 +375,12 @@ void * refToSelf;
     
     else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_TRYING) || PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_MULTIPLE_CHOICES)) {
         self.accountState = SWAccountStateConnecting;
+        self.isPaused = NO;
     }
     
     else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
         self.accountState = SWAccountStateConnected;
+        self.isPaused = NO;
     }
     
     else {

@@ -1365,8 +1365,9 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         
         if (status == PJSIP_SC_OK) {
             if (_confirmationBlock && (account.accountState == SWAccountStateConnected || account.accountState == SWAccountStateConnecting)) {
+                
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    _confirmationBlock(nil);
+                    _confirmationBlock(account, nil);
                 });
             }
             return PJ_FALSE;

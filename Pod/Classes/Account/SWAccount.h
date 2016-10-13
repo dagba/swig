@@ -63,6 +63,7 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 @property (nonatomic, readonly) NSInteger accountId;
 @property (nonatomic, readonly) SWAccountState accountState;
+@property (nonatomic, readonly) BOOL isPaused;
 @property (nonatomic, readonly, strong) SWAccountConfiguration *accountConfiguration;
 @property (nonatomic, readonly , assign, getter=isValid) BOOL valid;
 
