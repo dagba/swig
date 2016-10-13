@@ -1458,6 +1458,19 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         }
         
         
+        NSDate *submitTime = [NSDate date];
+        pj_str_t submit_time_hdr_str = pj_str((char *)"DateTime");
+        pjsip_generic_string_hdr* submit_time_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &submit_time_hdr_str, nil);
+        if (submit_time_hdr != nil) {
+            NSString *dateString = [NSString stringWithPJString:submit_time_hdr->hvalue];
+            
+            NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+            [dateFormatter setDateFormat:@"YYYY-MM-dd HH:mm:ss Z"];
+            
+            submitTime = [dateFormatter dateFromString:dateString];
+        }
+
+        
         /* Получаем SmID */
         NSUInteger sm_id = 0;
         pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
@@ -1469,7 +1482,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             /* Передаем идентификатор и статус сообщения в GUI */
             if (_messageStatusBlock) {
                 //                dispatch_async(dispatch_get_main_queue(), ^{
-                _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value, (sync_hdr?YES:NO), lastMessageInPack);
+                _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value, submitTime, (sync_hdr?YES:NO), lastMessageInPack);
                 //                });
             }
             
