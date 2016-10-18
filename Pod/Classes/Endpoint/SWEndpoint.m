@@ -171,6 +171,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 
 @interface SWEndpoint ()
 
+@property (nonatomic, copy) SWShouldResumeBlock shouldResumeBlock;
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
@@ -341,6 +342,12 @@ static SWEndpoint *_sharedEndpoint = nil;
         for (int i = 0; i < [self.accounts count]; ++i) {
             
             SWAccount *account = [self.accounts objectAtIndex:i];
+            BOOL shouldResume = YES;
+            
+            if (_shouldResumeBlock) {
+                shouldResume = _shouldResumeBlock(account);
+            }
+            if (!shouldResume) continue;
             
             dispatch_semaphore_t semaphone = dispatch_semaphore_create(0);
             
@@ -795,6 +802,10 @@ void logCallback (int level, const char *data, int len) {
             }];
         }
     }];
+}
+
+-(void)setShouldResumeBlock:(SWShouldResumeBlock)handler {
+    _shouldResumeBlock = handler;
 }
 
 #pragma Account Management

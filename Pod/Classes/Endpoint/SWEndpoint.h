@@ -49,6 +49,8 @@ typedef void (^SWSettingsUpdatedBlock) (struct Settings settings);
 typedef void (^SWSyncDoneBlock) (SWAccount *account);
 typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSString *groupName);
 typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, NSInteger groupID, BOOL typing);
+typedef BOOL (^SWShouldResumeBlock) (SWAccount *account);
+
 
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
@@ -71,6 +73,8 @@ typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, NSInteger 
 -(void)start:(void(^)(NSError *error))handler;
 -(void)reset:(void(^)(NSError *error))handler; //reset endpoint
 -(void)restart:(void(^)(NSError *error))handler;
+-(void)setShouldResumeBlock:(SWShouldResumeBlock)handler;
+
 
 -(void)addAccount:(SWAccount *)account;
 -(void)removeAccount:(SWAccount *)account;
