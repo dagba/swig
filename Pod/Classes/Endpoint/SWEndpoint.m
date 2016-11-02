@@ -196,6 +196,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 //@property (nonatomic, copy) SWPushServerUpdatedBlock pushServerUpdatedBlock;
 //@property (nonatomic, copy) SWBalanceUpdatedBlock balanceUpdatedBlock;
 @property (nonatomic, copy) SWSettingsUpdatedBlock settingsUpdatedBlock;
+@property (nonatomic, copy) SWChatDeletedBlock chatDeletedBlock;
 
 @property (nonatomic, strong) NSMutableDictionary *accountStateChangeBlockObservers;
 
@@ -909,6 +910,10 @@ void logCallback (int level, const char *data, int len) {
     _needConfirmBlock = needConfirmBlock;
 }
 
+- (void) setChatDeletedBlock: (SWChatDeletedBlock) chatDeletedBlock {
+    _chatDeletedBlock = chatDeletedBlock;
+}
+
 - (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock {
     _confirmationBlock = confirmationBlock;
 }
@@ -969,6 +974,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
             }];
         });
     }
+    
     
     
     if (account) {
@@ -1224,8 +1230,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         //    } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_invite_method) == 0) {
         //        [self incomingInvite:data];
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_refer_method) == 0) {
-        [self incomingRefer:data];
         pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, NULL, NULL);
+        [self incomingRefer:data];
         return PJ_TRUE;
     } else if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_command_method) == 0) {
         return [self incomingCommand:data];
@@ -1656,15 +1662,41 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     target.ptr = from_string;
     target.slen = snprintf(from_string, 256, "sips:%.*s@%.*s", (int)from->user.slen, from->user.ptr, (int)from->host.slen,from->host.ptr);
     /* Создаем непосредственно запрос */
-    status = pjsip_endpt_create_request(pjsua_get_pjsip_endpt(),
+    
+//    pj_str_t proxy = pj_str((char *)"<sips:[2001:470:1f09:1127::127]:5060;transport=TLS>");
+
+    
+    pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+    
+    
+    
+    
+    pj_addrinfo ai[10];
+    
+    pjsip_uri* refer_uri = pjsip_parse_uri([SWEndpoint sharedEndpoint].pjPool, refer_to->hvalue.ptr, refer_to->hvalue.slen, NULL);
+    pjsip_sip_uri *refer_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(refer_uri);
+    
+    unsigned int count = 10;
+    status = pj_getaddrinfo(data->pkt_info.src_addr.addr.sa_family, &refer_sip_uri->host, &count, ai);
+
+    char string_address[1024];
+    pj_sockaddr_print(&ai[0].ai_addr, string_address, 1024, 2);
+
+    char proxy_string[256];
+    
+    pj_str_t proxy;
+    proxy.ptr = proxy_string;
+    proxy.slen = snprintf(proxy_string, 256, "<sips:%s:%d;transport=TLS>", string_address, (int)refer_sip_uri->port);
+
+    status = pjsip_endpt_create_request(data->tp_info.transport->endpt,
                                         &pjsip_notify_method,
-                                        &refer_to->hvalue, //proxy
+                                        &proxy, //proxy
                                         &source, //from
                                         &target, //to
                                         &info.acc_uri, //contact
                                         &data->msg_info.cid->id,
                                         data->msg_info.cseq->cseq,
-                                        nil,
+                                        NULL,
                                         &tx_msg);
     
     pj_str_t hname = pj_str((char *)"Event");
@@ -1704,6 +1736,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     pj_str_t command_sync = pj_str((char *)"Sync");
     pj_str_t command_delete_message = pj_str((char *)"DeleteMessage");
+    pj_str_t command_delete_chat = pj_str((char *)"DeleteChat");
     pj_str_t command_create_chat = pj_str((char *)"CreateChat");
 
     pj_str_t command_add_abonent = pj_str((char *)"AddAbonent");
@@ -1728,6 +1761,33 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         }
         return PJ_TRUE;
     }
+
+    if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_delete_chat) == 0) {
+        pj_str_t  name_hdr_str = pj_str((char *)"Command-Value");
+        pjsip_generic_string_hdr* value_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &name_hdr_str, nil);
+        int smid = 0;
+        int chat_id = 0;
+
+        if (value_hdr != nil) {
+            sscanf(value_hdr->hvalue.ptr, "SMID=%i ChatID=%i", &smid, &chat_id);
+        }
+        
+        if (value_hdr != nil) {
+            if (_chatDeletedBlock) {
+                _chatDeletedBlock(account, @"test", (NSUInteger) chat_id);
+            }
+        }
+        
+        pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, NULL, NULL);
+        
+        
+        if (status != PJ_SUCCESS) {
+            NSLog(@"Failed to respond");
+        }
+        
+        return PJ_TRUE;
+    }
+
     
     if (command_name_hdr != nil && pj_strcmp(&command_name_hdr->hvalue, &command_delete_message) == 0) {
         
