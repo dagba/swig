@@ -1768,13 +1768,17 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         int smid = 0;
         int chat_id = 0;
 
+        pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+        NSString *abonent = [NSString stringWithPJString:fromUri->user];
+
+        
         if (value_hdr != nil) {
             sscanf(value_hdr->hvalue.ptr, "SMID=%i ChatID=%i", &smid, &chat_id);
         }
         
         if (value_hdr != nil) {
             if (_chatDeletedBlock) {
-                _chatDeletedBlock(account, @"test", (NSUInteger) chat_id);
+                _chatDeletedBlock(account, abonent, (NSUInteger) chat_id);
             }
         }
         

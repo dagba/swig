@@ -96,6 +96,7 @@ void * refToSelf;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
 //    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
+//    acc_cfg.transport_id = 0;
 
     //    acc_cfg.reg_delay_before_refresh
     //    acc_cfg.reg_first_retry_interval
