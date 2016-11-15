@@ -113,6 +113,14 @@
 
 -(void)stop {
     
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    NSError *overrideError;
+    
+    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+        
+    }
+
     if (self.audioPlayer.isPlaying) {
         [self.audioPlayer stop];
         
@@ -161,7 +169,7 @@
     
     NSError *overrideError;
     
-    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&overrideError]) {
+    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
         
     }
     
