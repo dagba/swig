@@ -110,55 +110,22 @@
     //TODO rewrite this. it is overly complex
     
     if ([uri length] == 0) {
-        return [[SWContact alloc] initWithName:nil address:nil];
+        return [[SWContact alloc] initWithName:nil host:nil user:nil];
     }
     
-    NSCharacterSet *spaceSet = [NSCharacterSet characterSetWithCharactersInString:@" "];
+    pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
     
-    uri = [uri stringByTrimmingCharactersInSet:spaceSet];
+    pj_str_t localURI = [uri pjString];
     
-    if ([uri rangeOfString:@"\"<"].location != NSNotFound && [uri rangeOfString:@">\""].location != NSNotFound) {
-        
-        NSRange leftBraceOriginal = [uri rangeOfString:@"\"<"];
-        
-        if (leftBraceOriginal.location != NSNotFound) {
-            uri = [uri stringByReplacingCharactersInRange:leftBraceOriginal withString:@"\""];
-        }
-        
-        NSRange rightBraceOriginal = [uri rangeOfString:@">\""];
-        
-        if (rightBraceOriginal.location != NSNotFound) {
-            uri = [uri stringByReplacingCharactersInRange:rightBraceOriginal withString:@"\""];
-        }
-    }
-
-    if ([uri rangeOfString:@"<"].location == NSNotFound && [uri rangeOfString:@">"].location == NSNotFound) {
-        
-        return [[SWContact alloc] initWithName:nil address:[[uri stringByReplacingOccurrencesOfString:@"sip:" withString:@""] stringByReplacingOccurrencesOfString:@"\"" withString:@""]];
-    }
+    pjsip_uri* local_uri = pjsip_parse_uri(tempPool, localURI.ptr, localURI.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+    pjsip_sip_uri *local_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_uri);
     
-    NSRange nameRange;
-    NSUInteger addressLocation;
+    NSString *username = [NSString stringWithPJString:local_sip_uri->user];
+    NSString *host = [NSString stringWithPJString:local_sip_uri->host];
+    NSString *user = [NSString stringWithPJString:local_sip_uri->user_param];
     
-    if ([uri rangeOfString:@"<sip:"].location != NSNotFound) {
-        
-        nameRange = NSMakeRange(0, [uri rangeOfString:@"<sip:"].location);
-        addressLocation = [uri rangeOfString:@"<sip:"].location + [uri rangeOfString:@"<sip:"].length;
-    }
-    
-    else {
-        
-        nameRange =  NSMakeRange(0, [uri rangeOfString:@"<"].location);
-        addressLocation = [uri rangeOfString:@"<"].location + [uri rangeOfString:@"<"].length;
-    }
-    
-    NSString *name = [[uri substringWithRange:nameRange] stringByReplacingOccurrencesOfString:@"\"" withString:@""];
-    
-    NSRange addressRange = NSMakeRange(addressLocation, [uri rangeOfString:@">"].location - addressLocation);
-    
-    NSString *address = [uri substringWithRange:addressRange];
-    
-    return [[SWContact alloc] initWithName:[name stringByTrimmingCharactersInSet:spaceSet] address:[address stringByTrimmingCharactersInSet:spaceSet]];
+    pj_pool_release(tempPool);
+    return [[SWContact alloc] initWithName:username host:host user:user];
 }
 
 + (NSString *) usernameFromURI: (NSString *) URI {
@@ -167,7 +134,7 @@
     
     pj_str_t localURI = [URI pjString];
     
-    pjsip_uri* local_uri = pjsip_parse_uri(tempPool, localURI.ptr, localURI.slen, NULL);
+    pjsip_uri* local_uri = pjsip_parse_uri(tempPool, localURI.ptr, localURI.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
     pjsip_sip_uri *local_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_uri);
     
     NSString *username = [NSString stringWithPJString:local_sip_uri->user];

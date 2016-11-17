@@ -293,7 +293,9 @@
     
     NSString *remoteURI = [NSString stringWithPJString:info.remote_info];
     
-    self.contact = [SWUriFormatter contactFromURI:remoteURI];
+    SWContact *contect = [SWUriFormatter contactFromURI:remoteURI];
+    
+    self.contact = contect;
 }
 
 - (void) sendRinging {

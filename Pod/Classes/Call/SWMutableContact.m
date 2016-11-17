@@ -11,6 +11,7 @@
 @implementation SWMutableContact
 
 @synthesize name = _name;
-@synthesize address = _address;
+@synthesize host = _host;
+@synthesize user = _user;
 
 @end

@@ -14,10 +14,10 @@
 
 -(instancetype)init {
     
-    return [self initWithName:nil address:nil];
+    return [self initWithName:nil host:nil user:nil];
 }
 
--(instancetype)initWithName:(NSString *)name address:(NSString *)address {
+-(instancetype)initWithName:(NSString *)name host:(NSString *)host user: (NSString *) user {
     
     self = [super init];
     
@@ -27,20 +27,22 @@
     
     if (!name) {
         _name = @"";
-    }
-    
-    else {
+    } else {
         _name = name;
     }
     
-    if (!address) {
-        _address = @"";
+    if (!host) {
+        _host = @"";
+    } else {
+        _host = host;
     }
-    
-    else {
-        _address = address;
+
+    if (!user) {
+        _user = @"";
+    } else {
+        _user = user;
     }
-    
+
     return self;
 }
 
@@ -48,7 +50,8 @@
     
     SWContact *contact = [[SWContact allocWithZone:zone] init];
     contact.name = [self.name copyWithZone:zone];
-    contact.address = [self.address copyWithZone:zone];
+    contact.host = [self.host copyWithZone:zone];
+    contact.user = [self.user copyWithZone:zone];
     
     return contact;
 }
@@ -57,7 +60,8 @@
  
     SWMutableContact *contact = [[SWMutableContact allocWithZone:zone] init];
     contact.name = [self.name copyWithZone:zone];
-    contact.address = [self.address copyWithZone:zone];
+    contact.host = [self.host copyWithZone:zone];
+    contact.user = [self.user copyWithZone:zone];
 
     return contact;
 }
@@ -69,11 +73,18 @@
     [self didChangeValueForKey:@"name"];
 }
 
--(void)setAddress:(NSString *)address {
+-(void)setHost:(NSString *)host {
     
-    [self willChangeValueForKey:@"address"];
-    _address = address;
-    [self didChangeValueForKey:@"address"];
+    [self willChangeValueForKey:@"host"];
+    _host = host;
+    [self didChangeValueForKey:@"host"];
+}
+
+-(void)setUser:(NSString *)user {
+    
+    [self willChangeValueForKey:@"user"];
+    _user = user;
+    [self didChangeValueForKey:@"user"];
 }
 
 
