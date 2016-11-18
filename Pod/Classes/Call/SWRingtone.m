@@ -169,7 +169,7 @@
     
     NSError *overrideError;
     
-    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&overrideError]) {
         
     }
     

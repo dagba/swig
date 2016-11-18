@@ -330,6 +330,15 @@
         self.missed = NO;
     }
     
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    NSError *overrideError;
+    
+    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+    }
+    if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
+    }
+    
     if (handler) {
         handler(error);
     }
