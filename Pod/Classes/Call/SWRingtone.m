@@ -27,7 +27,7 @@
 
 -(instancetype)init {
     
-    NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:[[NSBundle mainBundle] pathForResource:@"Ringtone" ofType:@"aif"]];
+    NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:[[NSBundle mainBundle] pathForResource:@"Ringtone" ofType:@"caf"]];
     
     return [self initWithFileAtPath:fileURL];
 }
@@ -97,11 +97,13 @@
     
     if (!self.audioPlayer.isPlaying) {
         
-        [self.audioPlayer prepareToPlay];
+        BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
         
         [self configureAudioSession];
 
-        [self.audioPlayer play];
+        BOOL play =  [self.audioPlayer play];
+        
+        NSLog(@"%@ %@", @(prepareToPlay), @(play));
         
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
         self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];

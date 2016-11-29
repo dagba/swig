@@ -259,7 +259,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     [self registerThread];
     
-    NSURL *fileURL = [[NSBundle mainBundle] URLForResource:@"Ringtone" withExtension:@"aif"];
+    NSURL *fileURL = [[NSBundle mainBundle] URLForResource:@"Ringtone" withExtension:@"caf"];
     
     _ringtone = [[SWRingtone alloc] initWithFileAtPath:fileURL];
     
@@ -560,8 +560,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
     
-    ua_cfg.user_agent = pj_str((char *)"Polyphone iOS 1.0");
-    
+    NSString *userAgent = [NSString stringWithFormat:@"%@/%@ (%@; iOS %@; Scale/%0.2f)", [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleExecutableKey] ?: [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleIdentifierKey], [[NSBundle mainBundle] infoDictionary][@"CFBundleShortVersionString"] ?: [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleVersionKey], [[UIDevice currentDevice] model], [[UIDevice currentDevice] systemVersion], [[UIScreen mainScreen] scale]];
+    ua_cfg.user_agent = [userAgent pjString];
+
     ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
     ua_cfg.srtp_secure_signaling = 2;
     
