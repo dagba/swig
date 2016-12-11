@@ -231,13 +231,17 @@
         } break;
             
         case PJSIP_INV_STATE_CALLING: {
-            [self.ringback start]; //TODO probably not needed
+//            [self.ringback start]; //TODO probably not needed
             self.callState = SWCallStateCalling;
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
             if (!self.inbound) {
-                [self.ringback start];
+                if (callInfo.last_status == PJSIP_SC_RINGING) {
+                    [self.ringback start];
+                } else if (callInfo.last_status == PJSIP_SC_PROGRESS) {
+                    [self.ringback stop];
+                }
             }
             self.callState = SWCallStateCalling;
         } break;
