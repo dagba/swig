@@ -103,29 +103,31 @@
 
 -(void)createLocalNotification {
     
-    _notification = [[UILocalNotification alloc] init];
-    _notification.repeatInterval = 0;
-    _notification.soundName = [[[SWEndpoint sharedEndpoint].ringtone.fileURL path] lastPathComponent];
-    
-    pj_status_t status;
-    
-    pjsua_call_info info;
-    
-    status = pjsua_call_get_info((int)self.callId, &info);
-    
-    if (status == PJ_TRUE) {
-        _notification.alertBody = [NSString stringWithFormat:@"Incoming call from %@", self.contact.name];
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
+        _notification = [[UILocalNotification alloc] init];
+        _notification.repeatInterval = 0;
+        _notification.soundName = [[[SWEndpoint sharedEndpoint].ringtone.fileURL path] lastPathComponent];
+        
+        pj_status_t status;
+        
+        pjsua_call_info info;
+        
+        status = pjsua_call_get_info((int)self.callId, &info);
+        
+        if (status == PJ_TRUE) {
+            _notification.alertBody = [NSString stringWithFormat:@"Incoming call from %@", self.contact.name];
+        }
+        
+        else {
+            _notification.alertBody = @"Incoming call";
+        }
+        
+        _notification.alertAction = @"Activate app";
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[UIApplication sharedApplication] presentLocalNotificationNow:_notification];
+        });
     }
-    
-    else {
-        _notification.alertBody = @"Incoming call";
-    }
-    
-    _notification.alertAction = @"Activate app";
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[UIApplication sharedApplication] presentLocalNotificationNow:_notification];
-    });
 }
 
 -(void)dealloc {
@@ -371,6 +373,42 @@
     }
     
     self.ringback = nil;
+}
+
+-(void)openSoundTrack:(void(^)(NSError *error))handler {
+    
+    pj_status_t status;
+    NSError *error;
+    
+    int capture_dev = 0;
+    int playback_dev = 0;
+    pjsua_get_snd_dev(&capture_dev, &playback_dev);
+    
+    status = pjsua_set_snd_dev(capture_dev, playback_dev);
+    
+    if (status != PJ_SUCCESS) {
+        error = [NSError errorWithDomain:@"Error open sound track" code:0 userInfo:nil];
+    }
+    
+    
+    if (handler) {
+        handler(error);
+    }
+}
+
+-(void)closeSoundTrack:(void(^)(NSError *error))handler {
+    pj_status_t status;
+    NSError *error;
+    status = pjsua_set_no_snd_dev();
+    
+    if (status != PJ_SUCCESS) {
+        error = [NSError errorWithDomain:@"Error close sound track" code:0 userInfo:nil];
+    }
+    
+    
+    if (handler) {
+        handler(error);
+    }
 }
 
 -(void)setHold:(void(^)(NSError *error))handler {

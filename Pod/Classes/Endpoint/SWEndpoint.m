@@ -311,6 +311,10 @@ static SWEndpoint *_sharedEndpoint = nil;
     }];
     
     
+    
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name: @"SWEndPointWakeUp" object:nil];
+    
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name: UIApplicationWillEnterForegroundNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredBackground:) name: UIApplicationDidEnterBackgroundNotification object:nil];
@@ -326,6 +330,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
     
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillTerminateNotification object:nil];
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:@"SWEndPointWakeUp" object:nil];
+    
     
     [self reset:^(NSError *error) {
         if (error) DDLogDebug(@"%@", [error description]);

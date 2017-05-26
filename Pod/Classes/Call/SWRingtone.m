@@ -95,42 +95,46 @@
 
 -(void)start {
     
-    if (!self.audioPlayer.isPlaying) {
-        
-        BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
-        
-        [self configureAudioSession];
-
-        BOOL play =  [self.audioPlayer play];
-        
-        NSLog(@"%@ %@", @(prepareToPlay), @(play));
-        
-        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
-        self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
-        
-        [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
-//        [self.virbateTimer s];
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
+        if (!self.audioPlayer.isPlaying) {
+            
+            BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
+            
+            [self configureAudioSession];
+            
+            BOOL play =  [self.audioPlayer play];
+            
+            NSLog(@"%@ %@", @(prepareToPlay), @(play));
+            
+            [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
+            self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
+            
+            [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
+        }
     }
 }
 
 -(void)stop {
     
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    
-    NSError *overrideError;
-    
-    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
         
-    }
-
-    if (self.audioPlayer.isPlaying) {
-        [self.audioPlayer stop];
+        AVAudioSession *audioSession = [AVAudioSession sharedInstance];
         
-        [self.virbateTimer invalidate];
-        self.virbateTimer = nil;
+        NSError *overrideError;
+        
+        if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+            
+        }
+        
+        if (self.audioPlayer.isPlaying) {
+            [self.audioPlayer stop];
+            
+            [self.virbateTimer invalidate];
+            self.virbateTimer = nil;
+        }
+        
+        [self.audioPlayer setCurrentTime:0];
     }
-    
-    [self.audioPlayer setCurrentTime:0];
 }
 
 -(void)setVolume:(float)volume {
