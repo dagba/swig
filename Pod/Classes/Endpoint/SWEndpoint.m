@@ -1614,9 +1614,18 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             lastMessageInPack = YES;
         }
     }
+    // * STATUS *
+    pj_str_t status_str = pj_str((char *) "Status");
+    pjsip_generic_string_hdr *status_hdr =
+    (pjsip_generic_string_hdr*) pjsip_msg_find_hdr_by_name(
+                                                           data->msg_info.msg, &status_str, NULL);
+    int event_value;
+    if (status_hdr!=NULL){
+        event_value = (int)pj_strtol(&status_hdr->hvalue);
+    }
     
     if (_messageReceivedBlock) {
-        _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO), lastMessageInPack);
+        _messageReceivedBlock(account, fromUser, toUser, message_txt, (NSUInteger) sm_id, group_id, submitTime, fileType, fileHash, fileServer, (sync_hdr?YES:NO), lastMessageInPack, event_value);
     }
     
     [self sendSubmit:data withCode:PJSIP_SC_OK];
