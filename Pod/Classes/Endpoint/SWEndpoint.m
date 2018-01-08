@@ -806,8 +806,18 @@ void logCallback (int level, const char *data, int len) {
     pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
     
     [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
-        for (SWAccount *account in self.accounts) {
+        
+        if(self.accounts.count == 0) {
+            handler(nil);
+            return;
+        }
+        
+        for (int i = 0; i < self.accounts.count; i++) {
+            SWAccount *account = self.accounts[i];
             [account configure:account.accountConfiguration completionHandler:^(NSError *error) {
+                if ((i == self.accounts.count - 1) && (handler != nil)) {
+                    handler(nil);
+                }
             }];
         }
     }];
@@ -973,11 +983,15 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     struct pjsip_regc_cbparam *rp = info->cbparam;
     
+    dispatch_queue_t queue = dispatch_get_main_queue();
+//#warning experiment
+    //Если так сделать, будет падать, потому что либа инициализирована в главном потоке
+    //dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
     
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
         
-        dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_async(queue, ^{
             [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
             }];
         });
