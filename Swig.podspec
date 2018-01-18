@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "Swig"
-  s.version          = "0.2.1"
+  s.version          = "0.2.2"
   s.summary          = "PJSIP Wrapper for ios"
   s.description      = <<-DESC
                        Simplifing the use of pjsip on ios
@@ -29,7 +29,6 @@ Pod::Spec.new do |s|
 
   s.dependency 'AFNetworking/Reachability', '~> 3'
   s.dependency 'libextobjc', '~> 0.4'
-  s.dependency 'pjsip'
   s.dependency 'CocoaLumberjack', '2.0.0-rc'
   s.dependency 'FCUUID', '~> 1.1'
 
