@@ -189,6 +189,10 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
 
+@property (nonatomic, copy) SWUnauthorizedBlock unauthorizedBlock;
+
+@property (nonatomic, copy) SWErrorBlock otherErrorBlock;
+
 //@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
 @property (nonatomic, copy) SWGetCounterBlock getCountersBlock;
@@ -1333,6 +1337,21 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
+    if ((_unauthorizedBlock != nil) && (status == PJSIP_SC_NOT_FOUND || status == PJSIP_SC_UNAUTHORIZED || status == 467)) {
+        if (status == PJSIP_SC_NOT_FOUND || status == 467) {
+            _unauthorizedBlock(account);
+            return PJ_FALSE;
+        }
+        
+        pjsua_acc_info accountInfo;
+        pjsua_acc_get_info(acc_id, &accountInfo);
+
+        if(accountInfo.expires > 0) {
+            _unauthorizedBlock(account);
+            return PJ_FALSE;
+        }
+    }
+    
     if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
         
         struct Settings settings;
@@ -2055,6 +2074,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     if (status != PJ_SUCCESS) {
         NSLog(@"Error");
         //        [self parseError:status];
+        
+        if(_otherErrorBlock) {
+            _otherErrorBlock(status);
+        }
     }
     return ret_value;
 }

@@ -51,7 +51,9 @@ typedef void (^SWSyncDoneBlock) (SWAccount *account);
 typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSString *groupName);
 typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, NSInteger groupID, BOOL typing);
 typedef BOOL (^SWShouldResumeBlock) (SWAccount *account);
+typedef void (^SWUnauthorizedBlock) (SWAccount *account);
 
+typedef void (^SWErrorBlock) (NSUInteger status);
 
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
@@ -106,6 +108,10 @@ typedef BOOL (^SWShouldResumeBlock) (SWAccount *account);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);
 - (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock;
 - (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock;
+
+- (void) setUnauthorizedBlock: (SWUnauthorizedBlock) unauthorizedBlock;
+
+- (void) setOtherErrorBlock: (SWErrorBlock) otherErrorBlock;
 
 //- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 

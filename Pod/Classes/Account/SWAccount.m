@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define kRegTimeout 800
+#define kRegTimeout 600
 
 void * refToSelf;
 
