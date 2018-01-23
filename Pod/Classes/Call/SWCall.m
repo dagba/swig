@@ -238,6 +238,12 @@
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+            
             if (!self.inbound) {
                 if (callInfo.last_status == PJSIP_SC_RINGING) {
                     [self.ringback start];
@@ -245,6 +251,7 @@
                     [self.ringback stop];
                 }
             }
+            
             self.callState = SWCallStateCalling;
         } break;
             
@@ -253,15 +260,29 @@
         } break;
             
         case PJSIP_INV_STATE_CONFIRMED: {
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
+#warning experiment
+            //[self changeVideoWindow];
             
             self.callState = SWCallStateConnected;
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+            
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
+            
             self.callState = SWCallStateDisconnected;
         } break;
     }
@@ -282,6 +303,29 @@
     pjsua_call_media_status mediaStatus = callInfo.media_status;
     
     self.mediaState = (SWMediaState)mediaStatus;
+}
+
+- (void) changeVideoWindow {
+#warning experiment
+    //Video
+    int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
+    pjsua_vid_win_id wid;
+    
+    if (vid_idx >= 0) {
+        pjsua_call_info ci;
+        
+        pjsua_call_get_info((int)self.callId, &ci);
+        wid = ci.media[vid_idx].stream.vid.win_in;
+        
+        pjsua_vid_win_info windowInfo;
+        pj_status_t status;
+        
+        status = pjsua_vid_win_get_info(wid, &windowInfo);
+        
+        if(status == PJ_SUCCESS) {
+            self.videoView = CFBridgingRelease(windowInfo.hwnd.info.window);
+        }
+    }
 }
 
 -(SWAccount *)getAccount {
@@ -324,7 +368,12 @@
     
     pj_status_t status;
     NSError *error;
-    
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    //[NSThread sleepForTimeInterval:1];
     status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
     
     if (status != PJ_SUCCESS) {
@@ -336,18 +385,29 @@
         self.missed = NO;
     }
     
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    /*
+     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+     
+     NSError *overrideError;
+     
+     if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+     }
+     if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
+     }
+     */
     
-    NSError *overrideError;
-    
-    if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
-    }
-    if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
-    }
+#warning experiment
+    //[self addVideoWindow];
     
     if (handler) {
         handler(error);
     }
+    
 }
 
 -(void)hangup:(void(^)(NSError *error))handler {
@@ -434,6 +494,16 @@
     }
 
 }
+
+- (void) setVideoEnabled: (BOOL) enabled {
+    if (enabled) {
+        pjsua_call_set_vid_strm(self.callId, PJSUA_CALL_VID_STRM_ADD, NULL);
+    }
+    else {
+        pjsua_call_set_vid_strm(self.callId, PJSUA_CALL_VID_STRM_REMOVE, NULL);
+    }
+}
+
 -(void)reinvite:(void(^)(NSError *error))handler {
     pj_status_t status;
     NSError *error;

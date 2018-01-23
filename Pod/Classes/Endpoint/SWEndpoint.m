@@ -37,6 +37,7 @@ typedef void (^SWAccountStateChangeBlock)(SWAccount *account);
 typedef void (^SWIncomingCallBlock)(SWAccount *account, SWCall *call);
 typedef void (^SWCallStateChangeBlock)(SWAccount *account, SWCall *call, pjsip_status_code statusCode);
 typedef void (^SWCallMediaStateChangeBlock)(SWAccount *account, SWCall *call);
+typedef void (^SWCallVideoFormatChangeBlock)(SWAccount *account, SWCall *call);
 
 
 //thread statics
@@ -175,6 +176,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
+@property (nonatomic, copy) SWCallVideoFormatChangeBlock callVideoFormatChangeBlock;
 @property (nonatomic, copy) SWSyncDoneBlock syncDoneBlock;
 @property (nonatomic, copy) SWGroupCreatedBlock groupCreatedBlock;
 
@@ -584,8 +586,13 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.console_level = (unsigned int)self.endpointConfiguration.logConsoleLevel;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
-    //    log_cfg.cb = &logCallback;
-    //    log_cfg.decor = PJ_FALSE;
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    log_cfg.cb = &logCallback;
+    log_cfg.decor = PJ_FALSE;
     
     
     
@@ -916,6 +923,11 @@ void logCallback (int level, const char *data, int len) {
     _callMediaStateChangeBlock = callMediaStateChangeBlock;
 }
 
+-(void)setCallVideoFormatChangeBlock:(void(^)(SWAccount *account, SWCall *call))callVideoFormatChangeBlock {
+    
+    _callVideoFormatChangeBlock = callVideoFormatChangeBlock;
+}
+
 -(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock {
     _syncDoneBlock = syncDoneBlock;
 }
@@ -1142,6 +1154,8 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
 
 static void SWOnCallMediaState(pjsua_call_id call_id) {
     
+    NSLog(@"---SWOnCallMediaState invoked");
+    
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
@@ -1164,7 +1178,21 @@ static void SWOnCallMediaState(pjsua_call_id call_id) {
 }
 
 static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_event *event) {
-    NSLog(@"MediaEvent");
+    NSLog(@"MediaEvent. Type=%d", event->type);
+
+    if (event->type == PJMEDIA_EVENT_FMT_CHANGED){
+        SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+        
+        SWCall *call = [account lookupCall:call_id];
+        
+        if (call) {
+            [call changeVideoWindow];
+            
+            if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
+                [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, call);
+            }
+        }
+    }
 }
 
 //TODO: implement these

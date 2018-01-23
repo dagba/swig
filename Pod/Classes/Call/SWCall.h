@@ -13,6 +13,8 @@
 #import "SWRingtone.h"
 #import "SWContact.h"
 
+#import <UIKit/UIKit.h>
+
 //TODO: move to 2 sublclasses (incoming/outgoing)
 
 @class SWAccount;
@@ -46,6 +48,8 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 @property (nonatomic, readonly) BOOL speaker;
 @property (nonatomic, readonly) BOOL mute;
 
+@property (nonatomic, strong) UIView *videoView;
+
 @property (nonatomic, readonly) NSDate *date;
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
 
@@ -62,11 +66,15 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 -(void)setHold:(void(^)(NSError *error))handler;
 -(void)reinvite:(void(^)(NSError *error))handler;
 
+- (void) setVideoEnabled: (BOOL) enabled;
+
 //-(void)transferCall:(NSString *)destination completionHandler:(void(^)(NSError *error))handler;
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
 
 -(void)toggleMute:(void(^)(NSError *error))handler;
 -(void)toggleSpeaker:(void(^)(NSError *error))handler;
 -(void)sendDTMF:(NSString *)dtmf handler:(void(^)(NSError *error))handler;
+
+- (void) changeVideoWindow;
 
 @end

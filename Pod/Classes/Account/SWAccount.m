@@ -112,6 +112,18 @@ void * refToSelf;
     
     acc_cfg.sip_stun_use = PJSUA_STUN_USE_DEFAULT;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
+    
+#warning experiment
+    acc_cfg.vid_in_auto_show = PJ_TRUE;
+    acc_cfg.vid_out_auto_transmit = PJ_TRUE;
+    acc_cfg.vid_wnd_flags = PJMEDIA_VID_DEV_WND_BORDER | PJMEDIA_VID_DEV_WND_RESIZABLE;
+    acc_cfg.vid_cap_dev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    acc_cfg.vid_rend_dev = PJMEDIA_VID_DEFAULT_RENDER_DEV;
+    acc_cfg.reg_retry_interval = 300;
+    acc_cfg.reg_first_retry_interval = 30;
+    
+    acc_cfg.vid_stream_sk_cfg.count = 100;
+    acc_cfg.vid_stream_sk_cfg.interval = 50;
 
     
     if (!self.accountConfiguration.proxy) {
@@ -470,7 +482,14 @@ void * refToSelf;
     
     pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
     
-    status = pjsua_call_make_call((int)self.accountId, &uri, 0, NULL, NULL, &callIdentifier);
+#warning experiment
+    pjsua_call_setting settings;
+    settings.aud_cnt = 1;
+    settings.vid_cnt = 1;
+    //settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
+    settings.flag = PJSUA_CALL_INCLUDE_DISABLED_MEDIA;
+    
+    status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);
     
     if (status != PJ_SUCCESS) {
         
@@ -481,6 +500,8 @@ void * refToSelf;
         
         SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
         
+#warning experiment
+        //[call setVideoEnabled:YES];
         
         [self addCall:call];
     }
