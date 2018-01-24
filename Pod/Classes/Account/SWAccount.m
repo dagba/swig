@@ -121,10 +121,13 @@ void * refToSelf;
     acc_cfg.vid_rend_dev = PJMEDIA_VID_DEFAULT_RENDER_DEV;
     acc_cfg.reg_retry_interval = 300;
     acc_cfg.reg_first_retry_interval = 30;
+    //int orientation = PJMEDIA_ORIENT_ROTATE_90DEG;
+    //pjsua_vid_dev_set_setting(PJMEDIA_VID_DEFAULT_CAPTURE_DEV, PJMEDIA_VID_DEV_CAP_ORIENTATION, &orientation, PJ_TRUE);
     
-    acc_cfg.vid_stream_sk_cfg.count = 100;
-    acc_cfg.vid_stream_sk_cfg.interval = 50;
-
+    //Ключевые фреймы в начале передачи посылаются через SWCall sendVideoKeyframe
+    acc_cfg.vid_stream_sk_cfg.count = 0;
+    //acc_cfg.vid_stream_sk_cfg.interval = 1000;
+    
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;
@@ -467,14 +470,18 @@ void * refToSelf;
 }
 
 -(void)makeCallToGSM:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
-    [self makeCall:URI toGSM:YES completionHandler:handler];
+    [self makeCall:URI toGSM:YES withVideo:NO completionHandler:handler];
 }
 
 -(void)makeCall:(NSString *)URI completionHandler:(void(^)(NSError *error))handler {
-    [self makeCall:URI toGSM:NO completionHandler:handler];
+    [self makeCall:URI toGSM:NO withVideo:NO completionHandler:handler];
 }
 
--(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM completionHandler:(void(^)(NSError *error))handler {
+-(void)makeCall:(NSString *)URI withVideo:(BOOL) withVideo completionHandler:(void(^)(NSError *error))handler {
+    [self makeCall:URI toGSM:NO withVideo:withVideo completionHandler:handler];
+}
+
+-(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM withVideo:(BOOL) withVideo completionHandler:(void(^)(NSError *error))handler {
     pj_status_t status;
     NSError *error;
     
@@ -485,7 +492,7 @@ void * refToSelf;
 #warning experiment
     pjsua_call_setting settings;
     settings.aud_cnt = 1;
-    settings.vid_cnt = 1;
+    settings.vid_cnt = withVideo ? 1 : 0;
     //settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
     settings.flag = PJSUA_CALL_INCLUDE_DISABLED_MEDIA;
     
@@ -499,9 +506,6 @@ void * refToSelf;
     else {
         
         SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
-        
-#warning experiment
-        //[call setVideoEnabled:YES];
         
         [self addCall:call];
     }

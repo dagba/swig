@@ -44,6 +44,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 @property (nonatomic, readonly) SWCallState callState;
 @property (nonatomic, readonly) SWMediaState mediaState;
 @property (nonatomic, readonly) BOOL inbound;
+@property (nonatomic, readonly) BOOL withVideo;
 @property (nonatomic, readonly) BOOL missed;
 @property (nonatomic, readonly) BOOL speaker;
 @property (nonatomic, readonly) BOOL mute;

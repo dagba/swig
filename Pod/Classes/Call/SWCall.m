@@ -46,6 +46,14 @@
         _missed = YES;
     }
     
+    pjsua_call_info info;
+    
+    pj_status_t status = pjsua_call_get_info(callId, &info);
+    
+    if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0)) {
+        _withVideo = YES;
+    }
+    
     _callState = SWCallStateReady;
     _callId = callId;
     _accountId = accountId;
@@ -238,12 +246,6 @@
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-            
             if (!self.inbound) {
                 if (callInfo.last_status == PJSIP_SC_RINGING) {
                     [self.ringback start];
@@ -260,26 +262,13 @@
         } break;
             
         case PJSIP_INV_STATE_CONFIRMED: {
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
-#warning experiment
-            //[self changeVideoWindow];
             
             self.callState = SWCallStateConnected;
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-            
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
             
@@ -298,6 +287,12 @@
     if (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE || callInfo.media_status == PJSUA_CALL_MEDIA_REMOTE_HOLD) {
         pjsua_conf_connect(callInfo.conf_slot, 0);
         pjsua_conf_connect(0, callInfo.conf_slot);
+        
+        if(self.withVideo && (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE)) {
+#warning нужно ли?
+            //[self changeVideoWindow];
+            [self sendVideoKeyframe];
+        }
     }
     
     pjsua_call_media_status mediaStatus = callInfo.media_status;
@@ -306,8 +301,6 @@
 }
 
 - (void) changeVideoWindow {
-#warning experiment
-    //Video
     int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
     pjsua_vid_win_id wid;
     
@@ -400,9 +393,6 @@
      if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
      }
      */
-    
-#warning experiment
-    //[self addVideoWindow];
     
     if (handler) {
         handler(error);
@@ -502,6 +492,22 @@
     else {
         pjsua_call_set_vid_strm(self.callId, PJSUA_CALL_VID_STRM_REMOVE, NULL);
     }
+}
+
+- (void) sendVideoKeyframe {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        __weak typeof(self) weakSelf = self;
+        for(int i = 0; i < 5; i++) {
+            if(!weakSelf) return;
+            
+            [NSThread sleepForTimeInterval:1];
+#warning UI thread
+            dispatch_async(dispatch_get_main_queue(), ^{
+                pj_status_t status;
+                status = pjsua_call_set_vid_strm(weakSelf.callId, PJSUA_CALL_VID_STRM_SEND_KEYFRAME, NULL);
+            });
+        }
+    });
 }
 
 -(void)reinvite:(void(^)(NSError *error))handler {
