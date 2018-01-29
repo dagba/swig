@@ -50,6 +50,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 @property (nonatomic, readonly) BOOL mute;
 
 @property (nonatomic, strong) UIView *videoView;
+@property (nonatomic, assign) CGSize videoSize;
 
 @property (nonatomic, readonly) NSDate *date;
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
@@ -68,6 +69,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 -(void)reinvite:(void(^)(NSError *error))handler;
 
 - (void) setVideoEnabled: (BOOL) enabled;
+- (void) changeVideoCaptureDevice;
 
 //-(void)transferCall:(NSString *)destination completionHandler:(void(^)(NSError *error))handler;
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
@@ -76,6 +78,6 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 -(void)toggleSpeaker:(void(^)(NSError *error))handler;
 -(void)sendDTMF:(NSString *)dtmf handler:(void(^)(NSError *error))handler;
 
-- (void) changeVideoWindow;
+- (void) changeVideoWindowWithSize: (CGSize) size;
 
 @end

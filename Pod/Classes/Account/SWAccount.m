@@ -121,13 +121,28 @@ void * refToSelf;
     acc_cfg.vid_rend_dev = PJMEDIA_VID_DEFAULT_RENDER_DEV;
     acc_cfg.reg_retry_interval = 300;
     acc_cfg.reg_first_retry_interval = 30;
-    //int orientation = PJMEDIA_ORIENT_ROTATE_90DEG;
-    //pjsua_vid_dev_set_setting(PJMEDIA_VID_DEFAULT_CAPTURE_DEV, PJMEDIA_VID_DEV_CAP_ORIENTATION, &orientation, PJ_TRUE);
     
     //Ключевые фреймы в начале передачи посылаются через SWCall sendVideoKeyframe
     acc_cfg.vid_stream_sk_cfg.count = 0;
     //acc_cfg.vid_stream_sk_cfg.interval = 1000;
     
+    int orient = PJMEDIA_ORIENT_ROTATE_90DEG;
+    
+    for (int i = pjsua_vid_dev_count()-1; i >= 0; i--) {
+        pjsua_vid_dev_set_setting(i, PJMEDIA_VID_DEV_CAP_ORIENTATION,
+                                  &orient, PJ_TRUE);
+    }
+    
+#pragma mark codec params settings
+    const pj_str_t codec_id = {"H264", 4};
+    pjmedia_vid_codec_param param;
+    
+    pjsua_vid_codec_get_param(&codec_id, &param);
+    
+    param.enc_fmt.det.vid.size.w = 1280;
+    param.enc_fmt.det.vid.size.h = 720;
+    
+    pjsua_vid_codec_set_param(&codec_id, &param);
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;
@@ -493,8 +508,16 @@ void * refToSelf;
     pjsua_call_setting settings;
     settings.aud_cnt = 1;
     settings.vid_cnt = withVideo ? 1 : 0;
-    //settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
-    settings.flag = PJSUA_CALL_INCLUDE_DISABLED_MEDIA;
+    
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    //Кажется, не передаёт кейфреймы, если это включено
+    settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
+    settings.req_keyframe_method = 0;
+    settings.flag = withVideo ? PJSUA_CALL_INCLUDE_DISABLED_MEDIA : 0;
     
     status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);
     

@@ -586,13 +586,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.console_level = (unsigned int)self.endpointConfiguration.logConsoleLevel;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    log_cfg.cb = &logCallback;
-    log_cfg.decor = PJ_FALSE;
+
+    //log_cfg.cb = &logCallback;
+    //log_cfg.decor = PJ_FALSE;
     
     
     
@@ -1186,7 +1182,10 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
         SWCall *call = [account lookupCall:call_id];
         
         if (call) {
-            [call changeVideoWindow];
+            CGFloat scale = [[UIScreen mainScreen] scale];
+            
+            CGSize size = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w*1.0/scale, event->data.fmt_changed.new_fmt.det.vid.size.h*1.0/scale);
+            [call changeVideoWindowWithSize: size];
             
             if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
                 [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, call);

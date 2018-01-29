@@ -50,9 +50,16 @@
     
     pj_status_t status = pjsua_call_get_info(callId, &info);
     
-    if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0)) {
+    if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0 || (!_inbound && (info.setting.vid_cnt > 0)))) {
         _withVideo = YES;
     }
+    
+#ifdef DEBUG
+#warning test
+    NSLog(@"<--SWCall init-->call created with video? %@", _withVideo ? @"true" : @"false");
+#else
+#error test
+#endif
     
     _callState = SWCallStateReady;
     _callId = callId;
@@ -287,7 +294,6 @@
     if (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE || callInfo.media_status == PJSUA_CALL_MEDIA_REMOTE_HOLD) {
         pjsua_conf_connect(callInfo.conf_slot, 0);
         pjsua_conf_connect(0, callInfo.conf_slot);
-        
         if(self.withVideo && (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE)) {
 #warning нужно ли?
             //[self changeVideoWindow];
@@ -300,7 +306,7 @@
     self.mediaState = (SWMediaState)mediaStatus;
 }
 
-- (void) changeVideoWindow {
+- (void) changeVideoWindowWithSize: (CGSize) size {
     int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
     pjsua_vid_win_id wid;
     
@@ -316,7 +322,8 @@
         status = pjsua_vid_win_get_info(wid, &windowInfo);
         
         if(status == PJ_SUCCESS) {
-            self.videoView = CFBridgingRelease(windowInfo.hwnd.info.window);
+            self.videoView = CFBridgingRelease(windowInfo.hwnd.info.ios.window);
+            self.videoSize = size;
         }
     }
 }
@@ -361,12 +368,7 @@
     
     pj_status_t status;
     NSError *error;
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    //[NSThread sleepForTimeInterval:1];
+    
     status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
     
     if (status != PJ_SUCCESS) {
@@ -378,12 +380,6 @@
         self.missed = NO;
     }
     
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    /*
      AVAudioSession *audioSession = [AVAudioSession sharedInstance];
      
      NSError *overrideError;
@@ -392,7 +388,6 @@
      }
      if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
      }
-     */
     
     if (handler) {
         handler(error);
@@ -430,11 +425,16 @@
     pj_status_t status;
     NSError *error;
     
+#warning experiment
+    /*
     int capture_dev = 0;
     int playback_dev = 0;
-    pjsua_get_snd_dev(&capture_dev, &playback_dev);
     
+    status = pjsua_get_snd_dev(&capture_dev, &playback_dev);
     status = pjsua_set_snd_dev(capture_dev, playback_dev);
+    */
+    
+    status = pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
     
     if (status != PJ_SUCCESS) {
         error = [NSError errorWithDomain:@"Error open sound track" code:0 userInfo:nil];
@@ -447,14 +447,22 @@
 }
 
 -(void)closeSoundTrack:(void(^)(NSError *error))handler {
-    pj_status_t status;
+    
     NSError *error;
+    
+    pjsua_set_no_snd_dev();
+    
+    //pjsua_set_no_snd_dev возвращает не статус!
+    /*
+     pj_status_t status;
+     NSError *error;
+     
     status = pjsua_set_no_snd_dev();
     
     if (status != PJ_SUCCESS) {
         error = [NSError errorWithDomain:@"Error close sound track" code:0 userInfo:nil];
     }
-    
+     */
     
     if (handler) {
         handler(error);
@@ -485,6 +493,8 @@
 
 }
 
+#pragma mark video
+
 - (void) setVideoEnabled: (BOOL) enabled {
     if (enabled) {
         pjsua_call_set_vid_strm(self.callId, PJSUA_CALL_VID_STRM_ADD, NULL);
@@ -492,6 +502,53 @@
     else {
         pjsua_call_set_vid_strm(self.callId, PJSUA_CALL_VID_STRM_REMOVE, NULL);
     }
+}
+
+- (void) changeVideoCaptureDevice {
+    unsigned count = pjsua_vid_dev_count();
+    
+    if (count == 0) {
+        return;
+    }
+    
+    pjmedia_vid_dev_info vdi;
+    pj_status_t status;
+    
+    int currentDev = -1;
+    int nextDev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    
+    for (int i=0; i<count; ++i) {
+        status = pjsua_vid_dev_get_info(i, &vdi);
+        
+        if ((status == PJ_SUCCESS) && (vdi.dir == PJMEDIA_DIR_CAPTURE)) {
+            //Если дошли до колорбаров, настоящие камеры кончились
+            if([[[NSString stringWithCString:vdi.name encoding:NSASCIIStringEncoding] lowercaseString] containsString:@"colorbar"]) {
+                break;
+            }
+            
+            if(pjsua_vid_dev_is_active (vdi.id)) {
+                currentDev = vdi.id;
+            }
+            else {
+                nextDev = vdi.id;
+                
+                //Если перед этим нашли текущее устройство видеозахвата, надо перейти на это.
+                if(currentDev != -1) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    pjsua_call_vid_strm_op_param param;
+    
+    pjsua_call_vid_strm_op_param_default(&param);
+    
+    param.cap_dev = nextDev;
+    
+    pjsua_call_set_vid_strm(self.callId,
+                            PJSUA_CALL_VID_STRM_CHANGE_CAP_DEV,
+                            &param);
 }
 
 - (void) sendVideoKeyframe {
@@ -515,10 +572,17 @@
     NSError *error;
     
     if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
-        int capture_dev = 0;
-        int playback_dev = 0;
-        pjsua_get_snd_dev(&capture_dev, &playback_dev);
-        pjsua_set_snd_dev(capture_dev, playback_dev);
+
+#warning experiment
+        /*
+         int capture_dev = 0;
+         int playback_dev = 0;
+         
+         status = pjsua_get_snd_dev(&capture_dev, &playback_dev);
+         status = pjsua_set_snd_dev(capture_dev, playback_dev);
+         */
+        
+        status = pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
         
         status = pjsua_call_reinvite((int)self.callId, PJ_TRUE, NULL);
         
