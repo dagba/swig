@@ -280,6 +280,7 @@
             [[SWEndpoint sharedEndpoint].ringtone stop];
             
             self.callState = SWCallStateDisconnected;
+            [self disableVideoCaptureDevice];
         } break;
     }
     
@@ -543,6 +544,47 @@
     }
     
     [self setVideoCaptureDevice:nextDev];
+}
+
+- (void) disableVideoCaptureDevice {
+    unsigned count = pjsua_vid_dev_count();
+    
+    if (count == 0) {
+        return;
+    }
+    
+    pjmedia_vid_dev_info vdi;
+    pj_status_t status;
+    
+    int currentDev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    
+    for (int i=0; i<count; ++i) {
+        status = pjsua_vid_dev_get_info(i, &vdi);
+        
+        if ((status == PJ_SUCCESS) && (vdi.dir == PJMEDIA_DIR_CAPTURE)) {
+            //Если дошли до колорбаров, настоящие камеры кончились
+            if([[[NSString stringWithCString:vdi.name encoding:NSASCIIStringEncoding] lowercaseString] containsString:@"colorbar"]) {
+                break;
+            }
+            
+            if(pjsua_vid_dev_is_active (vdi.id)) {
+                currentDev = vdi.id;
+                break;
+            }
+        }
+    }
+    
+    //Отключаем захват превью и его окно
+    pjsua_vid_win_id wid;
+    wid = pjsua_vid_preview_get_win(currentDev);
+    if (wid != PJSUA_INVALID_ID) {
+        pjsua_vid_win_set_show(wid, PJ_FALSE);
+    }
+    
+    
+    pjsua_vid_preview_stop(currentDev);
+    
+    self.videoPreviewView = nil;
 }
 
 - (void) setVideoCaptureDevice: (int) devId {
