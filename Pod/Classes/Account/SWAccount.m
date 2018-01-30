@@ -509,14 +509,7 @@ void * refToSelf;
     settings.aud_cnt = 1;
     settings.vid_cnt = withVideo ? 1 : 0;
     
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    //Кажется, не передаёт кейфреймы, если это включено
     settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
-    settings.req_keyframe_method = 0;
     settings.flag = withVideo ? PJSUA_CALL_INCLUDE_DISABLED_MEDIA : 0;
     
     status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);

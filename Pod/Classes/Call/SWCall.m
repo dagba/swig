@@ -322,10 +322,12 @@
         status = pjsua_vid_win_get_info(wid, &windowInfo);
         
         if(status == PJ_SUCCESS) {
-            self.videoView = CFBridgingRelease(windowInfo.hwnd.info.ios.window);
+            self.videoView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
             self.videoSize = size;
         }
     }
+    
+    [self setVideoCaptureDevice:PJMEDIA_VID_DEFAULT_CAPTURE_DEV];
 }
 
 -(SWAccount *)getAccount {
@@ -540,15 +542,47 @@
         }
     }
     
+    [self setVideoCaptureDevice:nextDev];
+}
+
+- (void) setVideoCaptureDevice: (int) devId {
     pjsua_call_vid_strm_op_param param;
     
     pjsua_call_vid_strm_op_param_default(&param);
     
-    param.cap_dev = nextDev;
+    param.cap_dev = devId;
     
     pjsua_call_set_vid_strm(self.callId,
                             PJSUA_CALL_VID_STRM_CHANGE_CAP_DEV,
                             &param);
+    
+    pjsua_vid_preview_param prvParam;
+    
+    pjsua_vid_preview_param_default(&prvParam);
+    prvParam.wnd_flags = PJMEDIA_VID_DEV_WND_BORDER |
+    PJMEDIA_VID_DEV_WND_RESIZABLE;
+    
+    pjsua_vid_preview_start(devId,&prvParam);
+    
+    
+    pjsua_vid_win_id wnd = pjsua_vid_preview_get_win(devId);
+    
+    pjsua_vid_win_info windowInfo;
+    
+    pj_status_t status = pjsua_vid_win_get_info(wnd, &windowInfo);
+    
+    if(status == PJ_SUCCESS) {
+        if ((self.videoPreviewSize.width > 0) && (self.videoPreviewSize.height > 0)) {
+            pjmedia_rect_size size;
+            
+            size.w = (int)self.videoPreviewSize.width;
+            size.h = (int)self.videoPreviewSize.height;
+            
+            pjsua_vid_win_set_size(wnd, &size);
+        }
+        
+        self.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
+    }
 }
 
 - (void) sendVideoKeyframe {

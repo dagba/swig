@@ -49,8 +49,10 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 @property (nonatomic, readonly) BOOL speaker;
 @property (nonatomic, readonly) BOOL mute;
 
-@property (nonatomic, strong) UIView *videoView;
+@property (nonatomic, weak) UIView *videoView;
+@property (nonatomic, weak) UIView *videoPreviewView;
 @property (nonatomic, assign) CGSize videoSize;
+@property (nonatomic, assign) CGSize videoPreviewSize;
 
 @property (nonatomic, readonly) NSDate *date;
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
