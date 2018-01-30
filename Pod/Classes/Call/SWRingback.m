@@ -73,9 +73,14 @@
 }
 
 -(void)dealloc {
+    int ringbackSlot = (int)_ringbackSlot;
+    pjmedia_port *ringbackPort = _ringbackPort;
     
-    pjsua_conf_remove_port((int)_ringbackSlot);
-    pjmedia_port_destroy(_ringbackPort);
+#warning main thread!
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        pjsua_conf_remove_port(ringbackSlot);
+        pjmedia_port_destroy(ringbackPort);
+    });
 }
 
 -(void)start {

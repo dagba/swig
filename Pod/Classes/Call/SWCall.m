@@ -21,6 +21,10 @@
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
 
+#define PJMEDIA_NO_VID_DEVICE -100
+
+@property (nonatomic, assign) pjmedia_vid_dev_index currentVideoCaptureDevice;
+
 @end
 
 @implementation SWCall
@@ -35,6 +39,8 @@
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
     
     self = [super init];
+    
+    self.currentVideoCaptureDevice = PJMEDIA_NO_VID_DEVICE;
     
     if (!self) {
         return nil;
@@ -53,13 +59,6 @@
     if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0 || (!_inbound && (info.setting.vid_cnt > 0)))) {
         _withVideo = YES;
     }
-    
-#ifdef DEBUG
-#warning test
-    NSLog(@"<--SWCall init-->call created with video? %@", _withVideo ? @"true" : @"false");
-#else
-#error test
-#endif
     
     _callState = SWCallStateReady;
     _callId = callId;
@@ -152,6 +151,7 @@
     }
     
     if (_callState != SWCallStateDisconnected && _callId != PJSUA_INVALID_ID) {
+#warning main thread!
         dispatch_async(dispatch_get_main_queue(), ^{
             pjsua_call_hangup((int)_callId, 0, NULL, NULL);
         });
@@ -328,7 +328,11 @@
         }
     }
     
-    [self setVideoCaptureDevice:PJMEDIA_VID_DEFAULT_CAPTURE_DEV];
+    if (self.currentVideoCaptureDevice == PJMEDIA_NO_VID_DEVICE) {
+        self.currentVideoCaptureDevice = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    }
+    
+    [self setVideoCaptureDevice:self.currentVideoCaptureDevice];
 }
 
 -(SWAccount *)getAccount {
@@ -510,17 +514,17 @@
 - (void) changeVideoCaptureDevice {
     unsigned count = pjsua_vid_dev_count();
     
-    if (count == 0) {
+    if ((count == 0) || (self.callState != SWCallStateConnected)) {
         return;
     }
     
     pjmedia_vid_dev_info vdi;
     pj_status_t status;
     
-    int currentDev = -1;
-    int nextDev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    pjmedia_vid_dev_index currentDev = PJMEDIA_NO_VID_DEVICE;
+    pjmedia_vid_dev_index nextDev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
     
-    for (int i=0; i<count; ++i) {
+    for (pjmedia_vid_dev_index i=0; i<count; ++i) {
         status = pjsua_vid_dev_get_info(i, &vdi);
         
         if ((status == PJ_SUCCESS) && (vdi.dir == PJMEDIA_DIR_CAPTURE)) {
@@ -529,19 +533,31 @@
                 break;
             }
             
-            if(pjsua_vid_dev_is_active (vdi.id)) {
+            //pjsua_vid_dev_is_active (vdi.id) лучше не использовать
+            //активными могут остаться несколько окон
+            if(vdi.id == self.currentVideoCaptureDevice) {
                 currentDev = vdi.id;
             }
             else {
                 nextDev = vdi.id;
                 
                 //Если перед этим нашли текущее устройство видеозахвата, надо перейти на это.
-                if(currentDev != -1) {
+                if(currentDev != PJMEDIA_NO_VID_DEVICE) {
+                    
                     break;
                 }
             }
         }
     }
+    
+    //Почему-то после этого pjsua_vid_dev_is_active всё равно тру, зато окно превью пропадает насовсем
+    /*
+    if(currentDev != PJMEDIA_NO_VID_DEVICE) {
+        //Отключаем захват превью
+        
+        pjsua_vid_preview_stop(currentDev);
+    }
+     */
     
     [self setVideoCaptureDevice:nextDev];
 }
@@ -556,9 +572,10 @@
     pjmedia_vid_dev_info vdi;
     pj_status_t status;
     
-    int currentDev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
+    pjmedia_vid_dev_index currentDev = PJMEDIA_NO_VID_DEVICE;
     
-    for (int i=0; i<count; ++i) {
+    //Найдём все активные видеоустройства
+    for (pjmedia_vid_dev_index i=0; i<count; ++i) {
         status = pjsua_vid_dev_get_info(i, &vdi);
         
         if ((status == PJ_SUCCESS) && (vdi.dir == PJMEDIA_DIR_CAPTURE)) {
@@ -569,25 +586,24 @@
             
             if(pjsua_vid_dev_is_active (vdi.id)) {
                 currentDev = vdi.id;
-                break;
+                
+                //Отключаем захват превью и его окно
+                pjsua_vid_win_id wid;
+                wid = pjsua_vid_preview_get_win(currentDev);
+                if (wid != PJSUA_INVALID_ID) {
+                    pjsua_vid_win_set_show(wid, PJ_FALSE);
+                }
+                
+                pjsua_vid_preview_stop(currentDev);
             }
         }
     }
     
-    //Отключаем захват превью и его окно
-    pjsua_vid_win_id wid;
-    wid = pjsua_vid_preview_get_win(currentDev);
-    if (wid != PJSUA_INVALID_ID) {
-        pjsua_vid_win_set_show(wid, PJ_FALSE);
-    }
-    
-    
-    pjsua_vid_preview_stop(currentDev);
-    
+    self.currentVideoCaptureDevice = PJMEDIA_NO_VID_DEVICE;
     self.videoPreviewView = nil;
 }
 
-- (void) setVideoCaptureDevice: (int) devId {
+- (void) setVideoCaptureDevice: (pjmedia_vid_dev_index) devId {
     pjsua_call_vid_strm_op_param param;
     
     pjsua_call_vid_strm_op_param_default(&param);
@@ -606,7 +622,6 @@
     
     pjsua_vid_preview_start(devId,&prvParam);
     
-    
     pjsua_vid_win_id wnd = pjsua_vid_preview_get_win(devId);
     
     pjsua_vid_win_info windowInfo;
@@ -622,9 +637,14 @@
             
             pjsua_vid_win_set_size(wnd, &size);
         }
+        else {
+            pjsua_vid_win_set_show(wnd, PJ_FALSE);
+        }
         
         self.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
     }
+    
+    self.currentVideoCaptureDevice = devId;
 }
 
 - (void) sendVideoKeyframe {
