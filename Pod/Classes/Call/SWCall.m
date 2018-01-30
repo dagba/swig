@@ -60,6 +60,9 @@
         _withVideo = YES;
     }
     
+    _mute = NO;
+    _speaker = _withVideo;
+    
     _callState = SWCallStateReady;
     _callId = callId;
     _accountId = accountId;
@@ -271,8 +274,14 @@
         case PJSIP_INV_STATE_CONFIRMED: {
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
+            [self updateOverrideSpeaker];
             
             self.callState = SWCallStateConnected;
+            
+            if(self.callState == SWCallStateConnected) {
+                [self updateMuteStatus];
+            }
+            
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
@@ -388,11 +397,15 @@
     }
     
      AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-     
-     NSError *overrideError;
-     
+    
+    NSError *overrideError;
+#warning experiment
+    /*
      if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
      }
+     */
+    [self updateOverrideSpeaker];
+    
      if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
      }
     
@@ -695,6 +708,42 @@
 //-(void)transferCall:(NSString *)destination completionHandler:(void(^)(NSError *error))handler;
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
 
+- (void)setMute:(BOOL)mute {
+    if (mute == _mute) {
+        return;
+    }
+    
+    _mute = mute;
+    
+    if(self.callState == SWCallStateConnected) {
+        [self updateMuteStatus];
+    }
+}
+
+- (void) updateMuteStatus {
+    pjsua_call_info callInfo;
+    pjsua_call_get_info((int)self.callId, &callInfo);
+    
+    pj_status_t status;
+    NSError *error = nil;
+    if (_mute) {
+        status = pjsua_conf_disconnect(0, callInfo.conf_slot);
+        if (status != PJ_SUCCESS) {
+            error = [NSError errorWithDomain:@"Error mute" code:0 userInfo:nil];
+            _mute = NO;
+        }
+    }
+    
+    else {
+        status = pjsua_conf_connect(0, callInfo.conf_slot);
+        if (status != PJ_SUCCESS) {
+            error = [NSError errorWithDomain:@"Error unmute" code:0 userInfo:nil];
+            _mute = YES;
+        }
+        
+    }
+}
+
 -(void)toggleMute:(void(^)(NSError *error))handler {
     
     pjsua_call_info callInfo;
@@ -722,6 +771,27 @@
     handler(error);
 }
 
+- (void)setSpeaker:(BOOL)speaker {
+    if (_speaker == speaker) return;
+    
+    _speaker = speaker;
+    
+    [self updateOverrideSpeaker];
+}
+
+- (void) updateOverrideSpeaker {
+    
+    NSError *error = nil;
+    if (_speaker) {
+        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
+    }
+    
+    else {
+        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
+    }
+}
+
+#warning deprecated
 -(void)toggleSpeaker:(void(^)(NSError *error))handler {
     NSError *error = nil;
     if (!_speaker) {
