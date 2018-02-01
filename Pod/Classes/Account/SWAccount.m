@@ -141,6 +141,7 @@ void * refToSelf;
     
     param.enc_fmt.det.vid.size.w = 1280;
     param.enc_fmt.det.vid.size.h = 720;
+    param.enc_fmt.det.vid.avg_bps = 2048 * 1024;
     
     pjsua_vid_codec_set_param(&codec_id, &param);
     
