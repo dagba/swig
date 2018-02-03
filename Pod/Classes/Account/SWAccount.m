@@ -13,10 +13,14 @@
 #import "SWUriFormatter.h"
 #import "NSString+PJString.h"
 
+
+#import <AVFoundation/AVFoundation.h>
+
 #import "pjsua.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+
 
 #define kRegTimeout 600
 
@@ -139,9 +143,47 @@ void * refToSelf;
     
     pjsua_vid_codec_get_param(&codec_id, &param);
     
+#warning experiment
+    /*
     param.enc_fmt.det.vid.size.w = 1280;
     param.enc_fmt.det.vid.size.h = 720;
-    param.enc_fmt.det.vid.avg_bps = 2048 * 1024;
+    */
+    
+    param.enc_fmt.det.vid.size.w = 720;
+    param.enc_fmt.det.vid.size.h = 1280;
+    
+    
+    
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    NSArray* availFormat;
+    
+    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+    for (AVCaptureDevice *device in devices) {
+        if ([device position] == AVCaptureDevicePositionBack) {
+            availFormat = device.formats;
+            NSLog(@"<--Camera formats-->Back camera:%@", availFormat);
+        }
+        else if ([device position] == AVCaptureDevicePositionFront) {
+            availFormat = device.formats;
+            NSLog(@"<--Camera formats-->Front camera:%@", availFormat);
+        }
+    }
+     
+    param.enc_fmt.det.vid.avg_bps = 2 * 1024 * 1024;
+    
+    
+    //Выставим уровень профиля кодека
+    for (int i=0; i < param.dec_fmtp.cnt; i++) {
+        if ([[NSString stringWithPJString:param.dec_fmtp.param[i].name] isEqualToString:@"profile-level-id"]) {
+            //Уровень 31
+            param.dec_fmtp.param[i].val = pj_str("42e01f");
+        }
+    }
+    
     
     pjsua_vid_codec_set_param(&codec_id, &param);
     

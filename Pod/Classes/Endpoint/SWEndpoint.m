@@ -1184,8 +1184,32 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
         if (call) {
             CGFloat scale = [[UIScreen mainScreen] scale];
             
-            CGSize size = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w*1.0/scale, event->data.fmt_changed.new_fmt.det.vid.size.h*1.0/scale);
-            [call changeVideoWindowWithSize: size];
+            CGSize videoSize = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w*1.0/scale, event->data.fmt_changed.new_fmt.det.vid.size.h*1.0/scale);
+            
+            const pj_str_t codec_id = {"H264", 4};
+            pjmedia_vid_codec_param param;
+            
+            pjsua_vid_codec_get_param(&codec_id, &param);
+            
+            /*
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+#ifdef DEBUG
+            NSLog(@"<--codec dec size--> w=%d, h=%d", param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
+#endif
+             */
+            
+            CGSize codecSize = CGSizeMake(param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
+            
+#warning костыль
+            if ((codecSize.width - codecSize.height) * (videoSize.width - videoSize.height) < 0) {
+                videoSize = CGSizeMake(videoSize.height, videoSize.width);
+            }
+            
+            [call changeVideoWindowWithSize: videoSize];
             
             if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
                 [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, call);
