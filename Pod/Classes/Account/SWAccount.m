@@ -143,16 +143,10 @@ void * refToSelf;
     
     pjsua_vid_codec_get_param(&codec_id, &param);
     
-#warning experiment
-    /*
-    param.enc_fmt.det.vid.size.w = 1280;
-    param.enc_fmt.det.vid.size.h = 720;
-    */
-    
     param.enc_fmt.det.vid.size.w = 720;
     param.enc_fmt.det.vid.size.h = 1280;
     
-    
+    /*
     
 #ifdef DEBUG
 #warning test
@@ -172,6 +166,7 @@ void * refToSelf;
             NSLog(@"<--Camera formats-->Front camera:%@", availFormat);
         }
     }
+    */
      
     param.enc_fmt.det.vid.avg_bps = 2 * 1024 * 1024;
     
