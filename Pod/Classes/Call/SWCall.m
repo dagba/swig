@@ -15,6 +15,7 @@
 #import "pjsua.h"
 #import <AVFoundation/AVFoundation.h>
 #import "SWMutableCall.h"
+#import "SWAccountConfiguration.h"
 
 @interface SWCall ()
 
@@ -616,7 +617,11 @@
     self.videoPreviewView = nil;
 }
 
-- (void) setVideoCaptureDevice: (pjmedia_vid_dev_index) devId {
+- (void) setVideoCaptureDevice: (int) devId {
+    SWAccount *account = [self getAccount];
+    
+    [account configureVideoCodecForDevice: devId];
+    
     pjsua_call_vid_strm_op_param param;
     
     pjsua_call_vid_strm_op_param_default(&param);
@@ -637,27 +642,32 @@
     
     pjsua_vid_win_id wnd = pjsua_vid_preview_get_win(devId);
     
+    self.currentVideoCaptureDevice = devId;
+    
     pjsua_vid_win_info windowInfo;
     
     pj_status_t status = pjsua_vid_win_get_info(wnd, &windowInfo);
     
-    if(status == PJ_SUCCESS) {
-        if ((self.videoPreviewSize.width > 0) && (self.videoPreviewSize.height > 0)) {
-            pjmedia_rect_size size;
-            
-            size.w = (int)self.videoPreviewSize.width;
-            size.h = (int)self.videoPreviewSize.height;
-            
-            pjsua_vid_win_set_size(wnd, &size);
-        }
-        else {
-            pjsua_vid_win_set_show(wnd, PJ_FALSE);
-        }
+    if(status != PJ_SUCCESS) return;
+    
+    if ((self.videoPreviewSize.width > 0) && (self.videoPreviewSize.height > 0)) {
+        pjmedia_rect_size size;
         
-        self.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
+        CGSize outputVideoSize = account.currentOutputVideoSize;
+        
+        CGFloat aspect = outputVideoSize.width / outputVideoSize.height;
+        
+        size.w = (int)self.videoPreviewSize.width;
+#warning игнорируется переданная высота. Может быть, использовать как ограничения?
+        size.h = (int)self.videoPreviewSize.width / aspect;
+        
+        pjsua_vid_win_set_size(wnd, &size);
+    }
+    else {
+        pjsua_vid_win_set_show(wnd, PJ_FALSE);
     }
     
-    self.currentVideoCaptureDevice = devId;
+    self.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
 }
 
 - (void) sendVideoKeyframe {

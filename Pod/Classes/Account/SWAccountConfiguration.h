@@ -22,6 +22,7 @@
 @property (nonatomic, strong) NSString *code;
 @property (nonatomic) BOOL registerOnAdd;
 @property (nonatomic) BOOL publishEnabled;
+@property (nonatomic, assign) CGSize outputVideoSize;
 
 +(NSString *)addressFromUsername:(NSString *)username domain:(NSString *)domain;
 

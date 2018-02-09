@@ -66,8 +66,10 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 @property (nonatomic, readonly) BOOL isPaused;
 @property (nonatomic, readonly, strong) SWAccountConfiguration *accountConfiguration;
 @property (nonatomic, readonly , assign, getter=isValid) BOOL valid;
+@property (nonatomic, assign) CGSize currentOutputVideoSize;
 
 -(void)configure:(SWAccountConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler; //configure and add account
+-(void)configureVideoCodecForDevice: (int) devId;
 -(void)setCode: (NSString *)code completionHandler:(void(^)(NSError *error))handler;
 -(void)setPhone: (NSString *)phone completionHandler:(void(^)(NSError *error))handler;
 -(void)connect:(void(^)(NSError *error))handler;

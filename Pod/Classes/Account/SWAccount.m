@@ -138,49 +138,7 @@ void * refToSelf;
     }
     
 #pragma mark codec params settings
-    const pj_str_t codec_id = {"H264", 4};
-    pjmedia_vid_codec_param param;
-    
-    pjsua_vid_codec_get_param(&codec_id, &param);
-    
-    param.enc_fmt.det.vid.size.w = 720;
-    param.enc_fmt.det.vid.size.h = 1280;
-    
-    /*
-    
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    NSArray* availFormat;
-    
-    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
-    for (AVCaptureDevice *device in devices) {
-        if ([device position] == AVCaptureDevicePositionBack) {
-            availFormat = device.formats;
-            NSLog(@"<--Camera formats-->Back camera:%@", availFormat);
-        }
-        else if ([device position] == AVCaptureDevicePositionFront) {
-            availFormat = device.formats;
-            NSLog(@"<--Camera formats-->Front camera:%@", availFormat);
-        }
-    }
-    */
-     
-    param.enc_fmt.det.vid.avg_bps = 2 * 1024 * 1024;
-    
-    
-    //Выставим уровень профиля кодека
-    for (int i=0; i < param.dec_fmtp.cnt; i++) {
-        if ([[NSString stringWithPJString:param.dec_fmtp.param[i].name] isEqualToString:@"profile-level-id"]) {
-            //Уровень 31
-            param.dec_fmtp.param[i].val = pj_str("42e01f");
-        }
-    }
-    
-    
-    pjsua_vid_codec_set_param(&codec_id, &param);
+    [self configureVideoCodecForDevice: PJMEDIA_VID_DEFAULT_CAPTURE_DEV];
     
     if (!self.accountConfiguration.proxy) {
         acc_cfg.proxy_cnt = 0;
@@ -214,6 +172,79 @@ void * refToSelf;
             handler(nil);
         }
     }
+}
+
+- (void) configureVideoCodecForDevice: (int) devId {
+    
+    const pj_str_t codec_id = {"H264", 4};
+    pjmedia_vid_codec_param param;
+    
+    pjsua_vid_codec_get_param(&codec_id, &param);
+    
+    if((self.accountConfiguration.outputVideoSize.width <= 0) || (self.accountConfiguration.outputVideoSize.height <= 0)) {
+        self.accountConfiguration.outputVideoSize = CGSizeMake(720, 1280);
+    }
+    
+    CGSize outputVideoSize = [self getOutputVideoSizeForDevice:devId];
+    
+    self.currentOutputVideoSize = outputVideoSize;
+    
+    param.enc_fmt.det.vid.size.w = (unsigned)outputVideoSize.width;
+    param.enc_fmt.det.vid.size.h = (unsigned)outputVideoSize.height;
+    
+    param.enc_fmt.det.vid.avg_bps = 2 * 1024 * 1024;
+    
+    
+    //Выставим уровень профиля кодека
+    for (int i=0; i < param.dec_fmtp.cnt; i++) {
+        if ([[NSString stringWithPJString:param.dec_fmtp.param[i].name] isEqualToString:@"profile-level-id"]) {
+            //Уровень 31
+            param.dec_fmtp.param[i].val = pj_str("42e01f");
+        }
+    }
+    
+    pjsua_vid_codec_set_param(&codec_id, &param);
+}
+
+- (CGSize) getOutputVideoSizeForDevice: (unsigned) devId {
+    pjmedia_vid_dev_info vdi;
+    pj_status_t status;
+    
+    CGSize needed = self.accountConfiguration.outputVideoSize;
+    
+    CGSize result;
+    //Нужное число точек. -1, чтобы исключить погрешность.
+    CGFloat pointsNeeded = needed.width * needed.height - 1;
+    
+    status = pjsua_vid_dev_get_info(devId, &vdi);
+    
+    if(status == PJ_SUCCESS) {
+        //Идём от самых больших разрешений к самым маленьким
+        for (int i = vdi.fmt_cnt - 1; i >= 0; i--) {
+            pjmedia_format format = vdi.fmt[i];
+            
+            result = CGSizeMake(format.det.vid.size.w, format.det.vid.size.h);
+            
+            //Может быть, нашли нужный размер?
+            if((result.width == needed.width) && (result.height == needed.height)) {
+                break;
+            }
+            
+            
+            if (
+                //Если количество точек уже меньше, но не нашли нужного...
+                (result.width * result.height < pointsNeeded)
+                &&
+                //...и повернуто правильно...
+                ((result.width - result.height) * (needed.width - needed.height) > 0)
+                ) {
+                //...то возьмём это разрешение
+                break;
+            }
+        }
+    }
+    
+    return result;
 }
 
 - (void) setCode: (NSString *) code completionHandler:(void(^)(NSError *error))handler {
