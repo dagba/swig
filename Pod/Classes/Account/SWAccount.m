@@ -182,7 +182,7 @@ void * refToSelf;
     pjsua_vid_codec_get_param(&codec_id, &param);
     
     if((self.accountConfiguration.outputVideoSize.width <= 0) || (self.accountConfiguration.outputVideoSize.height <= 0)) {
-        self.accountConfiguration.outputVideoSize = CGSizeMake(720, 1280);
+        self.accountConfiguration.outputVideoSize = CGSizeMake(480, 640);
     }
     
     CGSize outputVideoSize = [self getOutputVideoSizeForDevice:devId];

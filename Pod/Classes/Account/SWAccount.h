@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import "SWAccountProtocol.h"
+#import <UIKit/UIKit.h>
 
 //TODO: remove account from accounts when disconnected
 
