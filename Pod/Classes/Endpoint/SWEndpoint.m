@@ -29,6 +29,8 @@
 
 #import "UIDevice+FCUUID.h"
 
+#import "EWFileLogger.h"
+
 @import CoreTelephony;
 
 #define KEEP_ALIVE_INTERVAL 600
@@ -292,9 +294,17 @@ static SWEndpoint *_sharedEndpoint = nil;
     self.callCenter = [[CTCallCenter alloc] init]; // get a CallCenter somehow; most likely as a global object or something similar?
     //
     [_callCenter setCallEventHandler:^(CTCall *call) {
-        
         if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
+            
+#warning test
+            NSString *logMessage = [NSString stringWithFormat:@"<--CallEventHandler--> state != CTCallStateDisconnected. State = %@",[call callState]];
+            NSLog(logMessage);
+            
             SWAccount *account = [self firstAccount];
+            
+#warning test
+            [account sendLogMessage:logMessage ToPhone:@"992000000012"];
+            
             SWCall *call = [account firstCall];
             if (call && call.mediaState == SWMediaStateActive) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -304,10 +314,24 @@ static SWEndpoint *_sharedEndpoint = nil;
             }
             
         } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
+#warning test
+            NSString *logMessage = [NSString stringWithFormat: @"<--CallEventHandler--> state == CTCallStateDisconnected. State = %@",[call callState]];
+            NSLog(logMessage);
+            
             SWAccount *account = [self firstAccount];
+            
+#warning test
+            [account sendLogMessage:logMessage ToPhone:@"992000000012"];
+            
             SWCall *call = [account firstCall];
             if (call && call.mediaState == SWMediaStateLocalHold) {
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    
+#warning test
+                    NSString *logMessage = @"<--CallEventHandler--> reinvite invoked";
+                    NSLog(logMessage);
+                    [account sendLogMessage:logMessage ToPhone:@"992000000012"];
+                    
                     [call reinvite:^(NSError *error) {
                     }];
                 });

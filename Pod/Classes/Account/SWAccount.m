@@ -13,6 +13,8 @@
 #import "SWUriFormatter.h"
 #import "NSString+PJString.h"
 
+#import "EWFileLogger.h"
+
 
 #import <AVFoundation/AVFoundation.h>
 
