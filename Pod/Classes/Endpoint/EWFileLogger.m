@@ -22,7 +22,7 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
 
 void append(NSString *msg){
     // get path to Documents/somefile.txt
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
     NSString *path = [documentsDirectory stringByAppendingPathComponent:@"logfile.txt"];
     // create if needed

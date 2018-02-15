@@ -568,6 +568,7 @@ void * refToSelf;
 }
 
 -(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM withVideo:(BOOL) withVideo completionHandler:(void(^)(NSError *error))handler {
+    
     pj_status_t status;
     NSError *error;
     
@@ -593,6 +594,8 @@ void * refToSelf;
     else {
         
         SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
+        //По исходящему звонку не будет события коллцентра, поэтому забьём его идентификатор здесь
+        call.ctcallId = @"outgoing polyphone";
         
         [self addCall:call];
     }

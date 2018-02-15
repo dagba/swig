@@ -294,45 +294,36 @@ static SWEndpoint *_sharedEndpoint = nil;
     self.callCenter = [[CTCallCenter alloc] init]; // get a CallCenter somehow; most likely as a global object or something similar?
     //
     [_callCenter setCallEventHandler:^(CTCall *call) {
+        
+        SWAccount *account = [self firstAccount];
+        
+        SWCall *swcall = [account firstCall];
+        
+        //Если звонок не привязан к звонку коллцентра, привяжем
+        if (swcall.ctcallId == nil) {
+            swcall.ctcallId = call.callID;
+        }
+        
+        //Если это событие по тому же звонку, ничего больше делать не нужно
+        if ([call.callID isEqualToString: swcall.ctcallId]) {
+            return;
+        }
+        
         if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
             
-#warning test
-            NSString *logMessage = [NSString stringWithFormat:@"<--CallEventHandler--> state != CTCallStateDisconnected. State = %@",[call callState]];
-            NSLog(logMessage);
-            
-            SWAccount *account = [self firstAccount];
-            
-#warning test
-            [account sendLogMessage:logMessage ToPhone:@"992000000012"];
-            
-            SWCall *call = [account firstCall];
-            if (call && call.mediaState == SWMediaStateActive) {
+            if (swcall && swcall.mediaState == SWMediaStateActive) {
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    [call setHold:^(NSError *error) {
+                    [swcall setHold:^(NSError *error) {
                     }];
                 });
             }
             
         } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
-#warning test
-            NSString *logMessage = [NSString stringWithFormat: @"<--CallEventHandler--> state == CTCallStateDisconnected. State = %@",[call callState]];
-            NSLog(logMessage);
             
-            SWAccount *account = [self firstAccount];
-            
-#warning test
-            [account sendLogMessage:logMessage ToPhone:@"992000000012"];
-            
-            SWCall *call = [account firstCall];
-            if (call && call.mediaState == SWMediaStateLocalHold) {
+            if (swcall && swcall.mediaState == SWMediaStateLocalHold) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     
-#warning test
-                    NSString *logMessage = @"<--CallEventHandler--> reinvite invoked";
-                    NSLog(logMessage);
-                    [account sendLogMessage:logMessage ToPhone:@"992000000012"];
-                    
-                    [call reinvite:^(NSError *error) {
+                    [swcall reinvite:^(NSError *error) {
                     }];
                 });
             }
@@ -611,8 +602,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
 
-    //log_cfg.cb = &logCallback;
-    //log_cfg.decor = PJ_FALSE;
+    log_cfg.console_level = 4;
+    log_cfg.cb = &logCallback;
+    log_cfg.decor = PJ_FALSE;
     
     
     
@@ -693,7 +685,7 @@ static SWEndpoint *_sharedEndpoint = nil;
 void logCallback (int level, const char *data, int len) {
     NSString *logMessage = [NSString stringWithUTF8String:data];
     
-    NSLog(@"SIP: %@", [logMessage stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]);
+    NSLog(@"SIP: (%@) %@", [NSDate date], [logMessage stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]);
 }
 
 -(BOOL)hasTCPConfiguration {
@@ -1215,20 +1207,10 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             
             pjsua_vid_codec_get_param(&codec_id, &param);
             
-            /*
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-#ifdef DEBUG
-            NSLog(@"<--codec dec size--> w=%d, h=%d", param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
-#endif
-             */
-            
             CGSize codecSize = CGSizeMake(param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
             
 #warning костыль
+            //Сработает, если перепутана ширина и высота (приходит от андроида)
             if ((codecSize.width - codecSize.height) * (videoSize.width - videoSize.height) < 0) {
                 videoSize = CGSizeMake(videoSize.height, videoSize.width);
             }

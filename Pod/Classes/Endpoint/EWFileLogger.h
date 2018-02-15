@@ -7,8 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
-#warning test logging to file
-#define EW_OVERRIDE_NSLOG
+//#warning test logging to file
+//#define EW_OVERRIDE_NSLOG
 
 #ifdef EW_OVERRIDE_NSLOG
 #define NSLog(args...) _Log(@"DEBUG ", __FILE__,__LINE__,__PRETTY_FUNCTION__,args);
