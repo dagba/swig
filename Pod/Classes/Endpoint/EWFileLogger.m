@@ -11,6 +11,10 @@
 
 @implementation EWFileLogger
 
+static BOOL _loggingToFile = NO;
+
+static unsigned long long _logFileSize = 1024*1024*100;
+
 void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcName, NSString *format,...) {
     va_list ap;
     va_start (ap, format);
@@ -19,21 +23,21 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
     va_end (ap);
     fprintf(stderr,"%s%50s:%3d - %s",[prefix UTF8String], funcName, lineNumber, [msg UTF8String]);
     
-    if(EW_LOGGING_TO_FILE) {
+    if(EWFileLogger.loggingToFile) {
         [EWFileLogger append: msg];
     }
 }
 
 +(void) append: (NSString *) msg{
     
-    if (!EW_LOG_FILE_NAME) {
-        EW_LOG_FILE_NAME = [EWFileLogger generateFilename];
+    if (!EWFileLogger.logFileName) {
+        EWFileLogger.logFileName = [EWFileLogger generateFilename];
     }
     
     // get path to Documents/somefile.txt
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
-    NSString *path = [documentsDirectory stringByAppendingPathComponent:EW_LOG_FILE_NAME];
+    NSString *path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
     // create if needed
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]){
         [self createFileAt:path];
@@ -43,12 +47,12 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
         unsigned long long fileSize = [attributes fileSize];
         
         //Если новый файл разросся больше предельного размера, удаляем старый файл, а новый делаем старым
-        if (fileSize > EW_LOG_FILE_SIZE) {
-            [self deleteFileAt:[documentsDirectory stringByAppendingPathComponent:EW_LOG_FILE_NAME_OLD]];
+        if (fileSize > EWFileLogger.logFileSize) {
+            [self deleteFileAt:[documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileNameOld]];
             
-            EW_LOG_FILE_NAME_OLD = EW_LOG_FILE_NAME;
-            EW_LOG_FILE_NAME = [EWFileLogger generateFilename];
-            path = [documentsDirectory stringByAppendingPathComponent:EW_LOG_FILE_NAME];
+            EWFileLogger.logFileNameOld = EWFileLogger.logFileName;
+            EWFileLogger.logFileName = [EWFileLogger generateFilename];
+            path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
             [self createFileAt:path];
         }
     }
@@ -77,7 +81,48 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
 }
 
 + (NSString *) generateFilename {
-    return [NSString stringWithFormat:@"logfile%s.txt", [[NSProcessInfo processInfo] globallyUniqueString]];
+    return [NSString stringWithFormat:@"logfile%@.txt", [[NSUUID UUID] UUIDString]];
+}
+
+#pragma mark getters/setters
+
++(NSString *)logFileNameOld {
+    return [[NSUserDefaults standardUserDefaults] objectForKey:@"EWLogFileNameOld"];
+}
+
++(NSString *)logFileName {
+    return [[NSUserDefaults standardUserDefaults] objectForKey:@"EWLogFileName"];
+}
+
++(unsigned long long)logFileSize {
+    NSNumber *size = [[NSUserDefaults standardUserDefaults] objectForKey:@"EWLogFileSize"];
+    
+    return [size unsignedLongLongValue];
+}
+
++(BOOL) loggingToFile {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"EWLoggingToFile"];
+}
+
++ (void)setLogFileName:(NSString *)logFileName {
+    [[NSUserDefaults standardUserDefaults] setObject:logFileName forKey:@"EWLogFileName"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++(void)setLogFileNameOld:(NSString *)logFileNameOld {
+    [[NSUserDefaults standardUserDefaults] setObject:logFileNameOld forKey:@"EWLogFileNameOld"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++(void)setLogFileSize:(unsigned long long)logFileSize {
+    NSNumber *size = [NSNumber numberWithUnsignedLongLong:logFileSize];
+    [[NSUserDefaults standardUserDefaults] setObject:size forKey:@"EWLogFileSize"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++(void)setLoggingToFile:(BOOL)loggingToFile {
+    [[NSUserDefaults standardUserDefaults] setBool:loggingToFile forKey:@"EWLoggingToFile"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 @end
