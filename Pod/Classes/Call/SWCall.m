@@ -306,8 +306,8 @@
         pjsua_conf_connect(callInfo.conf_slot, 0);
         pjsua_conf_connect(0, callInfo.conf_slot);
         if(self.withVideo && (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE)) {
-#warning нужно ли?
-            //[self changeVideoWindow];
+#warning включать видео здесь
+            //[self setVideoEnabled:true];
             [self sendVideoKeyframe];
         }
     }
@@ -326,6 +326,11 @@
         
         pjsua_call_get_info((int)self.callId, &ci);
         wid = ci.media[vid_idx].stream.vid.win_in;
+        
+        //Если окно не инициализировано, wid = -1
+        if (wid == PJSUA_INVALID_ID) {
+            return;
+        }
         
         pjsua_vid_win_info windowInfo;
         pj_status_t status;
@@ -386,7 +391,13 @@
     pj_status_t status;
     NSError *error;
     
-    status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
+#warning отвечать без видео, если звонок с коллкита с заблокированного экрана?
+    pjsua_call_setting call_setting;
+    pjsua_call_setting_default(&call_setting);
+    call_setting.vid_cnt=1;
+    pjsua_call_answer2((int)self.callId, &call_setting, PJSIP_SC_OK, NULL, NULL);
+    
+    //status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
     
     if (status != PJ_SUCCESS) {
         

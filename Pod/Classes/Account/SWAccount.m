@@ -120,6 +120,7 @@ void * refToSelf;
     acc_cfg.media_stun_use = PJSUA_STUN_USE_DEFAULT;
     
 #warning experiment
+    //acc_cfg.vid_in_auto_show = PJ_FALSE;
     acc_cfg.vid_in_auto_show = PJ_TRUE;
     acc_cfg.vid_out_auto_transmit = PJ_TRUE;
     acc_cfg.vid_wnd_flags = PJMEDIA_VID_DEV_WND_BORDER | PJMEDIA_VID_DEV_WND_RESIZABLE;
