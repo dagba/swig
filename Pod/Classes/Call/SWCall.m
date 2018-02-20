@@ -857,7 +857,8 @@
 + (BOOL)isOnlySpeakerOutput {
     AVAudioSessionRouteDescription* route = [[AVAudioSession sharedInstance] currentRoute];
     for (AVAudioSessionPortDescription* desc in [route outputs]) {
-        if (![[desc portType] isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+        NSString *porttype = [desc portType];
+        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver]))
             return NO;
     }
     return YES;

@@ -31,6 +31,8 @@
 
 #import "EWFileLogger.h"
 
+#import "transport_adapter_fec.h"
+
 @import CoreTelephony;
 
 #define KEEP_ALIVE_INTERVAL 600
@@ -582,6 +584,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
+    //Не тот коллбэк
+    //ua_cfg.cb.on_create_media_transport = &SWOnMediaTransportCreate;
+    //ua_cfg.cb.on_create_media_transport_srtp = &SWOnSrtpTransportCreate;
     ua_cfg.cb.on_dtmf_digit = &SWOnDTMFDigit;
     ua_cfg.cb.on_typing2 = &SWOnTyping;
     
@@ -1246,6 +1251,69 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
     }
     
     //    NSLog(@"%@ %@", tp, info);
+}
+
+static void SWOnSrtpTransportCreate (pjsua_call_id call_id,
+                                                   unsigned media_idx,
+                                                   pjmedia_srtp_setting *srtp_opt) {
+#warning отличать видеопоток от аудио-
+    if (media_idx == 0) return;
+    
+    pjmedia_transport *adapter;
+    pj_status_t status;
+    
+    pjmedia_transport *base_tp;
+    pjsua_stream_info *psi;
+    
+    status = pjsua_call_get_stream_info(call_id, media_idx, &psi);
+    
+    if (status != PJ_SUCCESS) {
+        NSLog(@"<--swig-->Error found SRTP adapter");
+        return;
+    }
+    
+#warning test найти base_tp
+    /* Create the adapter */
+    status = pjmedia_fec_adapter_create(pjsua_get_pjmedia_endpt(),
+                                        NULL, base_tp,
+                                        PJSUA_MED_TP_CLOSE_MEMBER,
+                                        &adapter);
+    if (status != PJ_SUCCESS) {
+        NSLog(@"<--swig-->Error creating fec adapter");
+        return;
+    }
+    
+    NSLog(@"<--swig-->Fec adapter is created for call %d media %d",
+          call_id, media_idx);
+    
+}
+
+static pjmedia_transport* SWOnMediaTransportCreate (pjsua_call_id call_id,
+                                     unsigned media_idx,
+                                     pjmedia_transport *base_tp,
+                                     unsigned flags) {
+#warning отличать видеопоток от аудио-
+    if (media_idx == 0) return base_tp;
+    
+    //if (base_tp->type != PJMEDIA_TRANSPORT_TYPE_SRTP) return base_tp;
+    
+    pjmedia_transport *adapter;
+    pj_status_t status;
+    
+    /* Create the adapter */
+    status = pjmedia_fec_adapter_create(pjsua_get_pjmedia_endpt(),
+                                       NULL, base_tp,
+                                       (flags & PJSUA_MED_TP_CLOSE_MEMBER),
+                                       &adapter);
+    if (status != PJ_SUCCESS) {
+        NSLog(@"<--swig-->Error creating fec adapter");
+        return NULL;
+    }
+    
+    NSLog(@"<--swig-->Fec adapter is created for call %d media %d",
+          call_id, media_idx);
+    
+    return adapter;
 }
 
 static void SWOnDTMFDigit (pjsua_call_id call_id, int digit) {
