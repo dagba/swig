@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "Swig"
-  s.version          = "0.2.4"
+  s.version          = "0.2.5"
   s.summary          = "PJSIP Wrapper for ios"
   s.description      = <<-DESC
                        Simplifing the use of pjsip on ios
@@ -27,6 +27,8 @@ Pod::Spec.new do |s|
   s.source_files = 'Pod/Classes/**/*{h,m}', 'Pod/SoundSwitch/*{h,m}'
   s.preserve_paths = 'Pod/Classes/**/*{h,m}', 'Pod/SoundSwitch/*{h,m}'
 
+  s.vendored_libraries = 'Pod/openfec/lib/*.a'
+
   s.dependency 'AFNetworking/Reachability', '~> 3'
   s.dependency 'libextobjc', '~> 0.4'
   s.dependency 'CocoaLumberjack', '2.0.0-rc'
@@ -34,7 +36,7 @@ Pod::Spec.new do |s|
 
   s.xcconfig = {
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) PJ_AUTOCONF=1',
-    'HEADER_SEARCH_PATHS'  => '$(inherited) $(PODS_ROOT)/pjsip-ios/Pod/pjsip-include $(SOURCE_ROOT)/../Pod/pjsip-include'
+    'HEADER_SEARCH_PATHS'  => '$(inherited) $(PODS_ROOT)/pjsip-ios/Pod/pjsip-include $(SOURCE_ROOT)/../Pod/pjsip-include $(PODS_ROOT)/Swig/Pod/openfec/include'
   }
 
 end
