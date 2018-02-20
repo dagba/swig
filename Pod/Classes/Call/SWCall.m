@@ -62,7 +62,7 @@
     }
     
     _mute = NO;
-    _speaker = _withVideo;
+    _speaker = _withVideo && [SWCall isOnlySpeakerOutput];
     
     _callState = SWCallStateReady;
     _callId = callId;
@@ -801,14 +801,14 @@
 }
 
 - (void) updateOverrideSpeaker {
-    
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     NSError *error = nil;
     if (_speaker) {
-        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
+        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
     }
     
     else {
-        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
+        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
     }
 }
 
@@ -852,6 +852,15 @@
     if (self.callState == SWCallStateIncoming) {
         [self createLocalNotification];
     }
+}
+
++ (BOOL)isOnlySpeakerOutput {
+    AVAudioSessionRouteDescription* route = [[AVAudioSession sharedInstance] currentRoute];
+    for (AVAudioSessionPortDescription* desc in [route outputs]) {
+        if (![[desc portType] isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+            return NO;
+    }
+    return YES;
 }
 
 @end
