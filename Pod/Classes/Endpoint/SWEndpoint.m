@@ -1244,6 +1244,8 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
 }
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
+    NSLog(@"<--SWOnTransportState--> state=%d", state);
+    
     if (state == PJSIP_TP_STATE_DISCONNECTED && the_transport == tp) {
         NSLog(@"xxx: Releasing transport..");
         pjsip_transport_dec_ref(the_transport);
@@ -1292,6 +1294,10 @@ static pjmedia_transport* SWOnMediaTransportCreate (pjsua_call_id call_id,
                                      unsigned media_idx,
                                      pjmedia_transport *base_tp,
                                      unsigned flags) {
+    
+    NSLog(@"<--SWOnMediaTransportCreate-->");
+    return base_tp;
+    
 #warning отличать видеопоток от аудио-
     if (media_idx == 0) return base_tp;
     
@@ -1970,7 +1976,9 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         pj_status_t status = pjsip_endpt_respond_stateless(pjsua_get_pjsip_endpt(), data, PJSIP_SC_OK, NULL, &hdr_list, NULL);
         NSLog(@"RespondToCommand %d", status);
         
-        status = pjsua_acc_set_registration(acc_id, PJ_TRUE);
+        NSLog(@"<--pjsua_acc_set_registration--> incomingCommand");
+        //status = pjsua_acc_set_registration(acc_id, PJ_TRUE);
+        status = [account requestRegisterState:PJ_TRUE];
         if (status != PJ_SUCCESS) {
             NSLog(@"Failed to reregister");
         }

@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 #define kRegTimeout 600
 
 void * refToSelf;
@@ -32,6 +31,8 @@ void * refToSelf;
 
 @property (nonatomic, strong) SWAccountConfiguration *configuration;
 @property (nonatomic, strong) NSMutableArray *calls;
+
+@property (nonatomic, assign) pj_bool_t neededRegisterState;
 
 @end
 
@@ -309,7 +310,10 @@ void * refToSelf;
     
     pj_status_t status;
     
-    status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+    NSLog(@"<--pjsua_acc_set_registration--> connect");
+    
+    //status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+    status = [self requestRegisterState:PJ_TRUE];
     
     if (status != PJ_SUCCESS) {
         
@@ -340,6 +344,21 @@ void * refToSelf;
     }
 }
 
+- (pj_status_t) requestRegisterState: (pj_bool_t) state {
+    self.neededRegisterState = state;
+    
+    pj_status_t status;
+    status = pjsua_acc_set_registration((int)self.accountId, state);
+    
+    return status;
+}
+
++ (pj_status_t) requestRegisterState: (pj_bool_t) state forAccountId: (int) accountId {
+    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:accountId];
+    
+    return [account requestRegisterState:state];
+}
+
 -(void)disconnect:(void(^)(NSError *error))handler {
     
     pj_status_t status;
@@ -359,7 +378,10 @@ void * refToSelf;
         return;
     }
     
-    status = pjsua_acc_set_registration((int)self.accountId, PJ_FALSE);
+    NSLog(@"<--pjsua_acc_set_registration--> disconnect");
+    
+    //status = pjsua_acc_set_registration((int)self.accountId, PJ_FALSE);
+    status = [self requestRegisterState:PJ_FALSE];
     
     if (status != PJ_SUCCESS) {
         
@@ -397,8 +419,12 @@ void * refToSelf;
 //        
 //        return;
 //    }
-//    
-    status = pjsua_acc_set_registration((int)self.accountId, PJ_FALSE);
+//
+    
+    NSLog(@"<--pjsua_acc_set_registration--> pause");
+    
+    //status = pjsua_acc_set_registration((int)self.accountId, PJ_FALSE);
+    status = [self requestRegisterState:PJ_FALSE];
     
     if (status != PJ_SUCCESS) {
         
@@ -424,7 +450,9 @@ void * refToSelf;
     
     pj_status_t status;
     
-    status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+    NSLog(@"<--pjsua_acc_set_registration--> resume");
+    //status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+    status = [self requestRegisterState:PJ_TRUE];
     
     if (status != PJ_SUCCESS) {
         
@@ -488,6 +516,10 @@ void * refToSelf;
     
     else {
         self.accountState = SWAccountStateDisconnected;
+    }
+    
+    if ((self.accountState == SWAccountStateDisconnected) && self.neededRegisterState) {
+        [self requestRegisterState:PJ_TRUE];
     }
 }
 
@@ -690,7 +722,11 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
             handler(error, nil, nil, nil);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> sendMessageCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
 
         return;
     }
@@ -805,7 +841,11 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
             handler(error);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> sendMessageReadNotifyCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
 
         return;
     }
@@ -885,7 +925,11 @@ static void deleteMessageCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> deleteMessageCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
         return;
     }
     
@@ -964,7 +1008,11 @@ static void deleteChatCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> deleteChatCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
         return;
     }
     
@@ -1111,8 +1159,11 @@ static void subscribeCallback(void *token, pjsip_event *e) {
             handler(error);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
         
+        NSLog(@"<--pjsua_acc_set_registration--> subscribeCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
 
         return;
     }
@@ -1190,7 +1241,11 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
             handler(error, nil);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> updateBalanceCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
 
         return;
     }
@@ -1287,7 +1342,11 @@ static void createChatCallback(void *token, pjsip_event *e) {
             handler(error, nil);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> createChatCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
         return;
     }
     
@@ -1365,7 +1424,11 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
             handler(error, nil, nil, nil);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> groupInfoCallback");
+        
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
         return;
     }
     
@@ -1504,7 +1567,11 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
             handler(error);
 //        });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> groupModifyCallback");
+        
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1650,7 +1717,10 @@ static void logoutCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> logoutCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1730,7 +1800,10 @@ static void setRouteCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> setRouteCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1799,7 +1872,10 @@ static void getRouteCallback(void *token, pjsip_event *e) {
             handler(-1, error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> getRouteCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1881,7 +1957,10 @@ static void blockUserCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> blockUserCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -1956,7 +2035,10 @@ static void releaseUserCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> releaseUserCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -2029,7 +2111,10 @@ static void getBlacklistCallback(void *token, pjsip_event *e) {
         handler(error, nil);
                 });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> getBlacklistCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -2115,7 +2200,10 @@ static void reportUserCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> reportUserCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     
@@ -2218,7 +2306,10 @@ static void clearCallsCallback(void *token, pjsip_event *e) {
             handler(error);
         });
         int accountID = ((__bridge SWAccount *)refToSelf).accountId;
-        pjsua_acc_set_registration(accountID, PJ_TRUE);
+        
+        NSLog(@"<--pjsua_acc_set_registration--> clearCallsCallback");
+        [SWAccount requestRegisterState:PJ_TRUE forAccountId:accountID];
+        //pjsua_acc_set_registration(accountID, PJ_TRUE);
         return;
     }
     

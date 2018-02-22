@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "SWAccountProtocol.h"
 #import <UIKit/UIKit.h>
+#import <pjsip/sip_types.h>
 
 //TODO: remove account from accounts when disconnected
 
@@ -77,6 +78,7 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 -(void)disconnect:(void(^)(NSError *error))handler;
 -(void)pause:(void(^)(NSError *error))handler;
 -(void)resume:(void(^)(NSError *error))handler;
+- (pj_status_t) requestRegisterState: (pj_bool_t) state;
 
 - (void) accountStateConnecting;
 

@@ -42,7 +42,9 @@
 
     NSUInteger samplesPerFrame = (kSWAudioFramePtime * endpoint.endpointConfiguration.clockRate * kSWChannelCount) / 1000;
     
-    status = pjmedia_tonegen_create2([endpoint pjPool], &name, (unsigned int)endpoint.endpointConfiguration.clockRate, kSWChannelCount, (unsigned int)samplesPerFrame, 16, PJMEDIA_TONEGEN_LOOP, &_ringbackPort);
+    pj_pool_t *pool = [endpoint pjPool];
+    
+    status = pjmedia_tonegen_create2(pool, &name, (unsigned int)endpoint.endpointConfiguration.clockRate, kSWChannelCount, (unsigned int)samplesPerFrame, 16, PJMEDIA_TONEGEN_LOOP, &_ringbackPort);
     
     if (status != PJ_SUCCESS) {
         DDLogDebug(@"Error creating ringback tones");
