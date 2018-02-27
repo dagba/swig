@@ -58,7 +58,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
 
-@class SWEndpointConfiguration, SWAccount, SWCall;
+@class SWEndpointConfiguration, SWAccount, SWCall, SWThreadManager;
 
 @interface SWEndpoint : NSObject
 
@@ -66,6 +66,8 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 //@property (nonatomic, readonly) pj_pool_t *pjPool;
 @property (nonatomic, strong, readonly) NSArray *accounts;
 @property (nonatomic, strong) SWRingtone *ringtone;
+
+@property (nonatomic, strong) SWThreadManager *threadFactory;
 
 +(instancetype)sharedEndpoint;
 
@@ -103,7 +105,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (void) setTypingBlock: (SWTypingBlock) typingBlock;
 - (void) setChatDeletedBlock: (SWChatDeletedBlock) chatDeletedBlock;
 
-
+- (void) registerSipThread: (NSThread *) thread;
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);
@@ -128,5 +130,6 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (pj_bool_t) rxResponsePackageProcessing: (pjsip_rx_data *)data;
 - (pj_bool_t) txResponsePackageProcessing: (pjsip_tx_data *)tdata;
 - (pj_bool_t) txRequestPackageProcessing: (pjsip_tx_data *)tdata;
+
 
 @end

@@ -33,6 +33,8 @@
 
 #import "transport_adapter_fec.h"
 
+#import "SWThreadManager.h"
+
 @import CoreTelephony;
 
 #define KEEP_ALIVE_INTERVAL 600
@@ -173,7 +175,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
     }
 }
 
-
 @interface SWEndpoint ()
 
 @property (nonatomic, copy) SWShouldResumeBlock shouldResumeBlock;
@@ -211,6 +212,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, strong) NSMutableDictionary *accountStateChangeBlockObservers;
 
 @property (nonatomic) pj_thread_t *thread;
+@property (nonatomic, strong) NSMutableSet<NSString *> *sipThreadNames;
 
 @property (nonatomic, strong) CTCallCenter *callCenter;
 
@@ -267,7 +269,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     _accounts = [[NSMutableArray alloc] init];
     
-    [self registerThread];
+    //Здесь pjsua ещё не запущен, регистрировать нет смысла!
+    //[self registerThread];
     
     NSURL *fileURL = [[NSBundle mainBundle] URLForResource:@"Ringtone" withExtension:@"caf"];
     
@@ -584,8 +587,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     ua_cfg.cb.on_nat_detect = &SWOnNatDetect;
     ua_cfg.cb.on_call_redirected = &SWOnCallRedirected;
     ua_cfg.cb.on_transport_state = &SWOnTransportState;
-    //Не тот коллбэк
-    //ua_cfg.cb.on_create_media_transport = &SWOnMediaTransportCreate;
+    ua_cfg.cb.on_create_media_transport = &SWOnMediaTransportCreate;
     //ua_cfg.cb.on_create_media_transport_srtp = &SWOnSrtpTransportCreate;
     ua_cfg.cb.on_dtmf_digit = &SWOnDTMFDigit;
     ua_cfg.cb.on_typing2 = &SWOnTyping;
@@ -607,6 +609,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
 
+#warning test
     log_cfg.console_level = 4;
     log_cfg.cb = &logCallback;
     log_cfg.decor = PJ_FALSE;
@@ -616,7 +619,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     media_cfg.clock_rate = (unsigned int)self.endpointConfiguration.clockRate;
     media_cfg.snd_clock_rate = (unsigned int)self.endpointConfiguration.sndClockRate;
     media_cfg.no_vad = 1;
-    
+    //media_cfg.has_ioqueue = YES;
     
     status = pjsua_init(&ua_cfg, &log_cfg, &media_cfg);
     
@@ -630,6 +633,8 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         return;
     }
+    
+    [self registerSipThreads];
     
     status = pjsip_endpt_register_module(pjsua_get_pjsip_endpt(), &sipgate_module);
     if (status != PJ_SUCCESS) {
@@ -690,7 +695,7 @@ static SWEndpoint *_sharedEndpoint = nil;
 void logCallback (int level, const char *data, int len) {
     NSString *logMessage = [NSString stringWithUTF8String:data];
     
-    NSLog(@"SIP: (%@) %@", [NSDate date], [logMessage stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]);
+    NSLog(@"SIP: %@", [logMessage stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]);
 }
 
 -(BOOL)hasTCPConfiguration {
@@ -716,6 +721,18 @@ void logCallback (int level, const char *data, int len) {
     }
 }
 
+- (void) registerSipThreads {
+    
+    self.sipThreadNames = [[NSMutableSet alloc] initWithCapacity:2];
+    
+    [self registerThread];
+    self.threadFactory = [[SWThreadManager alloc] init];
+    
+    NSThread *messageThread = [self.threadFactory getMessageThread];
+    
+    [self registerSipThread:messageThread];
+}
+
 -(void)registerThread {
     
     if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
@@ -737,10 +754,54 @@ void logCallback (int level, const char *data, int len) {
     //        }
 }
 
+-(pj_thread_t *) registerThreadWithName: (NSString *) name {
+    
+    if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
+        return nil;
+    }
+    
+    const char *chName = name.UTF8String;
+    pj_thread_t * thrd;
+    
+    pj_thread_desc desc;
+    if (!pj_thread_is_registered()) {
+        pj_thread_register(chName, desc, &thrd);
+    }
+    
+    else {
+        thrd = pj_thread_this();
+    }
+    
+    //        if (!_pjPool) {
+    //            dispatch_async(dispatch_get_main_queue(), ^{
+    //                _pjPool = pjsua_pool_create("swig-pjsua", 512, 512);
+    //            });
+    //        }
+    
+    return thrd;
+}
+
+- (void) registerSipThread: (NSThread *) thread {
+    if (NO == [[NSThread currentThread] isEqual:thread]) {
+        [self performSelector:@selector(registerSipThread:) onThread:thread withObject:thread waitUntilDone:NO];
+        return;
+    }
+    
+    if ([self.sipThreadNames containsObject:thread.name]) {
+        return;
+    }
+    
+    pj_thread_t *pjthread = [self registerThreadWithName:thread.name];
+    
+    if (pjthread) {
+        [self.sipThreadNames addObject:thread.name];
+    }
+}
+
 - (pj_pool_t *) pjPool {
+    NSLog(@"<--pjPool--> pool accessed");
     static dispatch_once_t onceToken;
     static pj_pool_t *pool = nil;
-    
     dispatch_once(&onceToken, ^{
         pool = pjsua_pool_create("swig-pjsua", 512, 512);
     });
@@ -1017,9 +1078,9 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     struct pjsip_regc_cbparam *rp = info->cbparam;
     
     dispatch_queue_t queue = dispatch_get_main_queue();
-//#warning experiment
+#warning experiment
     //Если так сделать, будет падать, потому что либа инициализирована в главном потоке
-    //dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
+    //queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
     
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
@@ -1214,11 +1275,15 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             
             CGSize codecSize = CGSizeMake(param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
             
+            NSLog(@"MediaEvent. Videosize:%@; codecSize:%@", NSStringFromCGSize(videoSize), NSStringFromCGSize(codecSize));
+            
 #warning костыль
             //Сработает, если перепутана ширина и высота (приходит от андроида)
             if ((codecSize.width - codecSize.height) * (videoSize.width - videoSize.height) < 0) {
                 videoSize = CGSizeMake(videoSize.height, videoSize.width);
             }
+            
+            NSLog(@"MediaEvent. Videosize changed to:%@", NSStringFromCGSize(videoSize));
             
             [call changeVideoWindowWithSize: videoSize];
             
@@ -1265,21 +1330,27 @@ static void SWOnSrtpTransportCreate (pjsua_call_id call_id,
     pj_status_t status;
     
     pjmedia_transport *base_tp;
-    pjsua_stream_info *psi;
     
-    status = pjsua_call_get_stream_info(call_id, media_idx, &psi);
+    pjsua_call call = pjsua_var.calls[call_id];
     
-    if (status != PJ_SUCCESS) {
-        NSLog(@"<--swig-->Error found SRTP adapter");
-        return;
-    }
+    pjsua_call_media *call_med;
+    call_med = &call.media_prov[media_idx];
     
-#warning test найти base_tp
+    base_tp = call_med->tp;
+    
     /* Create the adapter */
     status = pjmedia_fec_adapter_create(pjsua_get_pjmedia_endpt(),
                                         NULL, base_tp,
                                         PJSUA_MED_TP_CLOSE_MEMBER,
                                         &adapter);
+    
+    
+    
+    call_med->tp_orig = base_tp;
+    
+    call_med->tp = adapter;
+    
+    
     if (status != PJ_SUCCESS) {
         NSLog(@"<--swig-->Error creating fec adapter");
         return;
@@ -1296,12 +1367,12 @@ static pjmedia_transport* SWOnMediaTransportCreate (pjsua_call_id call_id,
                                      unsigned flags) {
     
     NSLog(@"<--SWOnMediaTransportCreate-->");
-    return base_tp;
     
 #warning отличать видеопоток от аудио-
     if (media_idx == 0) return base_tp;
     
     //if (base_tp->type != PJMEDIA_TRANSPORT_TYPE_SRTP) return base_tp;
+    
     
     pjmedia_transport *adapter;
     pj_status_t status;
@@ -1542,6 +1613,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         
         if (status == PJSIP_SC_OK) {
             if (_confirmationBlock && (account.accountState == SWAccountStateConnected || account.accountState == SWAccountStateConnecting)) {
+                
+                account.isAuthorized = NO;
                 
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _confirmationBlock(account, nil);

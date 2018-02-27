@@ -9,6 +9,7 @@
 #import "SWRingback.h"
 #import "SWEndpoint.h"
 #import "SWEndpointConfiguration.h"
+#import "SWThreadManager.h"
 #import "Logger.h"
 
 #define kSWRingbackFrequency1 440
@@ -78,11 +79,23 @@
     int ringbackSlot = (int)_ringbackSlot;
     pjmedia_port *ringbackPort = _ringbackPort;
     
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+    
+    NSThread *callThread = [endpoint.threadFactory getCallManagementThread];
+    [endpoint registerSipThread:callThread];
+    
+    [endpoint.threadFactory runBlock:^{
+        pjsua_conf_remove_port(ringbackSlot);
+        pjmedia_port_destroy(ringbackPort);
+    } onThread:callThread wait:NO];
+    
+    /*
 #warning main thread!
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         pjsua_conf_remove_port(ringbackSlot);
         pjmedia_port_destroy(ringbackPort);
     });
+     */
 }
 
 -(void)start {

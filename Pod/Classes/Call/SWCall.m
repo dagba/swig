@@ -16,6 +16,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "SWMutableCall.h"
 #import "SWAccountConfiguration.h"
+#import "SWThreadManager.h"
 
 @interface SWCall ()
 
@@ -131,6 +132,8 @@
         pjsua_call_info info;
         
         status = pjsua_call_get_info((int)self.callId, &info);
+        
+        
         
         if (status == PJ_TRUE) {
             _notification.alertBody = [NSString stringWithFormat:@"Incoming call from %@", self.contact.name];
@@ -371,6 +374,19 @@
 }
 
 - (void) sendRinging {
+    
+    
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+    
+    NSThread *callThread = [endpoint.threadFactory getCallManagementThread];
+    
+    if([NSThread currentThread] != callThread) {
+        [self performSelector:@selector(sendRinging) onThread:callThread withObject:nil waitUntilDone:NO];
+        return;
+    }
+    
+    [endpoint registerSipThread:callThread];
+    
     pj_status_t status;
     NSError *error;
     
@@ -387,6 +403,17 @@
 #pragma Call Management
 
 -(void)answer:(void(^)(NSError *error))handler {
+    
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+    
+    NSThread *callThread = [endpoint.threadFactory getCallManagementThread];
+    
+    if([NSThread currentThread] != callThread) {
+        [self performSelector:@selector(answer:) onThread:callThread withObject:handler waitUntilDone:NO];
+        return;
+    }
+    
+    [endpoint registerSipThread:callThread];
     
     pj_status_t status;
     NSError *error;
@@ -411,11 +438,7 @@
      AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     
     NSError *overrideError;
-#warning experiment
-    /*
-     if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
-     }
-     */
+    
     [self updateOverrideSpeaker];
     
      if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {

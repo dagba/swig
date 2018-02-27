@@ -9,9 +9,11 @@
 #import "SWAccount.h"
 #import "SWAccountConfiguration.h"
 #import "SWEndpoint.h"
+#import "SWThreadManager.h"
 #import "SWCall.h"
 #import "SWUriFormatter.h"
 #import "NSString+PJString.h"
+#import "SWSipMessage.h"
 
 #import "EWFileLogger.h"
 
@@ -203,7 +205,7 @@ void * refToSelf;
     for (int i=0; i < param.dec_fmtp.cnt; i++) {
         if ([[NSString stringWithPJString:param.dec_fmtp.param[i].name] isEqualToString:@"profile-level-id"]) {
             //Уровень 31
-            param.dec_fmtp.param[i].val = pj_str("42e01f");
+            param.dec_fmtp.param[i].val = pj_str("42e016");
         }
     }
     
@@ -345,7 +347,10 @@ void * refToSelf;
 }
 
 - (pj_status_t) requestRegisterState: (pj_bool_t) state {
-    self.neededRegisterState = state;
+    
+    if (self.isAuthorized) {
+        self.neededRegisterState = state;
+    }
     
     pj_status_t status;
     status = pjsua_acc_set_registration((int)self.accountId, state);
@@ -602,6 +607,8 @@ void * refToSelf;
 
 -(void)makeCall:(NSString *)URI toGSM:(BOOL) isGSM withVideo:(BOOL) withVideo completionHandler:(void(^)(NSError *error))handler {
     
+    NSLog(@"<--pjPool--> makeCall invoked");
+    
     pj_status_t status;
     NSError *error;
     
@@ -609,6 +616,7 @@ void * refToSelf;
     
     pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
     
+    //Возможно, здесь надо определять, не с заблокированного ли экрана принят звонок, и выключать видео, если да
 #warning experiment
     pjsua_call_setting settings;
     settings.aud_cnt = 1;
@@ -654,28 +662,49 @@ void * refToSelf;
 
 -(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup forceOffline:(BOOL) forceOffline isGSM:(BOOL) isGSM completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
     
-    if (!forceOffline) {
-        if (self.accountState != SWAccountStateConnected) {
+    SWSipMessage *messageparams = [[SWSipMessage alloc] init];
+    messageparams.message = message;
+    messageparams.fileType = fileType;
+    messageparams.fileHash = fileHash;
+    messageparams.URI = URI;
+    messageparams.isGroup = isGroup;
+    messageparams.forceOffline = forceOffline;
+    messageparams.isGSM = isGSM;
+    messageparams.completionHandler = handler;
+    
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+    
+    NSThread *messageThread = [endpoint.threadFactory getMessageThread];
+    
+    [endpoint registerSipThread:messageThread];
+    
+    [self performSelector:@selector(sendSipMessage:) onThread:messageThread withObject:messageparams waitUntilDone:NO];
+    //[self sendSipMessage:messageparams];
+}
+
+- (void) sendSipMessage: (SWSipMessage *) sipMessage {
+    
+    if (!sipMessage.forceOffline) {
+        if ((self.accountState != SWAccountStateConnected) && (sipMessage.completionHandler != nil)) {
             NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-            handler(error, nil, nil, nil);
+            sipMessage.completionHandler(error, nil, nil, nil);
             return;
         }
     }
-
     
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pj_str_t to = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
-
+    pj_str_t to = [[SWUriFormatter sipUriWithPhone:sipMessage.URI fromAccount:self toGSM:sipMessage.isGSM] pjString];
+    
     status = pjsua_acc_create_request((int)self.accountId, &pjsip_message_method, &to, &tx_msg);
-    if (status != PJ_SUCCESS) {
+    if ((status != PJ_SUCCESS) && (sipMessage.completionHandler != nil)) {
         NSError *error = [NSError errorWithDomain:@"Error creating message" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
+        sipMessage.completionHandler(error, nil, nil, nil);
         return;
     }
     
-    pj_str_t pjMessage = [message pjString];
+    pj_str_t pjMessage = [sipMessage.message pjString];
     
     pj_str_t type = pj_str((char *)"text");
     pj_str_t subtype = pj_str((char *)"plain");
@@ -684,25 +713,25 @@ void * refToSelf;
     
     tx_msg->msg->body = body;
     
-    if (isGroup) {
+    if (sipMessage.isGroup) {
         pj_str_t hname = pj_str((char *)"GroupID");
-        pj_str_t hvalue = [URI pjString];
+        pj_str_t hvalue = [sipMessage.URI pjString];
         pjsip_generic_string_hdr *group_id_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
     }
     
-    if (fileType != SWFileTypeNo) {
+    if (sipMessage.fileType != SWFileTypeNo) {
         pj_str_t hname = pj_str((char *)"FileType");
         char to_string[256];
         pj_str_t hvalue;
         hvalue.ptr = to_string;
-        hvalue.slen = sprintf(to_string, "%lu",(unsigned long)fileType);
+        hvalue.slen = sprintf(to_string, "%lu",(unsigned long)sipMessage.fileType);
         pjsip_generic_string_hdr* filetype_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
         hname = pj_str((char *)"FileHash");
         
-        hvalue = [fileHash pjString];
+        hvalue = [sipMessage.fileHash pjString];
         
         pjsip_generic_string_hdr* file_hash_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
         
@@ -710,7 +739,7 @@ void * refToSelf;
         pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)file_hash_hdr);
     }
     
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageCallback);
+    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [sipMessage.completionHandler copy], &sendMessageCallback);
 }
 
 static void sendMessageCallback(void *token, pjsip_event *e) {

@@ -12,14 +12,21 @@
 @implementation EWFileLogger
 
 static BOOL _loggingToFile = NO;
+static NSDateFormatter *ewLogDateFormat;
 
 static unsigned long long _logFileSize = 1024*1024*100;
 
 void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcName, NSString *format,...) {
     va_list ap;
     va_start (ap, format);
+    
+    if (ewLogDateFormat == nil) {
+        ewLogDateFormat = [[NSDateFormatter alloc] init];
+        [ewLogDateFormat setDateFormat:@"dd.MM HH:mm:ss.SSS"];
+    }
+    
     format = [format stringByAppendingString:@"\n"];
-    NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithFormat:@"%@",format] arguments:ap];
+    NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithFormat:@"(%@)%@",[ewLogDateFormat stringFromDate: [NSDate date]],format] arguments:ap];
     va_end (ap);
     fprintf(stderr,"%s%50s:%3d - %s",[prefix UTF8String], funcName, lineNumber, [msg UTF8String]);
     
