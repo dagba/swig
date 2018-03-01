@@ -12,18 +12,30 @@
 @interface SWThreadManager () {
     NSThread *_messageThread;
     NSThread *_callManagementThread;
+    NSThread *_registrationThread;
 }
 
 @end
 
 @implementation SWThreadManager
 
++ (instancetype) sharedInstance {
+    static SWThreadManager *_sharedInstance;
+    static dispatch_once_t initOnceToken;
+    dispatch_once(&initOnceToken, ^{
+        _sharedInstance = [[self alloc] init];
+    });
+    return _sharedInstance;
+}
+
 - (NSThread *) getMessageThread {
     if (_messageThread == nil) {
         _messageThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
+        _messageThread.name = @"messageThread";
         [_messageThread start];
     }
-    _messageThread.name = @"messageThread";
+    
+    [[SWEndpoint sharedEndpoint] registerSipThread:_messageThread];
     
     return _messageThread;
 }
@@ -31,11 +43,28 @@
 - (NSThread *) getCallManagementThread {
     if (_callManagementThread == nil) {
         _callManagementThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
+        _callManagementThread.name = @"callManagementThread";
         [_callManagementThread start];
     }
-    _callManagementThread.name = @"callManagementThread";
+    
+    [[SWEndpoint sharedEndpoint] registerSipThread:_callManagementThread];
     
     return _callManagementThread;
+}
+
+- (NSThread *) getRegistrationThread {
+    
+    @synchronized (self) {
+        if (_registrationThread == nil) {
+            _registrationThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
+            _registrationThread.name = @"registrationThread";
+            [_registrationThread start];
+        }
+    }
+    
+    [[SWEndpoint sharedEndpoint] registerSipThread:_registrationThread];
+    
+    return _registrationThread;
 }
 
 - (void)threadKeepAlive:(id)data {

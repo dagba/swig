@@ -372,7 +372,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
     //    }];
     
-    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         for (int i = 0; i < [self.accounts count]; ++i) {
             
             SWAccount *account = [self.accounts objectAtIndex:i];
@@ -546,12 +546,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     [self didChangeValueForKey:@"ringtone"];
 }
 
--(void)configure:(SWEndpointConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler {
-    
-    //TODO add lock to this method
-    
-    self.endpointConfiguration = configuration;
-    
+-(void) configureWithCompletion: (void(^)(NSError *error))handler {
     pj_status_t status;
     
     status = pjsua_create();
@@ -597,7 +592,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     NSString *userAgent = [NSString stringWithFormat:@"%@/%@ (%@; iOS %@; Scale/%0.2f)", [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleExecutableKey] ?: [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleIdentifierKey], [[NSBundle mainBundle] infoDictionary][@"CFBundleShortVersionString"] ?: [[NSBundle mainBundle] infoDictionary][(__bridge NSString *)kCFBundleVersionKey], [[UIDevice currentDevice] model], [[UIDevice currentDevice] systemVersion], [[UIScreen mainScreen] scale]];
     ua_cfg.user_agent = [userAgent pjString];
-
+    
     ua_cfg.use_srtp = PJMEDIA_SRTP_MANDATORY;
     ua_cfg.srtp_secure_signaling = 2;
     
@@ -608,7 +603,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     log_cfg.console_level = (unsigned int)self.endpointConfiguration.logConsoleLevel;
     log_cfg.log_filename = [self.endpointConfiguration.logFilename pjString];
     log_cfg.log_file_flags = (unsigned int)self.endpointConfiguration.logFileFlags;
-
+    
 #warning test
     log_cfg.console_level = 4;
     log_cfg.cb = &logCallback;
@@ -633,8 +628,6 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         return;
     }
-    
-    [self registerSipThreads];
     
     status = pjsip_endpt_register_module(pjsua_get_pjsip_endpt(), &sipgate_module);
     if (status != PJ_SUCCESS) {
@@ -692,6 +685,19 @@ static SWEndpoint *_sharedEndpoint = nil;
     [self start:handler];
 }
 
+-(void)configure:(SWEndpointConfiguration *)configuration completionHandler:(void(^)(NSError *error))handler {
+    
+    //TODO add lock to this method
+    
+    self.endpointConfiguration = configuration;
+    
+    [self registerSipThreads];
+    
+    NSThread *regThread = [self.threadFactory getRegistrationThread];
+    
+    [self performSelector:@selector(configureWithCompletion:) onThread:regThread withObject:handler waitUntilDone:NO];
+}
+
 void logCallback (int level, const char *data, int len) {
     NSString *logMessage = [NSString stringWithUTF8String:data];
     
@@ -725,12 +731,9 @@ void logCallback (int level, const char *data, int len) {
     
     self.sipThreadNames = [[NSMutableSet alloc] initWithCapacity:2];
     
-    [self registerThread];
-    self.threadFactory = [[SWThreadManager alloc] init];
+    self.threadFactory = [SWThreadManager sharedInstance];
     
-    NSThread *messageThread = [self.threadFactory getMessageThread];
-    
-    [self registerSipThread:messageThread];
+    //[self registerThread];
 }
 
 -(void)registerThread {
@@ -839,6 +842,8 @@ void logCallback (int level, const char *data, int len) {
         }
     }
     
+#warning experiment
+    [self registerSipThread:[NSThread mainThread]];
     
     if (handler) {
         handler(nil);
@@ -846,6 +851,13 @@ void logCallback (int level, const char *data, int len) {
 }
 
 -(void)reset:(void(^)(NSError *error))handler {
+    NSThread *regThread = [[SWEndpoint sharedEndpoint].threadFactory getRegistrationThread];
+    
+    if([NSThread currentThread] != regThread) {
+        [self performSelector:@selector(reset:) onThread:regThread withObject:handler waitUntilDone:NO];
+        return;
+    }
+    
     //TODO shutdown agent correctly. stop all calls, destroy all accounts
     
     for (SWAccount *account in self.accounts) {
@@ -861,6 +873,9 @@ void logCallback (int level, const char *data, int len) {
         
         dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
     }
+    
+#warning надо формировать ошибку
+    handler(nil);
     
     //    for (SWAccount *account in self.accounts) {
     //        [self removeAccount:account];
@@ -892,8 +907,15 @@ void logCallback (int level, const char *data, int len) {
 
 -(void)restart:(void(^)(NSError *error))handler {
     
-    pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+    NSThread *regThread = [[SWEndpoint sharedEndpoint].threadFactory getRegistrationThread];
     
+    if([NSThread currentThread] != regThread) {
+        [self performSelector:@selector(restart:) onThread:regThread withObject:handler waitUntilDone:NO];
+        return;
+    }
+    
+    pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+        
     [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
         
         if(self.accounts.count == 0) {
@@ -1074,36 +1096,50 @@ static pjsip_transport *the_transport;
 
 static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
-    
     struct pjsip_regc_cbparam *rp = info->cbparam;
     
-    dispatch_queue_t queue = dispatch_get_main_queue();
-#warning experiment
-    //Если так сделать, будет падать, потому что либа инициализирована в главном потоке
-    //queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-    if (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT) {
+    
+    if ((info != NULL) && (info->cbparam != NULL) && (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT)) {
         
-        dispatch_async(queue, ^{
-            [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
-            }];
-        });
-    }
-    
-    
-    
-    if (account) {
-        [account accountStateChanged];
-        NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
-        for (NSString *key in observersKeys) {
-            SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
-            dispatch_async(dispatch_get_main_queue(), ^{
-                observer(account);
-            });
+        [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+            SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
             
-        }
+            NSThread *regThread = [thrManager getRegistrationThread];
+            [thrManager runBlock:^{
+                SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+                if (account) {
+                    [account accountStateChanged];
+                    NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
+                    for (NSString *key in observersKeys) {
+                        SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            observer(account);
+                        });
+                    }
+                }
+            } onThread:regThread wait:NO];
+        }];
     }
+    else {
+        SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+        
+        NSThread *regThread = [thrManager getRegistrationThread];
+        [thrManager runBlock:^{
+            SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
+            if (account) {
+                [account accountStateChanged];
+                NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
+                for (NSString *key in observersKeys) {
+                    SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        observer(account);
+                    });
+                }
+            }
+        } onThread:regThread wait:NO];
+    }
+    
 }
 
 static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
@@ -1528,6 +1564,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 
 
 - (pj_bool_t) rxResponsePackageProcessing:(pjsip_rx_data *)data {
+    
     /* Разбираем - на какой запрос пришел ответ */
     NSString *call_id = [NSString stringWithPJString:data->msg_info.cid->id];
     int status = data->msg_info.msg->line.status.code;
@@ -1545,8 +1582,13 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             return PJ_FALSE;
         }
         
-        pjsua_acc_info accountInfo;
-        pjsua_acc_get_info(acc_id, &accountInfo);
+        pjsua_acc_info accountInfo = [account getInfo];
+        
+        /*
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info(acc_id, &accountInfo);
+        }
+         */
 
         if(accountInfo.expires > 0) {
             _unauthorizedBlock(account);
@@ -1868,6 +1910,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     [self sendSubmit:data withCode:PJSIP_SC_OK];
 }
 - (void) incomingRefer:(pjsip_rx_data *)data {
+    
     /* Смотрим о каком абоненте речь в сообщении */
     
     pjsua_acc_id acc_id;
@@ -1887,10 +1930,15 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     pj_status_t    status;
     pjsip_tx_data *tx_msg;
     
-    pjsua_acc_info info;
+    SWAccount *account = [self lookupAccount:acc_id];
     
-    pjsua_acc_get_info(acc_id, &info);
+    pjsua_acc_info accountInfo = [account getInfo];
     
+    /*
+     @synchronized ([SWAccount getLocker]) {
+     pjsua_acc_get_info(acc_id, &accountInfo);
+     }
+     */
     
     pjsip_sip_uri *to = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.to->uri);
     pjsip_sip_uri *from = (pjsip_sip_uri *)pjsip_uri_get_uri(data->msg_info.from->uri);
@@ -2198,93 +2246,113 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
-    pjsip_tx_data *response;
-    pj_status_t status;
-    bool ret_value = false;
-    int sm_id;
     
-    /* Готовим ответ абоненту о результате регистрации */
-    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
-    if (status == PJ_SUCCESS) {
+    SWThreadManager *thrManager = self.threadFactory;
+    NSThread *mesThread = [thrManager getMessageThread];
+    
+    __block bool ret_value = false;
+    
+    [thrManager runBlock:^{
+        pjsip_tx_data *response;
+        pj_status_t status;
+        int sm_id;
         
-        pj_str_t smid_hdr_str = pj_str((char *)"SMID");
-        pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
-        
-        pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
-        pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
-        
-        if (smid_hdr != nil) {
-            pjsip_msg_add_hdr(response->msg, smid_hdr);
-            sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
-        }
-        
-        if (sync_hdr != nil) {
-            int num = 0;
-            int total = 0;
-            int seq = 0;
-            int type = 0;
-            
-            sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
-            
-            
-            if (total == seq) {
-                char sync_buf[256];
-                
-                pj_str_t hname = pj_str((char *)"SYNC");
-                pj_str_t hvalue;
-                hvalue.ptr = sync_buf;
-                hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
-                
-                pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
-                if (submit_sync_hdr != nil) {
-                    pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
-                }
-                
-                //В поле TO всегда отвечаем, что это мы. иначе - пизда.
-                
-                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
-                
-                pjsua_acc_id acc_id;
-                if (pjsua_acc_get_count() == 0) return PJ_FALSE;
-                
-                acc_id = pjsua_acc_find_for_incoming(message);
-                
-                pjsua_acc_info info;
-                
-                status = pjsua_acc_get_info(acc_id, &info);
-                
-                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
-                
-                to_hdr->uri = uri;
-                pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);
-                //
-                pjsip_msg_add_hdr(response->msg, to_hdr);
-                
-            } else {
-                return YES;
-            }
-        }
-        
-        
-        /* Получаем адрес, куда мы должны отправить ответ */
-        pjsip_response_addr  response_addr;
-        status = pjsip_get_response_addr(response->pool, message, &response_addr);
+        /* Готовим ответ абоненту о результате регистрации */
+        status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
         if (status == PJ_SUCCESS) {
-            /* Отправляем ответ на регистрацию */
-            status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, response, nil, nil);
+            
+            pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+            pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+            
+            pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+            pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
+            
+            if (smid_hdr != nil) {
+                pjsip_msg_add_hdr(response->msg, smid_hdr);
+                sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+            }
+            
+            if (sync_hdr != nil) {
+                int num = 0;
+                int total = 0;
+                int seq = 0;
+                int type = 0;
+                
+                sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+                
+                
+                if (total == seq) {
+                    char sync_buf[256];
+                    
+                    pj_str_t hname = pj_str((char *)"SYNC");
+                    pj_str_t hvalue;
+                    hvalue.ptr = sync_buf;
+                    hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
+                    
+                    pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
+                    if (submit_sync_hdr != nil) {
+                        pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
+                    }
+                    
+                    //В поле TO всегда отвечаем, что это мы. иначе - пизда.
+                    
+                    pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
+                    
+                    pjsua_acc_id acc_id;
+                    if (pjsua_acc_get_count() == 0) {
+                        ret_value = PJ_FALSE;
+                        return;
+                    }
+                        
+                    
+                    acc_id = pjsua_acc_find_for_incoming(message);
+                    
+                    SWAccount *account = [self lookupAccount:acc_id];
+                                        
+                    pjsua_acc_info info = [account getInfo];
+                    
+                    /*
+                     @synchronized ([SWAccount getLocker]) {
+                     pjsua_acc_get_info(acc_id, &info);
+                     }
+                     */
+                    
+                    pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+                    
+                    to_hdr->uri = uri;
+                    pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);
+                    //
+                    pjsip_msg_add_hdr(response->msg, to_hdr);
+                    
+                } else {
+                    ret_value = YES;
+                    return;
+                }
+            }
+            
+            
+            /* Получаем адрес, куда мы должны отправить ответ */
+            pjsip_response_addr  response_addr;
+            status = pjsip_get_response_addr(response->pool, message, &response_addr);
             if (status == PJ_SUCCESS) {
-                ret_value = true;
+                /* Отправляем ответ на регистрацию */
+                status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, response, nil, nil);
+                if (status == PJ_SUCCESS) {
+                    ret_value = true;
+                }
             }
         }
-    }
-    if (status != PJ_SUCCESS) {
-        NSLog(@"Error");
-        //        [self parseError:status];
-        
-        if(_otherErrorBlock) {
-            _otherErrorBlock(status);
+        if (status != PJ_SUCCESS) {
+            NSLog(@"Error");
+            //        [self parseError:status];
+            
+            if(_otherErrorBlock) {
+                _otherErrorBlock(status);
+            }
         }
-    }
+        return;
+    } onThread:mesThread wait:YES];
+    
     return ret_value;
 }
 

@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "Swig"
-  s.version          = "0.3.1"
+  s.version          = "0.3.2"
   s.summary          = "PJSIP Wrapper for ios"
   s.description      = <<-DESC
                        Simplifing the use of pjsip on ios
@@ -20,7 +20,7 @@ Pod::Spec.new do |s|
   s.source           = { :git => "https://github.com/petester42/swig.git", :tag => s.version.to_s }
   s.social_media_url = 'https://twitter.com/petester42'
 
-  s.platform     = :ios, '7.0'
+  s.platform     = :ios, '8.0'
   s.requires_arc = true
 
   s.resources = 'Pod/Assets/*', 'Pod/SoundSwitch/*.caf'

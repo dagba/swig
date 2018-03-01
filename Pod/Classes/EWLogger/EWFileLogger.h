@@ -15,6 +15,8 @@
 @interface EWFileLogger : NSObject
 
 @property (class, nonatomic, assign) BOOL loggingToFile;
+//Чтобы отключить логирование в релизе
+@property (class, nonatomic, assign) BOOL noLogging;
 
 @property (class, nonatomic, assign) unsigned long long logFileSize;
 

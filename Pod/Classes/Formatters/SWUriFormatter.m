@@ -52,13 +52,17 @@
 }
 
 +(NSString *)sipUriWithPhone:(NSString *)uri fromAccount:(SWAccount *)account toGSM: (BOOL) toGSM {
-
+    
     pj_pool_t *tempPool = pjsua_pool_create("swig-pjsua-temp", 512, 512);
 
-    pjsua_acc_info acc_info;
-    pjsua_acc_get_info((int) account.accountId, &acc_info);
+    pjsua_acc_info acc_info = [account getInfo];
     
-
+    /*
+     @synchronized ([SWAccount getLocker]) {
+     pjsua_acc_get_info(acc_id, &acc_info);
+     }
+     */
+    
     pjsip_uri* local_uri = pjsip_parse_uri(tempPool, acc_info.acc_uri.ptr, acc_info.acc_uri.slen, NULL);
     pjsip_sip_uri *local_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_uri);
 

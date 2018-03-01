@@ -82,7 +82,6 @@
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
     NSThread *callThread = [endpoint.threadFactory getCallManagementThread];
-    [endpoint registerSipThread:callThread];
     
     [endpoint.threadFactory runBlock:^{
         pjsua_conf_remove_port(ringbackSlot);

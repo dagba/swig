@@ -11,12 +11,16 @@
 
 @implementation EWFileLogger
 
-static BOOL _loggingToFile = NO;
+static BOOL _EWNoLogging = YES;
 static NSDateFormatter *ewLogDateFormat;
 
 static unsigned long long _logFileSize = 1024*1024*100;
 
 void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcName, NSString *format,...) {
+    if (EWFileLogger.noLogging) {
+        return;
+    }
+    
     va_list ap;
     va_start (ap, format);
     
@@ -111,6 +115,10 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"EWLoggingToFile"];
 }
 
++(BOOL) noLogging {
+    return _EWNoLogging;
+}
+
 + (void)setLogFileName:(NSString *)logFileName {
     [[NSUserDefaults standardUserDefaults] setObject:logFileName forKey:@"EWLogFileName"];
     [[NSUserDefaults standardUserDefaults] synchronize];
@@ -130,6 +138,10 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
 +(void)setLoggingToFile:(BOOL)loggingToFile {
     [[NSUserDefaults standardUserDefaults] setBool:loggingToFile forKey:@"EWLoggingToFile"];
     [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
++(void)setNoLogging:(BOOL)noLogging {
+    _EWNoLogging = noLogging;
 }
 
 @end

@@ -10,6 +10,7 @@
 #import "SWAccountProtocol.h"
 #import <UIKit/UIKit.h>
 #import <pjsip/sip_types.h>
+#import "pjsua.h"
 
 //TODO: remove account from accounts when disconnected
 
@@ -140,6 +141,8 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 
 - (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler;
++ (NSObject *) getLocker;
 
+- (pjsua_acc_info) getInfo;
 
 @end

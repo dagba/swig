@@ -36,6 +36,8 @@ void * refToSelf;
 
 @property (nonatomic, assign) pj_bool_t neededRegisterState;
 
+@property (atomic, strong) dispatch_semaphore_t registerRequestSemaphore;
+
 @end
 
 @implementation SWAccount
@@ -198,7 +200,7 @@ void * refToSelf;
     param.enc_fmt.det.vid.size.w = (unsigned)outputVideoSize.width;
     param.enc_fmt.det.vid.size.h = (unsigned)outputVideoSize.height;
     
-    param.enc_fmt.det.vid.avg_bps = 2 * 1024 * 1024;
+    param.enc_fmt.det.vid.avg_bps = 512 * 1024;
     
     
     //Выставим уровень профиля кодека
@@ -352,10 +354,55 @@ void * refToSelf;
         self.neededRegisterState = state;
     }
     
-    pj_status_t status;
-    status = pjsua_acc_set_registration((int)self.accountId, state);
+    if ([NSThread currentThread] == [[[SWEndpoint sharedEndpoint] threadFactory] getRegistrationThread]) {
+        return pjsua_acc_set_registration((int)self.accountId, state);
+    }
+    
+    /*
+    if(self.registerRequestSemaphore != nil) {
+        dispatch_semaphore_wait(self.registerRequestSemaphore, DISPATCH_TIME_FOREVER);
+    }
+     */
+    
+    self.registerRequestSemaphore = dispatch_semaphore_create(0);
+    
+    __block pj_status_t status;
+    __block dispatch_semaphore_t sema = self.registerRequestSemaphore;
+    
+    [self requestThreadedRegisterState: state withCompletion:^(pj_status_t sttus) {
+        status = sttus;
+        dispatch_semaphore_signal(sema);
+    }];
+    
+    dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+    
+    self.registerRequestSemaphore = nil;
     
     return status;
+}
+
+- (void) requestThreadedRegisterState: (pj_bool_t) state withCompletion: (void(^)(pj_status_t status))handler {
+    
+    if (self.isAuthorized) {
+        self.neededRegisterState = state;
+    }
+    
+    SWThreadManager *threader = [[SWEndpoint sharedEndpoint] threadFactory];
+    
+    NSThread *regThread = [threader getRegistrationThread];
+    
+    [threader runBlock:^{
+        pj_status_t status;
+        
+        @synchronized ([SWAccount getLocker]) {
+            status = pjsua_acc_set_registration((int)self.accountId, state);
+        }
+        
+        if(handler) {
+            handler(status);
+        }
+    } onThread:regThread wait:NO];
+    
 }
 
 + (pj_status_t) requestRegisterState: (pj_bool_t) state forAccountId: (int) accountId {
@@ -496,36 +543,43 @@ void * refToSelf;
 }
 
 -(void)accountStateChanged {
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pjsua_acc_info accountInfo;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &accountInfo);
+        }
+        
+        pjsip_status_code code = accountInfo.status;
+        
+        //TODO make status offline/online instead of offline/connect
+        //status would be disconnected, online, and offline, isConnected could return true if online/offline
+        
+        if (code == 0 || accountInfo.expires == -1) {
+            self.accountState = SWAccountStateDisconnected;
+        }
+        
+        else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_TRYING) || PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_MULTIPLE_CHOICES)) {
+            self.accountState = SWAccountStateConnecting;
+            self.isPaused = NO;
+        }
+        
+        else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
+            self.accountState = SWAccountStateConnected;
+            self.isPaused = NO;
+        }
+        
+        else {
+            self.accountState = SWAccountStateDisconnected;
+        }
+        
+        if ((self.accountState == SWAccountStateDisconnected) && self.neededRegisterState) {
+            [self requestRegisterState:PJ_TRUE];
+        }
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info accountInfo;
-    pjsua_acc_get_info((int)self.accountId, &accountInfo);
-    
-    pjsip_status_code code = accountInfo.status;
-    
-    //TODO make status offline/online instead of offline/connect
-    //status would be disconnected, online, and offline, isConnected could return true if online/offline
-    
-    if (code == 0 || accountInfo.expires == -1) {
-        self.accountState = SWAccountStateDisconnected;
-    }
-    
-    else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_TRYING) || PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_MULTIPLE_CHOICES)) {
-        self.accountState = SWAccountStateConnecting;
-        self.isPaused = NO;
-    }
-    
-    else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
-        self.accountState = SWAccountStateConnected;
-        self.isPaused = NO;
-    }
-    
-    else {
-        self.accountState = SWAccountStateDisconnected;
-    }
-    
-    if ((self.accountState == SWAccountStateDisconnected) && self.neededRegisterState) {
-        [self requestRegisterState:PJ_TRUE];
-    }
 }
 
 -(BOOL)isValid {
@@ -609,41 +663,46 @@ void * refToSelf;
     
     NSLog(@"<--pjPool--> makeCall invoked");
     
-    pj_status_t status;
-    NSError *error;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *callThread = [thrManager getCallManagementThread];
     
-    pjsua_call_id callIdentifier;
-    
-    pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
-    
-    //Возможно, здесь надо определять, не с заблокированного ли экрана принят звонок, и выключать видео, если да
+    [thrManager runBlock:^{
+        pj_status_t status;
+        NSError *error;
+        
+        pjsua_call_id callIdentifier;
+        
+        pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
+        
+        //Возможно, здесь надо определять, не с заблокированного ли экрана принят звонок, и выключать видео, если да
 #warning experiment
-    pjsua_call_setting settings;
-    settings.aud_cnt = 1;
-    settings.vid_cnt = withVideo ? 1 : 0;
-    
-    settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
-    settings.flag = withVideo ? PJSUA_CALL_INCLUDE_DISABLED_MEDIA : 0;
-    
-    status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);
-    
-    if (status != PJ_SUCCESS) {
+        pjsua_call_setting settings;
+        settings.aud_cnt = 1;
+        settings.vid_cnt = withVideo ? 1 : 0;
         
-        error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
-    }
-    
-    else {
+        settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
+        settings.flag = withVideo ? PJSUA_CALL_INCLUDE_DISABLED_MEDIA : 0;
         
-        SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
-        //По исходящему звонку не будет события коллцентра, поэтому забьём его идентификатор здесь
-        call.ctcallId = @"outgoing polyphone";
+        status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);
         
-        [self addCall:call];
-    }
-    
-    if (handler) {
-        handler(error);
-    }
+        if (status != PJ_SUCCESS) {
+            
+            error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
+        }
+        
+        else {
+            
+            SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
+            //По исходящему звонку не будет события коллцентра, поэтому забьём его идентификатор здесь
+            call.ctcallId = @"outgoing polyphone";
+            
+            [self addCall:call];
+        }
+        
+        if (handler) {
+            handler(error);
+        }
+    } onThread:callThread wait:NO];
 }
 
 #pragma mark - Send Message
@@ -675,8 +734,6 @@ void * refToSelf;
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
     NSThread *messageThread = [endpoint.threadFactory getMessageThread];
-    
-    [endpoint registerSipThread:messageThread];
     
     [self performSelector:@selector(sendSipMessage:) onThread:messageThread withObject:messageparams waitUntilDone:NO];
     //[self sendSipMessage:messageparams];
@@ -814,51 +871,57 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
 #pragma mark - Message Notify
 
 -(void)sendMessageReadNotifyTo:(NSString *)URI smid:(NSUInteger)smid groupID:(NSInteger) groupID completionHandler:(void(^)(NSError *error))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *mesThread = [thrManager getMessageThread];
     
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+        
+        status = pjsua_acc_create_request((int)self.accountId, &pjsip_notify_method, &target, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        pj_str_t hname = pj_str((char *)"Event");
+        char to_string[256];
+        pj_str_t hvalue;
+        hvalue.ptr = to_string;
+        hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
+        
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+        
+        hname = pj_str((char *)"SMID");
+        hvalue.ptr = to_string;
+        hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
+        pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+        
+        if (groupID > 0) {
+            hname = pj_str((char *)"GroupID");
+            char buffer[50];
+            hvalue.ptr = buffer;
+            hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
+            pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+            pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
+        }
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageReadNotifyCallback);
+    } onThread:mesThread wait:NO];
     
-    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-    
-    status = pjsua_acc_create_request((int)self.accountId, &pjsip_notify_method, &target, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create reading recepient" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-    pj_str_t hname = pj_str((char *)"Event");
-    char to_string[256];
-    pj_str_t hvalue;
-    hvalue.ptr = to_string;
-    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)SWMessageStatusRead);
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
-    
-    hname = pj_str((char *)"SMID");
-    hvalue.ptr = to_string;
-    hvalue.slen = sprintf(to_string, "%lu",(unsigned long)smid);
-    pjsip_generic_string_hdr* smid_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
-
-    if (groupID > 0) {
-        hname = pj_str((char *)"GroupID");
-        char buffer[50];
-        hvalue.ptr = buffer;
-        hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
-        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
-        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)group_id_hdr);
-    }
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)smid_hdr);
-
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &sendMessageReadNotifyCallback);
 }
 
 static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
@@ -904,44 +967,51 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
 #pragma mark - Delete Message
 
 - (void) deleteMessage:(NSInteger) smid direction:(SWMessageDirection) direction fileFlag:(BOOL) fileFlag chatID: (NSInteger) chatID completionHandler:(void(^)(NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to delete message" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        
+        char buffer[255];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = buffer;
+        hvalue_value.slen = snprintf(buffer, 255, "SMID=%d Type=%d FileFlag=%d", (int)smid, (int)direction, (int)fileFlag);
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteMessageCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to delete message" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"DeleteMessage");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[255];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 255, "SMID=%d Type=%d FileFlag=%d", (int)smid, (int)direction, (int)fileFlag);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &deleteMessageCallback);
 }
 
 static void deleteMessageCallback(void *token, pjsip_event *e) {
@@ -1145,38 +1215,46 @@ static void deleteChatCallback(void *token, pjsip_event *e) {
 #pragma mark - Subscribe for abonent status
 
 -(void) monitorPresenceStatusURI:(NSString *) URI action:(SWPresenseAction) action completionHandler:(void(^)(NSError *error))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
     
-    pjsua_acc_info info;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
     
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
-    
-    status = pjsua_acc_create_request((int)self.accountId, &pjsip_subscribe_method, &target, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create subscribe request" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-    
-    if (action == SWPresenseActionSubscribe) {
-        pj_str_t hname = pj_str((char *)"Event");
-        pj_str_t hvalue = pj_str((char *)"presence");
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
         
-        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
-    }
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &subscribeCallback);
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
+        
+        status = pjsua_acc_create_request((int)self.accountId, &pjsip_subscribe_method, &target, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create subscribe request" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        if (action == SWPresenseActionSubscribe) {
+            pj_str_t hname = pj_str((char *)"Event");
+            pj_str_t hvalue = pj_str((char *)"presence");
+            pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+            
+            pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+        }
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &subscribeCallback);
+    } onThread:regThread wait:NO];
 }
 
 static void subscribeCallback(void *token, pjsip_event *e) {
@@ -1223,41 +1301,48 @@ static void subscribeCallback(void *token, pjsip_event *e) {
 #pragma mark - Get Balance
 
 -(void)updateBalanceCompletionHandler:(void(^)(NSError *error, NSNumber *balance))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error, nil);
-        return;
-    }
-
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error, nil);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
+            handler(error, nil);
+            return;
+        }
+        
+        pj_str_t hname = pj_str((char *)"Command-Name");
+        
+        pj_str_t hvalue = pj_str((char *)"GetBalance");
+        
+        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &updateBalanceCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
-        handler(error, nil);
-        return;
-    }
-
-    pj_str_t hname = pj_str((char *)"Command-Name");
-    
-    pj_str_t hvalue = pj_str((char *)"GetBalance");
-    
-    pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tx_msg->pool, &hname, &hvalue);
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)event_hdr);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &updateBalanceCallback);
 }
 
 static void updateBalanceCallback(void *token, pjsip_event *e) {
@@ -1306,58 +1391,64 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
 #pragma mark - Groups
 
 -(void) createGroup:(NSArray *) abonents name:(NSString *) name completionHandler:(void(^)(NSError *error, NSInteger groupID))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error, nil);
-        return;
-    }
-
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
-        handler(error, nil);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"CreateChat");
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [name pjString];
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-
-    
-    NSString *abonentsString = [abonents componentsJoinedByString:@", "];
-    
-    pj_str_t abonentsPjStr = [abonentsString pjString];
-    
-    pj_str_t type = pj_str((char *)"text");
-    pj_str_t subtype = pj_str((char *)"plain");
-    
-    
-    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &abonentsPjStr);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    tx_msg->msg->body = body;
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &createChatCallback);
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error, nil);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create balance request" code:0 userInfo:nil];
+            handler(error, nil);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"CreateChat");
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        pj_str_t hvalue_value = [name pjString];
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        
+        
+        NSString *abonentsString = [abonents componentsJoinedByString:@", "];
+        
+        pj_str_t abonentsPjStr = [abonentsString pjString];
+        
+        pj_str_t type = pj_str((char *)"text");
+        pj_str_t subtype = pj_str((char *)"plain");
+        
+        
+        pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &abonentsPjStr);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        tx_msg->msg->body = body;
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &createChatCallback);
+    } onThread:regThread wait:NO];
     
 }
 
@@ -1396,51 +1487,58 @@ static void createChatCallback(void *token, pjsip_event *e) {
 }
 
 -(void)groupInfo:(NSInteger) groupID completionHandler:(void(^)(NSError *error, NSString *name, NSArray *abonents, NSString *avatarPath))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
-        return;
-    }
-
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error, nil, nil, nil);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group info request" code:0 userInfo:nil];
+            handler(error, nil, nil, nil);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"GetChatInfo");
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        
+        char buffer[50];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = buffer;
+        hvalue_value.slen = snprintf(buffer, 50, "%d", (int)groupID);
+        
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupInfoCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create group info request" code:0 userInfo:nil];
-        handler(error, nil, nil, nil);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetChatInfo");
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", (int)groupID);
-    
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupInfoCallback);
 }
 
 static void groupInfoCallback(void *token, pjsip_event *e) {
@@ -1517,73 +1615,80 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
 }
 
 -(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name;
+        
+        switch (groupAction) {
+            case SWGroupActionAdd:
+                hvalue_name = pj_str((char *)"AddAbonent");
+                break;
+            case SWGroupActionDelete:
+                hvalue_name = pj_str((char *)"DeleteAbonent");
+                break;
+                
+            default:
+                break;
+        }
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        
+        char buffer[50];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = buffer;
+        hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        NSString *message = [abonents componentsJoinedByString:@","];
+        
+        pj_str_t pjMessage = [message pjString];
+        
+        pj_str_t type = pj_str((char *)"text");
+        pj_str_t subtype = pj_str((char *)"plain");
+        
+        pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
+        
+        tx_msg->msg->body = body;
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
+    } onThread:regThread wait:NO];
     
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name;
-    
-    switch (groupAction) {
-        case SWGroupActionAdd:
-            hvalue_name = pj_str((char *)"AddAbonent");
-            break;
-        case SWGroupActionDelete:
-            hvalue_name = pj_str((char *)"DeleteAbonent");
-            break;
-            
-        default:
-            break;
-    }
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    NSString *message = [abonents componentsJoinedByString:@","];
-    
-    pj_str_t pjMessage = [message pjString];
-    
-    pj_str_t type = pj_str((char *)"text");
-    pj_str_t subtype = pj_str((char *)"plain");
-    
-    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
-    
-    tx_msg->msg->body = body;
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
 }
 
 static void groupModifyCallback(void *token, pjsip_event *e) {
@@ -1627,59 +1732,66 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
 }
 
 -(void)modifyGroup:(NSInteger) groupID avatarPath:(NSString *) avatarPath completionHandler:(void(^)(NSError *error))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"SetGroupAvatar");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        
+        char buffer[50];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = buffer;
+        hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pj_str_t pjMessage = [avatarPath pjString];
+        
+        pj_str_t type = pj_str((char *)"text");
+        pj_str_t subtype = pj_str((char *)"plain");
+        
+        pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
+        
+        tx_msg->msg->body = body;
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
+    } onThread:regThread wait:NO];
     
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"SetGroupAvatar");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    
-    char buffer[50];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = buffer;
-    hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pj_str_t pjMessage = [avatarPath pjString];
-    
-    pj_str_t type = pj_str((char *)"text");
-    pj_str_t subtype = pj_str((char *)"plain");
-    
-    pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
-    
-    tx_msg->msg->body = body;
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
 }
 
 #pragma mark - Logout
@@ -1693,47 +1805,54 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
 }
 
 -(void) logoutAll:(BOOL) all completionHandler:(void(^)(NSError *error))handler {
-    if (self.accountState != SWAccountStateConnected) {
-        NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"Logout");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        pj_str_t hvalue_value = pj_str((char *)(all?"All":"Current"));
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &logoutCallback);
+    } onThread:regThread wait:NO];
     
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-    
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"Logout");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = pj_str((char *)(all?"All":"Current"));
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &logoutCallback);
 }
 
 static void logoutCallback(void *token, pjsip_event *e) {
@@ -1778,45 +1897,51 @@ static void logoutCallback(void *token, pjsip_event *e) {
 #pragma mark - Call Route
 
 - (void) setCallRoute:(SWCallRoute) callRoute completionHandler:(void(^)(NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"SetRoute");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        char to_string[256];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = to_string;
+        hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)callRoute);
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &setRouteCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-    
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"SetRoute");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    char to_string[256];
-    pj_str_t hvalue_value;
-    hvalue_value.ptr = to_string;
-    hvalue_value.slen = sprintf(to_string, "%lu",(unsigned long)callRoute);
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &setRouteCallback);
-
 }
 
 static void setRouteCallback(void *token, pjsip_event *e) {
@@ -1860,35 +1985,42 @@ static void setRouteCallback(void *token, pjsip_event *e) {
 
 
 - (void) getCallRouteCompletionHandler:(void(^)(SWCallRoute callRoute, NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(-1, error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"GetRoute");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getRouteCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(-1, error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetRoute");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getRouteCallback);
 }
 
 static void getRouteCallback(void *token, pjsip_event *e) {
@@ -1939,40 +2071,46 @@ static void getRouteCallback(void *token, pjsip_event *e) {
 }
 
 - (void) blockUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"BlockUser");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [abonent pjString];
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &blockUserCallback);
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"BlockUser");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        pj_str_t hvalue_value = [abonent pjString];
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &blockUserCallback);
+    } onThread:regThread wait:NO];
     
 }
 
@@ -2016,41 +2154,47 @@ static void blockUserCallback(void *token, pjsip_event *e) {
 }
 
 - (void) releaseUser:(NSString *)abonent completionHandler:(void(^)(NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"ReleaseUser");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    pj_str_t hvalue_value = [abonent pjString];
-    
-    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
-    
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &releaseUserCallback);
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"ReleaseUser");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        pj_str_t hvalue_value = [abonent pjString];
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &releaseUserCallback);
+    } onThread:regThread wait:NO];
     
 }
 
@@ -2094,40 +2238,47 @@ static void releaseUserCallback(void *token, pjsip_event *e) {
 }
 
 - (void) getBlackListCompletionHandler:(void(^)(NSError *error, NSArray *blackListed))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(error, nil);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"GetBlackList");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        //    pj_str_t hname_value = pj_str((char *)"Command-Value");
+        //    pj_str_t hvalue_value = [abonent pjString];
+        //
+        //    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getBlacklistCallback);
+    } onThread:regThread wait:NO];
     
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(error, nil);
-        return;
-    }
-    
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"GetBlackList");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-    //    pj_str_t hname_value = pj_str((char *)"Command-Value");
-    //    pj_str_t hvalue_value = [abonent pjString];
-    //
-    //    pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname_value, &hvalue_value);
-    
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &getBlacklistCallback);
 }
 
 static void getBlacklistCallback(void *token, pjsip_event *e) {
@@ -2293,36 +2444,43 @@ static void reportUserCallback(void *token, pjsip_event *e) {
 }
 
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler {
-    pj_status_t    status;
-    pjsip_tx_data *tx_msg;
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        pjsua_acc_info info;
+        
+        @synchronized ([SWAccount getLocker]) {
+            pjsua_acc_get_info((int)self.accountId, &info);
+        }
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"ClearCalls");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &clearCallsCallback);
+    } onThread:regThread wait:NO];
     
-    pjsip_method method;
-    pj_str_t method_string = pj_str("COMMAND");
-    
-    pjsip_method_init_np(&method, &method_string);
-    
-    pjsua_acc_info info;
-    
-    pjsua_acc_get_info((int)self.accountId, &info);
-    
-    /* Создаем непосредственно запрос */
-    status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Failed to set route" code:0 userInfo:nil];
-        handler(error);
-        return;
-    }
-
-    pj_str_t hname_name = pj_str((char *)"Command-Name");
-    pj_str_t hvalue_name = pj_str((char *)"ClearCalls");
-    
-    pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
-    
-
-    pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
-    
-    pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &clearCallsCallback);
 }
 
 static void clearCallsCallback(void *token, pjsip_event *e) {
@@ -2364,6 +2522,34 @@ static void clearCallsCallback(void *token, pjsip_event *e) {
     });
 }
 
+- (pjsua_acc_info) getInfo {
+    __block pjsua_acc_info acc_info;
+    int accId = self.accountId;
+    
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    
+    [thrManager runBlock:^{
+        pjsua_acc_info info;
+        pjsua_acc_get_info(accId, &info);
+        
+        acc_info = info;
+    } onThread:regThread wait:YES];
+    
+    
+    return acc_info;
+}
+
+#pragma mark Locker
+
+static NSObject *_locker;
+
++ (NSObject *) getLocker {
+    if(_locker == nil) {
+        _locker = [[NSObject alloc] init];
+    }
+    return _locker;
+}
 
 
 @end

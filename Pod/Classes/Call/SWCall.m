@@ -17,6 +17,7 @@
 #import "SWMutableCall.h"
 #import "SWAccountConfiguration.h"
 #import "SWThreadManager.h"
+#import "EWFileLogger.h"
 
 @interface SWCall ()
 
@@ -384,9 +385,7 @@
         [self performSelector:@selector(sendRinging) onThread:callThread withObject:nil waitUntilDone:NO];
         return;
     }
-    
-    [endpoint registerSipThread:callThread];
-    
+        
     pj_status_t status;
     NSError *error;
     
@@ -412,8 +411,6 @@
         [self performSelector:@selector(answer:) onThread:callThread withObject:handler waitUntilDone:NO];
         return;
     }
-    
-    [endpoint registerSipThread:callThread];
     
     pj_status_t status;
     NSError *error;
@@ -765,6 +762,8 @@
 }
 
 - (void) updateMuteStatus {
+    
+    NSLog(@"<--mute--> value:%@", _mute ? @"true" : @"false");
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
     
@@ -826,6 +825,7 @@
 - (void) updateOverrideSpeaker {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     NSError *error = nil;
+    NSLog(@"<--speaker--> value:%@", _speaker ? @"true" : @"false");
     if (_speaker) {
         [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
     }
