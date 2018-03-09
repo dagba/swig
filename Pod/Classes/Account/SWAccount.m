@@ -705,7 +705,7 @@ void * refToSelf;
             
             error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
             
-            [call callStateChanged];
+            [call terminateWithCompletion:nil];
             [self removeCall:-2];
         }
         

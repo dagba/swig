@@ -300,16 +300,18 @@
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
-            [SWCall closeSoundTrack:nil];
-            if (!self.inbound) {
-                if (callInfo.last_status == PJSIP_SC_RINGING) {
-                    [self.ringback start];
-                } else if (callInfo.last_status == PJSIP_SC_PROGRESS) {
-                    [self.ringback stop];
-                }
-            }
-            
             self.callState = SWCallStateCalling;
+            
+            [self updateOverrideSpeaker];
+            [SWCall openSoundTrack:^(NSError *error) {
+                if (!self.inbound) {
+                    if (callInfo.last_status == PJSIP_SC_RINGING) {
+                        [self.ringback start];
+                    } else if (callInfo.last_status == PJSIP_SC_PROGRESS) {
+                        [self.ringback stop];
+                    }
+                }
+            }];
         } break;
             
         case PJSIP_INV_STATE_CONNECTING: {
@@ -550,6 +552,19 @@
     
 }
 
+-(void)terminateWithCompletion:(void(^)(NSError *error))handler {
+    if (self.callState == SWCallStateReady) {
+        _callState = SWCallStateDisconnected;
+        [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:self setCode:PJSIP_SC_TSX_TRANSPORT_ERROR];
+        if (handler) {
+            handler(nil);
+        }
+    }
+    else {
+        [self hangup:handler];
+    }
+}
+
 -(void)hangup:(void(^)(NSError *error))handler {
     
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
@@ -597,21 +612,6 @@
     
     pj_status_t status;
     NSError *error;
-    
-#warning experiment
-    
-    int capture_dev = 0;
-    int playback_dev = 0;
-    
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-    
-    status = pjsua_get_snd_dev(&capture_dev, &playback_dev);
-    //status = pjsua_set_snd_dev(capture_dev, playback_dev);
-    
     
     status = pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
     
@@ -973,7 +973,7 @@
             speaker = YES;
             break;
         case SWCallStateCalling:
-            speaker = YES;
+            speaker = _speaker;
             break;
         case SWCallStateConnecting:
             sessionActive = NO;
