@@ -90,6 +90,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 -(void)removeAccountStateChangeBlockForObserver: (id) observer;
 -(void)setIncomingCallBlock:(void(^)(SWAccount *account, SWCall *call))incomingCallBlock;
 -(void)setCallStateChangeBlock:(void(^)(SWAccount *account, SWCall *call, pjsip_status_code statusCode))callStateChangeBlock;
+- (void) runCallStateChangeBlockForCall: (SWCall *)call setCode: (pjsip_status_code) statusCode;
 -(void)setCallMediaStateChangeBlock:(void(^)(SWAccount *account, SWCall *call))callMediaStateChangeBlock;
 -(void)setCallVideoFormatChangeBlock:(void(^)(SWAccount *account, SWCall *call))callVideoFormatChangeBlock;
 -(void)setSyncDoneBlock:(void(^)(SWAccount *account))syncDoneBlock;

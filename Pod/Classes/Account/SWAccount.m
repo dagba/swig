@@ -354,10 +354,6 @@ void * refToSelf;
         self.neededRegisterState = state;
     }
     
-    if ([NSThread currentThread] == [[[SWEndpoint sharedEndpoint] threadFactory] getRegistrationThread]) {
-        return pjsua_acc_set_registration((int)self.accountId, state);
-    }
-    
     /*
     if(self.registerRequestSemaphore != nil) {
         dispatch_semaphore_wait(self.registerRequestSemaphore, DISPATCH_TIME_FOREVER);
@@ -374,7 +370,10 @@ void * refToSelf;
         dispatch_semaphore_signal(sema);
     }];
     
-    dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+    if ([NSThread currentThread] != [[[SWEndpoint sharedEndpoint] threadFactory] getRegistrationThread]) {
+        int test = 1;
+        dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+    }
     
     self.registerRequestSemaphore = nil;
     
@@ -391,17 +390,25 @@ void * refToSelf;
     
     NSThread *regThread = [threader getRegistrationThread];
     
+    //Если мы уже в потоке регистрации, вызывающая процедура не будет ждать вызова хэндлера, поэтому блок надо выполнить синхронно здесь
+    BOOL needWait = ([NSThread currentThread] == regThread);
+    
     [threader runBlock:^{
+        
         pj_status_t status;
         
-        @synchronized ([SWAccount getLocker]) {
-            status = pjsua_acc_set_registration((int)self.accountId, state);
+        if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
+#warning experiment может быть, стоит возвращать ошибку?
+            status = PJ_SUCCESS;
+            //return;
         }
+        
+        status = pjsua_acc_set_registration((int)self.accountId, state);
         
         if(handler) {
             handler(status);
         }
-    } onThread:regThread wait:NO];
+    } onThread:regThread wait:needWait];
     
 }
 
@@ -548,9 +555,7 @@ void * refToSelf;
     [thrManager runBlock:^{
         pjsua_acc_info accountInfo;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &accountInfo);
-        }
+        pjsua_acc_get_info((int)self.accountId, &accountInfo);
         
         pjsip_status_code code = accountInfo.status;
         
@@ -596,7 +601,7 @@ void * refToSelf;
     //TODO:: setup blocks
 }
 
--(void)removeCall:(NSUInteger)callId {
+-(void)removeCall:(NSInteger)callId {
     
     SWCall *call = [self lookupCall:callId];
     
@@ -670,9 +675,18 @@ void * refToSelf;
         pj_status_t status;
         NSError *error;
         
-        pjsua_call_id callIdentifier;
+        NSString *uri = [SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM];
+        pj_str_t pjuri = [uri pjString];
         
-        pj_str_t uri = [[SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM] pjString];
+        SWCall *call = [SWCall callBeforeSipForAccountId:self.accountId inBound:NO withVideo:withVideo forUri: uri];
+        
+        call.ctcallId = @"outgoing polyphone";
+        
+        [self addCall:call];
+        
+        [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:call setCode:PJSIP_SC_TRYING];
+        
+        pjsua_call_id callIdentifier;
         
         //Возможно, здесь надо определять, не с заблокированного ли экрана принят звонок, и выключать видео, если да
 #warning experiment
@@ -683,20 +697,31 @@ void * refToSelf;
         settings.req_keyframe_method = PJSUA_VID_REQ_KEYFRAME_SIP_INFO;
         settings.flag = withVideo ? PJSUA_CALL_INCLUDE_DISABLED_MEDIA : 0;
         
-        status = pjsua_call_make_call((int)self.accountId, &uri, &settings, NULL, NULL, &callIdentifier);
+        status = pjsua_call_make_call((int)self.accountId, &pjuri, &settings, NULL, NULL, &callIdentifier);
+        
+        NSLog(@"<--makeCall--> callIdentifier = ")
         
         if (status != PJ_SUCCESS) {
             
             error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
+            
+            [call callStateChanged];
+            [self removeCall:-2];
         }
         
         else {
-            
+            /*
             SWCall *call = [SWCall callWithId:callIdentifier accountId:self.accountId inBound:NO];
             //По исходящему звонку не будет события коллцентра, поэтому забьём его идентификатор здесь
             call.ctcallId = @"outgoing polyphone";
             
             [self addCall:call];
+            
+            [call callStateChanged];
+             */
+            [call initSipDataForCallId:callIdentifier];
+            
+            [call callStateChanged];
         }
         
         if (handler) {
@@ -975,9 +1000,7 @@ static void sendMessageReadNotifyCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1231,9 +1254,7 @@ static void deleteChatCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pj_str_t target = [[SWUriFormatter sipUri:URI fromAccount:self] pjString];
         
@@ -1315,9 +1336,7 @@ static void subscribeCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1405,9 +1424,7 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1501,9 +1518,7 @@ static void createChatCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1629,9 +1644,7 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1746,9 +1759,7 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1819,9 +1830,7 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1905,9 +1914,7 @@ static void logoutCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -1993,9 +2000,7 @@ static void setRouteCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -2079,9 +2084,7 @@ static void getRouteCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -2162,9 +2165,7 @@ static void blockUserCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -2246,9 +2247,7 @@ static void releaseUserCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         pjsip_method method;
         pj_str_t method_string = pj_str("COMMAND");
@@ -2411,36 +2410,42 @@ static void reportUserCallback(void *token, pjsip_event *e) {
 
 - (void) isTyping:(BOOL) typing abonent:(NSString *)abonent groupID:(NSInteger) groupID  completionHandler:(void(^)(NSError *error))handler {
 //    status = pjsua_acc_create_request((int)self.accountId, &method, &to, &tx_msg);
-    pj_str_t to = [[SWUriFormatter sipUriWithPhone:abonent fromAccount:self toGSM:NO] pjString];
-
-    pjsua_msg_data msg_data;
-    pjsua_msg_data_init(&msg_data);
-
-    if (groupID) {
-        pj_str_t hname = pj_str((char *)"GroupID");
-        pj_str_t hvalue;
-
-        char buffer[50];
-        hvalue.ptr = buffer;
-        hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
-        pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
-        pj_list_push_back(&msg_data.hdr_list, (pjsip_hdr*)group_id_hdr);
-    }
-    pj_status_t status = pjsua_im_typing((int)self.accountId, &to, typing, &msg_data);
-    if (status == PJ_SUCCESS && handler) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(nil);
-        });
-    }
-    else if (handler) {
-        char errbuf[256];
-        pjsip_strerror(status, errbuf, sizeof(errbuf));
-        NSError *error = [NSError errorWithDomain:[NSString stringWithFormat:@"%c", errbuf] code:status userInfo:nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            handler(error);
-        });
-
-    }
+    SWThreadManager *thrmanager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *mesThread = [thrmanager getMessageThread];
+    
+    [thrmanager runBlock:^{
+        pj_str_t to = [[SWUriFormatter sipUriWithPhone:abonent fromAccount:self toGSM:NO] pjString];
+        
+        pjsua_msg_data msg_data;
+        pjsua_msg_data_init(&msg_data);
+        
+        if (groupID) {
+            pj_str_t hname = pj_str((char *)"GroupID");
+            pj_str_t hvalue;
+            
+            char buffer[50];
+            hvalue.ptr = buffer;
+            hvalue.slen = snprintf(buffer, 50, "%d", (int)groupID);
+            pjsip_generic_string_hdr* group_id_hdr = pjsip_generic_string_hdr_create([SWEndpoint sharedEndpoint].pjPool, &hname, &hvalue);
+            pj_list_push_back(&msg_data.hdr_list, (pjsip_hdr*)group_id_hdr);
+        }
+        pj_status_t status = pjsua_im_typing((int)self.accountId, &to, typing, &msg_data);
+        if (status == PJ_SUCCESS && handler) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                handler(nil);
+            });
+        }
+        else if (handler) {
+            char errbuf[256];
+            pjsip_strerror(status, errbuf, sizeof(errbuf));
+            NSError *error = [NSError errorWithDomain:[NSString stringWithFormat:@"%c", errbuf] code:status userInfo:nil];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                handler(error);
+            });
+            
+        }
+    } onThread:mesThread wait:NO];
+    
 }
 
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler {
@@ -2457,9 +2462,7 @@ static void reportUserCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info((int)self.accountId, &info);
-        }
+        pjsua_acc_get_info((int)self.accountId, &info);
         
         /* Создаем непосредственно запрос */
         status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);

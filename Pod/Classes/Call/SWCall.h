@@ -61,13 +61,13 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
++(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri;
+-(void)initSipDataForCallId: (NSUInteger)callId;
 
 -(SWAccount *)getAccount;
 
 -(void)answer:(void(^)(NSError *error))handler;
 -(void)hangup:(void(^)(NSError *error))handler;
--(void)openSoundTrack:(void(^)(NSError *error))handler;
--(void)closeSoundTrack:(void(^)(NSError *error))handler;
 
 -(void)setHold:(void(^)(NSError *error))handler;
 -(void)reinvite:(void(^)(NSError *error))handler;
@@ -83,5 +83,9 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 -(void)sendDTMF:(NSString *)dtmf handler:(void(^)(NSError *error))handler;
 
 - (void) changeVideoWindowWithSize: (CGSize) size;
+
++(void)openSoundTrack:(void(^)(NSError *error))handler;
++(void)closeSoundTrack:(void(^)(NSError *error))handler;
+-(void)updateOverrideSpeaker;
 
 @end

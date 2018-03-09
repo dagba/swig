@@ -18,6 +18,7 @@
 #import "SWAccountConfiguration.h"
 #import "SWThreadManager.h"
 #import "EWFileLogger.h"
+#import <pjsua-lib/pjsua_internal.h>
 
 @interface SWCall ()
 
@@ -41,7 +42,24 @@
 
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
     
+    self = [self initBeforeSipWithAccountId:accountId inBound:inbound withVideo:NO forUri:nil];
+    
+    if (!self) {
+        return nil;
+    }
+    
+    [self initSipDataForCallId:callId];
+    
+    return self;
+}
+
+-(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+    
     self = [super init];
+    
+    _callId = -2;
+    _accountId = accountId;
+    _inbound = inbound;
     
     self.currentVideoCaptureDevice = PJMEDIA_NO_VID_DEVICE;
     
@@ -49,26 +67,34 @@
         return nil;
     }
     
-    _inbound = inbound;
-    
     if (_inbound) {
         _missed = YES;
     }
     
-    pjsua_call_info info;
-    
-    pj_status_t status = pjsua_call_get_info(callId, &info);
-    
-    if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0 || (!_inbound && (info.setting.vid_cnt > 0)))) {
-        _withVideo = YES;
-    }
+    _withVideo = withVideo;
     
     _mute = NO;
     _speaker = _withVideo && [SWCall isOnlySpeakerOutput];
     
     _callState = SWCallStateReady;
+    
+    if (uri) {
+        [self contactSetForUri:uri];
+    }
+    
+    //TODO: move to account to fix multiple call problem
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(returnToBackground:) name:UIApplicationWillResignActiveNotification object:nil];
+    
+    return self;
+}
+
+-(void)initSipDataForCallId: (NSUInteger)callId {
+    
     _callId = callId;
-    _accountId = accountId;
+    
+    pjsua_call_info info;
+    
+    pj_status_t status = pjsua_call_get_info(_callId, &info);
     
     //configure ringback
     
@@ -76,10 +102,12 @@
     
     [self contactChanged];
     
-    //TODO: move to account to fix multiple call problem
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(returnToBackground:) name:UIApplicationWillResignActiveNotification object:nil];
+    if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0 || (!_inbound && (info.setting.vid_cnt > 0)))) {
+        _withVideo = YES;
+    }
     
-    return self;
+    _mute = NO;
+    _speaker = _withVideo && [SWCall isOnlySpeakerOutput];
 }
 
 -(instancetype)copyWithZone:(NSZone *)zone {
@@ -117,6 +145,13 @@
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
     
     SWCall *call = [[SWCall alloc] initWithCallId:callId accountId:accountId inBound:inbound];
+    
+    return call;
+}
+
++(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+    
+    SWCall *call = [[SWCall alloc] initBeforeSipWithAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri];
     
     return call;
 }
@@ -240,27 +275,32 @@
 }
 
 -(void)callStateChanged {
-    
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
     
     switch (callInfo.state) {
         case PJSIP_INV_STATE_NULL: {
+            [SWCall closeSoundTrack:nil];
             self.callState = SWCallStateReady;
         } break;
             
         case PJSIP_INV_STATE_INCOMING: {
+            [SWCall closeSoundTrack:nil];
             [[SWEndpoint sharedEndpoint].ringtone start];
             [self sendRinging];
             self.callState = SWCallStateIncoming;
+            [self updateOverrideSpeaker];
         } break;
             
         case PJSIP_INV_STATE_CALLING: {
+            [SWCall closeSoundTrack:nil];
 //            [self.ringback start]; //TODO probably not needed
             self.callState = SWCallStateCalling;
+            [self updateOverrideSpeaker];
         } break;
             
         case PJSIP_INV_STATE_EARLY: {
+            [SWCall closeSoundTrack:nil];
             if (!self.inbound) {
                 if (callInfo.last_status == PJSIP_SC_RINGING) {
                     [self.ringback start];
@@ -273,32 +313,95 @@
         } break;
             
         case PJSIP_INV_STATE_CONNECTING: {
+            [SWCall closeSoundTrack:nil];
+            [self.ringback stop];
+            [[SWEndpoint sharedEndpoint].ringtone stop];
+            
             self.callState = SWCallStateConnecting;
+            [self updateOverrideSpeaker];
         } break;
             
         case PJSIP_INV_STATE_CONFIRMED: {
-            [self.ringback stop];
-            [[SWEndpoint sharedEndpoint].ringtone stop];
-            [self updateOverrideSpeaker];
+            
+            NSLog(@"<--starting--> SWCallStateConnected");
+            //[self reRunVideo];
+            
+            [SWCall openSoundTrack:nil];
             
             self.callState = SWCallStateConnected;
+            [self updateMuteStatus];
+            [self updateOverrideSpeaker];
             
-            if(self.callState == SWCallStateConnected) {
-                [self updateMuteStatus];
-            }
-            
+            /*
+            __weak typeof(self) weakSelf = self;
+            #warning костыль
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+                [weakSelf updateOverrideSpeaker];
+            });
+            */
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
+            [SWCall closeSoundTrack:nil];
             [self.ringback stop];
             [[SWEndpoint sharedEndpoint].ringtone stop];
             
             self.callState = SWCallStateDisconnected;
             [self disableVideoCaptureDevice];
+            [self updateOverrideSpeaker];
         } break;
     }
     
     [self contactChanged];
+}
+
+- (void) reRunVideo {
+    if (!self.withVideo) {
+        return;
+    }
+    
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), queue, ^{
+        
+        SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+        
+        NSThread *callThread = [thrManager getCallManagementThread];
+        
+        [thrManager runBlock:^{
+            pjsua_call *call;
+            
+            pjsua_call_media *call_med;
+            
+            call = &pjsua_var.calls[self.callId];
+            
+            int med_idx = pjsua_call_get_vid_stream_idx(self.callId);
+            pj_status_t status;
+            
+            call_med = &call->media[med_idx];
+            pjmedia_vid_stream *stream = call_med->strm.v.stream;
+            char errmsg[PJ_ERR_MSG_SIZE];
+            
+            if (!stream) {
+                pjmedia_endpt *endpt = pjsua_var.med_endpt;
+                pjmedia_vid_stream_info *info;
+                
+                status = pjmedia_vid_stream_create(endpt, NULL, &info, call_med->tp, NULL, &stream);
+                
+                
+                if (status != PJ_SUCCESS) {
+                    pj_strerror(status, errmsg, sizeof(errmsg));
+                }
+            }
+            
+            BOOL isRunning = pjmedia_vid_stream_is_running(stream, PJMEDIA_DIR_ENCODING);
+            
+            if(!isRunning) {
+                pjmedia_vid_stream_start(stream);
+            }
+        } onThread:callThread wait:NO];
+        
+    });
 }
 
 -(void)mediaStateChanged {
@@ -369,6 +472,11 @@
     
     NSString *remoteURI = [NSString stringWithPJString:info.remote_info];
     
+    [self contactSetForUri:remoteURI];
+}
+
+-(void)contactSetForUri: (NSString *) remoteURI {
+    
     SWContact *contect = [SWUriFormatter contactFromURI:remoteURI];
     
     self.contact = contect;
@@ -376,6 +484,8 @@
 
 - (void) sendRinging {
     
+#warning experiment гудки должен слать сервер
+    //return;
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
@@ -432,14 +542,7 @@
         self.missed = NO;
     }
     
-     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    
-    NSError *overrideError;
-    
-    [self updateOverrideSpeaker];
-    
-     if ([audioSession setCategory:AVAudioSessionModeVoiceChat error:&overrideError]) {
-     }
+    //[self updateOverrideSpeaker];
     
     if (handler) {
         handler(error);
@@ -448,6 +551,14 @@
 }
 
 -(void)hangup:(void(^)(NSError *error))handler {
+    
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *callThread = [thrManager getCallManagementThread];
+    
+    if ([NSThread currentThread] != callThread) {
+        [self performSelector:@selector(hangup:) onThread:callThread withObject:handler waitUntilDone:NO];
+        return;
+    }
     
     pj_status_t status;
     NSError *error;
@@ -472,19 +583,35 @@
     self.ringback = nil;
 }
 
--(void)openSoundTrack:(void(^)(NSError *error))handler {
++(void)openSoundTrack:(void(^)(NSError *error))handler {
+    
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *callThread = [thrManager getCallManagementThread];
+    
+    if ([NSThread currentThread] != callThread) {
+        [self performSelector:@selector(openSoundTrack:) onThread:callThread withObject:handler waitUntilDone:NO];
+        return;
+    }
+    
+    NSLog(@"<--starting call--> openSoundTrack");
     
     pj_status_t status;
     NSError *error;
     
 #warning experiment
-    /*
+    
     int capture_dev = 0;
     int playback_dev = 0;
     
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+    
     status = pjsua_get_snd_dev(&capture_dev, &playback_dev);
-    status = pjsua_set_snd_dev(capture_dev, playback_dev);
-    */
+    //status = pjsua_set_snd_dev(capture_dev, playback_dev);
+    
     
     status = pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
     
@@ -498,7 +625,16 @@
     }
 }
 
--(void)closeSoundTrack:(void(^)(NSError *error))handler {
++(void)closeSoundTrack:(void(^)(NSError *error))handler {
+    NSLog(@"<--starting call--> closeSoundTrack");
+    
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *callThread = [thrManager getCallManagementThread];
+    
+    if ([NSThread currentThread] != callThread) {
+        [self performSelector:@selector(closeSoundTrack:) onThread:callThread withObject:handler waitUntilDone:NO];
+        return;
+    }
     
     NSError *error;
     
@@ -824,21 +960,107 @@
 
 - (void) updateOverrideSpeaker {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    NSString *sessionMode = AVAudioSessionModeDefault;
+    
+    BOOL speaker = NO;
+    BOOL sessionActive = YES;
+    
+    switch (self.callState) {
+        case SWCallStateReady:
+            speaker = YES;
+            break;
+        case SWCallStateIncoming:
+            speaker = YES;
+            break;
+        case SWCallStateCalling:
+            speaker = YES;
+            break;
+        case SWCallStateConnecting:
+            sessionActive = NO;
+            speaker = _speaker;
+            break;
+        case SWCallStateConnected:
+            sessionActive = YES;
+            speaker = _speaker;
+            //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
+            break;
+            
+        case SWCallStateDisconnected:
+            sessionActive = NO;
+            speaker = NO;
+            break;
+        default:
+            break;
+    }
+    
     NSError *error = nil;
-    NSLog(@"<--speaker--> value:%@", _speaker ? @"true" : @"false");
-    if (_speaker) {
-        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
+    //NSLog(@"<--speaker--> value:%@", speaker ? @"true" : @"false");
+    if (speaker) {
+        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
+        
+        for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
+            NSString *porttype = [desc portType];
+            NSString *portname = [desc portName];
+            NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
+            AVAudioSessionDataSourceDescription *frontMicrophone;
+            AVAudioSessionDataSourceDescription *topMicrophone;
+            
+            //NSLog(@"<--speaker--> available input porttype: %@ : %@. DataSources: %d", porttype, portname, dataSources.count);
+            //NSLog(@"<--speaker--> selectedDataSource:%@. location=%@; orientation=%@; selectedPolarPattern: %@", frontMicrophone.dataSourceName, frontMicrophone.location, frontMicrophone.orientation, frontMicrophone.selectedPolarPattern);
+            
+            
+            for(AVAudioSessionDataSourceDescription* source in dataSources) {
+                //NSLog(@"<--speaker--> --- dataSource: %@", source);
+                if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
+                    frontMicrophone = source;
+                }
+                else if ([source.orientation isEqualToString:AVAudioSessionOrientationTop]) {
+                    topMicrophone = source;
+                }
+            }
+            
+            //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
+            if (frontMicrophone) {
+                [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                
+                [audioSession setInputDataSource:frontMicrophone error:&error];
+            }
+            else if (topMicrophone) {
+                [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                
+                [audioSession setInputDataSource:topMicrophone error:&error];
+            }
+            
+        }
     }
     
     else {
-        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
+        
+        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
+        
+        if (error) {
+            NSLog(@"<--speaker--> setCategory error: %@", error);
+        }
     }
+    
+    NSTimeInterval bufferDuration = .005;
+    [audioSession setPreferredIOBufferDuration:bufferDuration error:&error];
+    [audioSession setPreferredSampleRate:44100 error:&error];
+    
+    [audioSession setMode:sessionMode error:&error];
+    /*
+    NSLog(@"<--speaker--> audioSession.category:%@", audioSession.category);
+    NSLog(@"<--speaker--> audioSession.mode:%@", audioSession.mode);
+    NSLog(@"<--speaker--> audioSession.inputGain:%f", audioSession.inputGain);
+    NSLog(@"<--speaker--> audioSession.categoryOptions:%d", audioSession.categoryOptions);
+    */
 }
 
 #warning deprecated
 -(void)toggleSpeaker:(void(^)(NSError *error))handler {
     NSError *error = nil;
     if (!_speaker) {
+        [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         _speaker = YES;
     }

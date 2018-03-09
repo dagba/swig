@@ -34,6 +34,7 @@
 #import "transport_adapter_fec.h"
 
 #import "SWThreadManager.h"
+#import "SWAudioSessionObserver.h"
 
 @import CoreTelephony;
 
@@ -177,6 +178,8 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 
 @interface SWEndpoint ()
 
+@property (atomic, assign) pj_pool_t *pool;
+
 @property (nonatomic, copy) SWShouldResumeBlock shouldResumeBlock;
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
@@ -215,6 +218,9 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *sipThreadNames;
 
 @property (nonatomic, strong) CTCallCenter *callCenter;
+
+@property (nonatomic, strong) SWAudioSessionObserver *audioSessionObserver;
+@property (atomic, assign) BOOL needResetPjPool;
 
 @end
 
@@ -336,8 +342,7 @@ static SWEndpoint *_sharedEndpoint = nil;
         }
     }];
     
-    
-    
+    self.audioSessionObserver = [SWAudioSessionObserver new];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector: @selector(handleEnteredForeground:) name: @"SWEndPointWakeUp" object:nil];
     
@@ -368,7 +373,7 @@ static SWEndpoint *_sharedEndpoint = nil;
 #pragma Notification Methods
 
 - (void) handleEnteredForeground: (NSNotification *)notification {
-    NSLog(@"handleEnteredForeground %@", _callCenter.currentCalls);
+    NSLog(@"<--starting--> handleEnteredForeground %@", _callCenter.currentCalls);
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
     //    }];
     
@@ -801,17 +806,39 @@ void logCallback (int level, const char *data, int len) {
     }
 }
 
+/*
 - (pj_pool_t *) pjPool {
     NSLog(@"<--pjPool--> pool accessed");
     static dispatch_once_t onceToken;
-    static pj_pool_t *pool = nil;
+    //static pj_pool_t *pool = nil;
+    static pj_pool_t *pool;
     dispatch_once(&onceToken, ^{
         pool = pjsua_pool_create("swig-pjsua", 512, 512);
     });
     
     return pool;
 }
+*/
 
+- (pj_pool_t *) pjPool {
+    NSLog(@"<--pjPool--> pool accessed");
+    //static pj_pool_t *pool = nil;
+    static pj_pool_t *pool;
+    
+    @synchronized (self) {
+        if(self.needResetPjPool) {
+            pool = nil;
+        }
+        
+        if (pool == nil) {
+            pool = pjsua_pool_create("swig-pjsua", 512, 512);
+            self.needResetPjPool = NO;
+        }
+    }
+    
+    return pool;
+}
+ 
 -(void)start:(void(^)(NSError *error))handler {
     
     pj_status_t status = pjsua_start();
@@ -915,6 +942,7 @@ void logCallback (int level, const char *data, int len) {
     }
     
     pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+    self.needResetPjPool = YES;
         
     [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
         
@@ -1170,6 +1198,7 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
         if (call) {
             
             [account addCall:call];
+            NSLog(@"<--callStateChanged--> SWOnIncomingCall");
             
             [call callStateChanged];
             
@@ -1247,13 +1276,10 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 if (dlg) pjsip_dlg_dec_lock(dlg);
             }
             
-            
-            
+            NSLog(@"<--callStateChanged--> SWOnCallState");
             [call callStateChanged];
             
-            if ([SWEndpoint sharedEndpoint].callStateChangeBlock) {
-                [SWEndpoint sharedEndpoint].callStateChangeBlock(account, call, callInfo.last_status);
-            }
+            [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:call setCode:callInfo.state];
             
             if (call.callState == SWCallStateDisconnected) {
                 [account removeCall:call.callId];
@@ -1302,7 +1328,16 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
         if (call) {
             CGFloat scale = [[UIScreen mainScreen] scale];
             
-            CGSize videoSize = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w*1.0/scale, event->data.fmt_changed.new_fmt.det.vid.size.h*1.0/scale);
+            CGSize videoSize = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w, event->data.fmt_changed.new_fmt.det.vid.size.h);
+            
+#warning костыль. Андроид передаёт неправильный размер. Если разрешение не 640*480 (горизонтально или вертикально, меняем размер на соотношение 3/4)
+            /*
+            if (!((videoSize.height == 640 && videoSize.width == 480) || (videoSize.width == 640 && videoSize.height == 480))) {
+                videoSize = CGSizeMake(videoSize.width, videoSize.width * 4 / 3.0);
+            }
+             */
+            
+            videoSize = CGSizeMake(videoSize.width*1.0/scale, videoSize.height*1.0/scale);
             
             const pj_str_t codec_id = {"H264", 4};
             pjmedia_vid_codec_param param;
@@ -1313,11 +1348,13 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             
             NSLog(@"MediaEvent. Videosize:%@; codecSize:%@", NSStringFromCGSize(videoSize), NSStringFromCGSize(codecSize));
             
+            /*
 #warning костыль
             //Сработает, если перепутана ширина и высота (приходит от андроида)
             if ((codecSize.width - codecSize.height) * (videoSize.width - videoSize.height) < 0) {
                 videoSize = CGSizeMake(videoSize.height, videoSize.width);
             }
+             */
             
             NSLog(@"MediaEvent. Videosize changed to:%@", NSStringFromCGSize(videoSize));
             
@@ -1326,6 +1363,7 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
                 [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, call);
             }
+            
         }
     }
 }
@@ -2243,6 +2281,13 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     return PJ_FALSE;
 }
 
+- (void) runCallStateChangeBlockForCall: (SWCall *)call setCode: (pjsip_status_code) statusCode {
+    SWAccount *account = [self lookupAccount:call.accountId];
+    
+    if (self.callStateChangeBlock) {
+        self.callStateChangeBlock(account, call, statusCode);
+    }
+}
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {

@@ -7,12 +7,14 @@
 //
 
 #import "SWRingtone.h"
+#import "SWCall.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <AVFoundation/AVFoundation.h>
 //#import "SharkfoodMuteSwitchDetector.h"
 #import <UIKit/UIKit.h>
 #import <libextobjc/extobjc.h>
 #import "Logger.h"
+
 
 #define kVibrateDuration 2.0
 
@@ -118,13 +120,25 @@
     
     if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
         
+
         AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+        
+        NSError *error = nil;
+        //[audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
         
         NSError *overrideError;
         
+        /*
         if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
             
         }
+         */
+        #warning experiment
+        /*
+        if ([audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:0 error:&overrideError]) {
+            
+        }
+        */
         
         if (self.audioPlayer.isPlaying) {
             [self.audioPlayer stop];
@@ -165,25 +179,44 @@
 
 -(void)configureAudioSession {
     
+#warning experiment
+    return;
+    //[SWCall closeSoundTrack:^(NSError *error) {}];
+    
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    NSError *error = nil;
+    //[audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
     
     NSError *setCategoryError;
     
-    if (![audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDuckOthers|AVAudioSessionCategoryOptionAllowBluetooth error:&setCategoryError]) {
+    if (![audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:(AVAudioSessionCategoryOptionDuckOthers|AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionDefaultToSpeaker) error:&setCategoryError]) {
+        
+    }
+    
+    
+    NSError *setModeError;
+    
+    if (![audioSession setMode:AVAudioSessionModeDefault error:&setModeError]) {
         
     }
     
     NSError *overrideError;
     
+    /*
     if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&overrideError]) {
         
     }
-    
+    */
+     
     NSError *activationError;
     
+    [audioSession setActive:NO error:&activationError];
     if (![audioSession setActive:YES error:&activationError]) {
         
     }
+    
+    //[SWCall openSoundTrack:^(NSError *error) {}];
 
 }
 
