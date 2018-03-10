@@ -143,9 +143,10 @@
         if (self.audioPlayer.isPlaying) {
             [self.audioPlayer stop];
             
-            [self.virbateTimer invalidate];
-            self.virbateTimer = nil;
         }
+        
+        [self.virbateTimer invalidate];
+        self.virbateTimer = nil;
         
         [self.audioPlayer setCurrentTime:0];
     }

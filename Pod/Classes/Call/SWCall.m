@@ -293,7 +293,7 @@
         } break;
             
         case PJSIP_INV_STATE_CALLING: {
-            [SWCall closeSoundTrack:nil];
+            //[SWCall closeSoundTrack:nil];
 //            [self.ringback start]; //TODO probably not needed
             self.callState = SWCallStateCalling;
             [self updateOverrideSpeaker];
@@ -301,17 +301,18 @@
             
         case PJSIP_INV_STATE_EARLY: {
             self.callState = SWCallStateCalling;
-            
-            [self updateOverrideSpeaker];
-            [SWCall openSoundTrack:^(NSError *error) {
-                if (!self.inbound) {
+#warning experiment лишний раз?
+            //[self updateOverrideSpeaker];
+            if (!self.inbound) {
+                [SWCall openSoundTrack:^(NSError *error) {
                     if (callInfo.last_status == PJSIP_SC_RINGING) {
                         [self.ringback start];
                     } else if (callInfo.last_status == PJSIP_SC_PROGRESS) {
                         [self.ringback stop];
                     }
-                }
-            }];
+                }];
+            }
+            
         } break;
             
         case PJSIP_INV_STATE_CONNECTING: {
@@ -334,13 +335,11 @@
             [self updateMuteStatus];
             [self updateOverrideSpeaker];
             
-            /*
             __weak typeof(self) weakSelf = self;
             #warning костыль
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
                 [weakSelf updateOverrideSpeaker];
             });
-            */
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
@@ -973,7 +972,7 @@
             speaker = YES;
             break;
         case SWCallStateCalling:
-            speaker = _speaker;
+            speaker = _speaker || self.inbound;
             break;
         case SWCallStateConnecting:
             sessionActive = NO;
@@ -994,44 +993,16 @@
     }
     
     NSError *error = nil;
+    
+    NSTimeInterval bufferDuration = .005;
+    [audioSession setPreferredIOBufferDuration:bufferDuration error:&error];
+    [audioSession setPreferredSampleRate:44100 error:&error];
+    
+    [audioSession setMode:sessionMode error:&error];
+    
     //NSLog(@"<--speaker--> value:%@", speaker ? @"true" : @"false");
     if (speaker) {
         [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
-        
-        for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
-            NSString *porttype = [desc portType];
-            NSString *portname = [desc portName];
-            NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
-            AVAudioSessionDataSourceDescription *frontMicrophone;
-            AVAudioSessionDataSourceDescription *topMicrophone;
-            
-            //NSLog(@"<--speaker--> available input porttype: %@ : %@. DataSources: %d", porttype, portname, dataSources.count);
-            //NSLog(@"<--speaker--> selectedDataSource:%@. location=%@; orientation=%@; selectedPolarPattern: %@", frontMicrophone.dataSourceName, frontMicrophone.location, frontMicrophone.orientation, frontMicrophone.selectedPolarPattern);
-            
-            
-            for(AVAudioSessionDataSourceDescription* source in dataSources) {
-                //NSLog(@"<--speaker--> --- dataSource: %@", source);
-                if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
-                    frontMicrophone = source;
-                }
-                else if ([source.orientation isEqualToString:AVAudioSessionOrientationTop]) {
-                    topMicrophone = source;
-                }
-            }
-            
-            //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
-            if (frontMicrophone) {
-                [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
-                
-                [audioSession setInputDataSource:frontMicrophone error:&error];
-            }
-            else if (topMicrophone) {
-                [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
-                
-                [audioSession setInputDataSource:topMicrophone error:&error];
-            }
-            
-        }
     }
     
     else {
@@ -1043,11 +1014,59 @@
         }
     }
     
-    NSTimeInterval bufferDuration = .005;
-    [audioSession setPreferredIOBufferDuration:bufferDuration error:&error];
-    [audioSession setPreferredSampleRate:44100 error:&error];
+    for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
+        NSString *porttype = [desc portType];
+        NSString *portname = [desc portName];
+        NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
+        
+        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
+            return;
+        }
+        
+        AVAudioSessionDataSourceDescription *frontMicrophone;
+        AVAudioSessionDataSourceDescription *topMicrophone;
+        AVAudioSessionDataSourceDescription *bottomMicrophone;
+        
+        //NSLog(@"<--speaker--> available input porttype: %@ : %@. DataSources: %d", porttype, portname, dataSources.count);
+        //NSLog(@"<--speaker--> selectedDataSource:%@. location=%@; orientation=%@; selectedPolarPattern: %@", frontMicrophone.dataSourceName, frontMicrophone.location, frontMicrophone.orientation, frontMicrophone.selectedPolarPattern);
+        
+        
+        for(AVAudioSessionDataSourceDescription* source in dataSources) {
+            //NSLog(@"<--speaker--> --- dataSource: %@", source);
+            if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
+                frontMicrophone = source;
+            }
+            else if ([source.orientation isEqualToString:AVAudioSessionOrientationTop]) {
+                topMicrophone = source;
+            }
+            else if ([source.orientation isEqualToString:AVAudioSessionOrientationBottom]) {
+                bottomMicrophone = source;
+            }
+        }
+        
+        if (speaker) {
+            //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
+            if (frontMicrophone) {
+                [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                
+                [audioSession setInputDataSource:frontMicrophone error:&error];
+            }
+            else if (topMicrophone) {
+                [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                
+                [audioSession setInputDataSource:topMicrophone error:&error];
+            }
+        }
+        else {
+            //переключаемся на нижний микрофон
+            if (bottomMicrophone) {
+                [bottomMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                
+                [audioSession setInputDataSource:bottomMicrophone error:&error];
+            }
+        }
+    }
     
-    [audioSession setMode:sessionMode error:&error];
     /*
     NSLog(@"<--speaker--> audioSession.category:%@", audioSession.category);
     NSLog(@"<--speaker--> audioSession.mode:%@", audioSession.mode);

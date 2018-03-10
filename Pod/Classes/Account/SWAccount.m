@@ -206,7 +206,7 @@ void * refToSelf;
     //Выставим уровень профиля кодека
     for (int i=0; i < param.dec_fmtp.cnt; i++) {
         if ([[NSString stringWithPJString:param.dec_fmtp.param[i].name] isEqualToString:@"profile-level-id"]) {
-            //Уровень 31
+            //Уровень 22
             param.dec_fmtp.param[i].val = pj_str("42e016");
         }
     }

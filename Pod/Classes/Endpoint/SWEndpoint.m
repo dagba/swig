@@ -1276,7 +1276,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 if (dlg) pjsip_dlg_dec_lock(dlg);
             }
             
-            NSLog(@"<--callStateChanged--> SWOnCallState");
+            NSLog(@"<--callStateChanged--> SWOnCallState: %d", callInfo.state);
             [call callStateChanged];
             
             [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:call setCode:callInfo.state];

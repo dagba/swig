@@ -12,13 +12,6 @@
 #import "SWThreadManager.h"
 #import "Logger.h"
 
-#ifdef DEBUG
-#warning test
-#include <pjsua-lib/pjsua_internal.h>
-#else
-#error test
-#endif
-
 #define kSWRingbackFrequency1 440
 #define kSWRingbackFrequency2 480
 #define kSWRingbackOnDuration 2000
@@ -58,16 +51,6 @@
         DDLogDebug(@"Error creating ringback tones");
         return nil;
     }
-    
-#ifdef DEBUG
-#warning test
-    NSLog(@"<--pj_pool_factory_dump--> after pjmedia_tonegen_create2");
-    pj_pool_factory *factory = &pjsua_var.cp.factory;
-    
-    pj_pool_factory_dump (factory, PJ_TRUE);
-#else
-#error test
-#endif
     
     pj_bzero(&tone, sizeof(tone));
     
