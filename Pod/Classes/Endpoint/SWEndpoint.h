@@ -132,5 +132,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (pj_bool_t) txResponsePackageProcessing: (pjsip_tx_data *)tdata;
 - (pj_bool_t) txRequestPackageProcessing: (pjsip_tx_data *)tdata;
 
+- (void) startStandartRingtone;
+
 
 @end

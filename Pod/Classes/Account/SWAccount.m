@@ -103,6 +103,16 @@ void * refToSelf;
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
     acc_cfg.reg_timeout = kRegTimeout;
+    
+    /*
+#ifdef DEBUG
+#warning test
+    acc_cfg.reg_timeout = 30;
+#else
+#error test
+#endif
+     */
+    
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
@@ -400,7 +410,7 @@ void * refToSelf;
         if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
 #warning experiment может быть, стоит возвращать ошибку?
             status = PJ_SUCCESS;
-            //return;
+            return;
         }
         
         status = pjsua_acc_set_registration((int)self.accountId, state);

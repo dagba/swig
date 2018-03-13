@@ -222,6 +222,8 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, strong) SWAudioSessionObserver *audioSessionObserver;
 @property (atomic, assign) BOOL needResetPjPool;
 
+@property (nonatomic, strong) SWRingtone *standartRingtone;
+
 @end
 
 @implementation SWEndpoint
@@ -278,9 +280,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     //Здесь pjsua ещё не запущен, регистрировать нет смысла!
     //[self registerThread];
     
-    NSURL *fileURL = [[NSBundle mainBundle] URLForResource:@"Ringtone" withExtension:@"caf"];
-    
-    _ringtone = [[SWRingtone alloc] initWithFileAtPath:fileURL];
+    [self setStandartRingtone];
     
     //TODO check if the reachability happens in background
     //FIX make sure connect doesnt get called too often
@@ -377,6 +377,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
     //    }];
     
+#warning experiment 2018-03-12
+    /*
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         for (int i = 0; i < [self.accounts count]; ++i) {
             
@@ -402,6 +404,45 @@ static SWEndpoint *_sharedEndpoint = nil;
             dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
         }
     });
+     */
+    
+    if (![SWEndpoint sharedEndpoint].firstAccount.firstCall) {
+        
+        dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
+        
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), queue, ^{
+            NSInteger accountState = [SWEndpoint sharedEndpoint].firstAccount.accountState;
+            
+            NSLog(@"<--swaccount--> handleEnteredForeground code=%d", accountState);
+            if (accountState == SWAccountStateDisconnected) {
+                [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
+                    SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+                    
+                    SWAccountConfiguration *configuration = account.accountConfiguration;
+                    
+                    /*
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+                    [account configure:configuration completionHandler:^(NSError *error) {
+                        
+                    }];
+                    */
+                    
+                    [account resume:^(NSError *error) {
+                        
+                    }];
+                }];
+            } else {
+                SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
+                [account resume:^(NSError *error) {
+                    
+                }];
+            }
+        });
+    }
 }
 
 - (void) handleApplicationWillResignActiveNotification: (NSNotification *)notification {
@@ -541,7 +582,8 @@ static SWEndpoint *_sharedEndpoint = nil;
     if (_ringtone.isPlaying) {
         [_ringtone stop];
         _ringtone = ringtone;
-        [_ringtone start];
+        //После смены рингтона он может быть для другой цели, поэтому его надо запускать заново.
+        //[_ringtone start];
     }
     
     else {
@@ -1126,7 +1168,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     struct pjsip_regc_cbparam *rp = info->cbparam;
     
-    
+    NSLog(@"<--swaccount--> SWOnRegState2 code=%d", info->cbparam->code);
     
     if ((info != NULL) && (info->cbparam != NULL) && (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT)) {
         
@@ -2399,6 +2441,25 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     } onThread:mesThread wait:YES];
     
     return ret_value;
+}
+
+#pragma mark Ringtone management
+
+- (void) setStandartRingtone {
+    if (!_standartRingtone) {
+        
+        NSURL *fileURL = [[NSBundle mainBundle] URLForResource:@"Ringtone" withExtension:@"caf"];
+        
+        _standartRingtone = [[SWRingtone alloc] initWithFileAtPath:fileURL];
+    }
+    
+    self.ringtone = _standartRingtone;
+}
+
+- (void) startStandartRingtone {
+    [self setStandartRingtone];
+    
+    [self.ringtone start];
 }
 
 @end

@@ -95,60 +95,70 @@
     return self.audioPlayer.isPlaying;
 }
 
+#pragma mark start/stop ringtone anyway
+
+-(void)startRingtone {
+    
+    if (!self.audioPlayer.isPlaying) {
+        
+        BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
+        
+        [self configureAudioSession];
+        
+        BOOL play =  [self.audioPlayer play];
+        
+        NSLog(@"%@ %@", @(prepareToPlay), @(play));
+        
+        [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
+        self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
+        
+        [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
+    }
+}
+
+-(void) stopRingtone {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    NSError *error = nil;
+    //[audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
+    
+    NSError *overrideError;
+    
+    /*
+     if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
+     
+     }
+     */
+#warning experiment
+    /*
+     if ([audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:0 error:&overrideError]) {
+     
+     }
+     */
+    
+    if (self.audioPlayer.isPlaying) {
+        [self.audioPlayer stop];
+        
+    }
+    
+    [self.virbateTimer invalidate];
+    self.virbateTimer = nil;
+    
+    [self.audioPlayer setCurrentTime:0];
+}
+
+#pragma mark start/stop ringtone if no callKit
+
 -(void)start {
     
     if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
-        if (!self.audioPlayer.isPlaying) {
-            
-            BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
-            
-            [self configureAudioSession];
-            
-            BOOL play =  [self.audioPlayer play];
-            
-            NSLog(@"%@ %@", @(prepareToPlay), @(play));
-            
-            [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
-            self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
-            
-            [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
-        }
+        [self startRingtone];
     }
 }
 
 -(void)stop {
-    
     if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
-        
-
-        AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-        
-        NSError *error = nil;
-        //[audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
-        
-        NSError *overrideError;
-        
-        /*
-        if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
-            
-        }
-         */
-        #warning experiment
-        /*
-        if ([audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:0 error:&overrideError]) {
-            
-        }
-        */
-        
-        if (self.audioPlayer.isPlaying) {
-            [self.audioPlayer stop];
-            
-        }
-        
-        [self.virbateTimer invalidate];
-        self.virbateTimer = nil;
-        
-        [self.audioPlayer setCurrentTime:0];
+        [self stopRingtone];
     }
 }
 

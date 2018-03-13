@@ -24,6 +24,7 @@
 
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
+@property (nonatomic, strong) NSString *hangupReason;
 
 #define PJMEDIA_NO_VID_DEVICE -100
 
@@ -286,7 +287,7 @@
             
         case PJSIP_INV_STATE_INCOMING: {
             [SWCall closeSoundTrack:nil];
-            [[SWEndpoint sharedEndpoint].ringtone start];
+            [[SWEndpoint sharedEndpoint] startStandartRingtone];
             [self sendRinging];
             self.callState = SWCallStateIncoming;
             [self updateOverrideSpeaker];
@@ -577,9 +578,47 @@
     pj_status_t status;
     NSError *error;
     
-    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+    pjsua_msg_data *msg_data;
+    
+    NSString *reason = self.hangupReason;
+    
+    /*
+    //Если попали сюда из hangupOnReason, сгенерируем структуру, добавим в хедер и очистим свойство
+    if (reason != nil) {
+        self.hangupReason = nil;
+        pjsua_msg_data_init(msg_data);
         
-        status = pjsua_call_hangup((int)self.callId, 0, NULL, NULL);
+        pj_str_t hname = pj_str((char *)[@"X-Reason" UTF8String]);
+        char * headerValue=(char *)[reason UTF8String];
+        pj_str_t hvalue = pj_str(headerValue);
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+        
+        pj_pool_t *pool;
+        pool = pjsua_pool_create("reasonheader", 512, 512);
+        
+        pjsip_generic_string_hdr* add_hdr = pjsip_generic_string_hdr_create(pool, &hname, &hvalue);
+        pj_list_push_back(&(*msg_data).hdr_list, add_hdr);
+    }
+    else {
+        msg_data = NULL;
+    }
+    
+#ifdef DEBUG
+#warning test
+    NSString *test = self.hangupReason;
+    NSInteger callid = self.callId;
+    SWCallState callState = self.callState;
+#else
+#error test
+#endif
+     */
+    
+    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+        status = pjsua_call_hangup((int)self.callId, 0, NULL, msg_data);
         
         if (status != PJ_SUCCESS) {
             
@@ -595,6 +634,15 @@
     }
     
     self.ringback = nil;
+}
+
+-(void)hangupOnReason: (NSString *)reason withCompletion:(void(^)(NSError *error))handler {
+    self.hangupReason = reason;
+    
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *callThread = [thrManager getCallManagementThread];
+    
+    [self performSelector:@selector(hangup:) onThread:callThread withObject:handler waitUntilDone:NO];
 }
 
 +(void)openSoundTrack:(void(^)(NSError *error))handler {
