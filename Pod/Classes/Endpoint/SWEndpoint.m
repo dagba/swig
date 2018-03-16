@@ -420,17 +420,6 @@ static SWEndpoint *_sharedEndpoint = nil;
                     
                     SWAccountConfiguration *configuration = account.accountConfiguration;
                     
-                    /*
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-                    [account configure:configuration completionHandler:^(NSError *error) {
-                        
-                    }];
-                    */
-                    
                     [account resume:^(NSError *error) {
                         
                     }];

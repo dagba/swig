@@ -575,27 +575,26 @@
         return;
     }
     
+    typeof (self) slf = self;
+    
     pj_status_t status;
     NSError *error;
     
-    pjsua_msg_data *msg_data;
     
-    NSString *reason = self.hangupReason;
-    
-    /*
     //Если попали сюда из hangupOnReason, сгенерируем структуру, добавим в хедер и очистим свойство
+    
+     pjsua_msg_data *msg_data = NULL;
+     
+     NSString *reason = slf.hangupReason;
+     
     if (reason != nil) {
-        self.hangupReason = nil;
+        msg_data = malloc(sizeof(pjsua_msg_data));
+        slf.hangupReason = nil;
         pjsua_msg_data_init(msg_data);
         
         pj_str_t hname = pj_str((char *)[@"X-Reason" UTF8String]);
         char * headerValue=(char *)[reason UTF8String];
         pj_str_t hvalue = pj_str(headerValue);
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
         
         pj_pool_t *pool;
         pool = pjsua_pool_create("reasonheader", 512, 512);
@@ -607,25 +606,24 @@
         msg_data = NULL;
     }
     
-#ifdef DEBUG
-#warning test
-    NSString *test = self.hangupReason;
-    NSInteger callid = self.callId;
-    SWCallState callState = self.callState;
-#else
-#error test
-#endif
-     */
+    SWCall *cll = slf;
     
-    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
-        status = pjsua_call_hangup((int)self.callId, 0, NULL, msg_data);
+    NSString *test = slf.hangupReason;
+    NSInteger callid = slf.callId;
+    SWCallState callState = slf.callState;
+    
+    
+    if (slf.callId != PJSUA_INVALID_ID && slf.callState != SWCallStateDisconnected) {
+        
+        status = pjsua_call_hangup((int)slf.callId, 0, NULL, msg_data);
+        //status = pjsua_call_hangup((int)self.callId, 0, NULL, NULL);
         
         if (status != PJ_SUCCESS) {
             
             error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
         }
         else {
-            self.missed = NO;
+            slf.missed = NO;
         }
     }
     
@@ -633,7 +631,7 @@
         handler(error);
     }
     
-    self.ringback = nil;
+    slf.ringback = nil;
 }
 
 -(void)hangupOnReason: (NSString *)reason withCompletion:(void(^)(NSError *error))handler {
@@ -643,6 +641,15 @@
     NSThread *callThread = [thrManager getCallManagementThread];
     
     [self performSelector:@selector(hangup:) onThread:callThread withObject:handler waitUntilDone:NO];
+}
+
+-(void)openSoundTrack:(void(^)(NSError *error))handler {
+    
+    [SWCall openSoundTrack:handler];
+}
+
+-(void)closeSoundTrack:(void(^)(NSError *error))handler {
+    [SWCall closeSoundTrack:handler];
 }
 
 +(void)openSoundTrack:(void(^)(NSError *error))handler {

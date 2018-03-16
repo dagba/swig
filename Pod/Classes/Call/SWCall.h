@@ -86,8 +86,12 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 
 - (void) changeVideoWindowWithSize: (CGSize) size;
 
+-(void)openSoundTrack:(void(^)(NSError *error))handler;
+-(void)closeSoundTrack:(void(^)(NSError *error))handler;
+
 +(void)openSoundTrack:(void(^)(NSError *error))handler;
 +(void)closeSoundTrack:(void(^)(NSError *error))handler;
+
 -(void)updateOverrideSpeaker;
 
 @end

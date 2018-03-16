@@ -102,16 +102,12 @@ void * refToSelf;
     acc_cfg.reg_uri = [[SWUriFormatter sipUri:self.accountConfiguration.domain] pjString];
     acc_cfg.register_on_acc_add = self.accountConfiguration.registerOnAdd ? PJ_TRUE : PJ_FALSE;
     acc_cfg.publish_enabled = self.accountConfiguration.publishEnabled ? PJ_TRUE : PJ_FALSE;
-    acc_cfg.reg_timeout = kRegTimeout;
     
-    /*
-#ifdef DEBUG
-#warning test
-    acc_cfg.reg_timeout = 30;
-#else
-#error test
-#endif
-     */
+    NSInteger timeout = self.accountConfiguration.registrationTimeout;
+    
+    if (timeout == 0) {
+        acc_cfg.reg_timeout = kRegTimeout;
+    }
     
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;

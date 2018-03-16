@@ -23,6 +23,7 @@
 @property (nonatomic) BOOL registerOnAdd;
 @property (nonatomic) BOOL publishEnabled;
 @property (nonatomic, assign) CGSize outputVideoSize;
+@property (nonatomic, assign) NSInteger registrationTimeout;
 
 +(NSString *)addressFromUsername:(NSString *)username domain:(NSString *)domain;
 
