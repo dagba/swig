@@ -1620,7 +1620,7 @@ static void groupInfoCallback(void *token, pjsip_event *e) {
     }
     
     NSString *avatarPath = nil;
-    if (rawResponse.count > 3) {
+    if (rawResponse.count >= 3) {
         avatarPath = [rawResponse objectAtIndex:2];
     }
     
