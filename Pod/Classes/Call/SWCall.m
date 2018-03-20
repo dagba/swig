@@ -583,12 +583,13 @@
     
     //Если попали сюда из hangupOnReason, сгенерируем структуру, добавим в хедер и очистим свойство
     
-     pjsua_msg_data *msg_data = NULL;
+    pjsua_msg_data *msg_data = NULL;
      
-     NSString *reason = slf.hangupReason;
+    NSString *reason = slf.hangupReason;
      
     if (reason != nil) {
         msg_data = malloc(sizeof(pjsua_msg_data));
+        
         slf.hangupReason = nil;
         pjsua_msg_data_init(msg_data);
         
@@ -605,13 +606,6 @@
     else {
         msg_data = NULL;
     }
-    
-    SWCall *cll = slf;
-    
-    NSString *test = slf.hangupReason;
-    NSInteger callid = slf.callId;
-    SWCallState callState = slf.callState;
-    
     
     if (slf.callId != PJSUA_INVALID_ID && slf.callState != SWCallStateDisconnected) {
         

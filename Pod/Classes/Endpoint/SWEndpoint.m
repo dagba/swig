@@ -443,7 +443,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
-    //    [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:NULL];
+    UIBackgroundTaskIdentifier taskId = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:NULL];
     //    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     
     self.ringtone.volume = 0.0;
@@ -475,7 +475,10 @@ static SWEndpoint *_sharedEndpoint = nil;
             
             dispatch_semaphore_wait(semaphone, DISPATCH_TIME_FOREVER);
         }
+        
+        [application endBackgroundTask:taskId];
     });
+    
 }
 
 -(void)handleApplicationWillTeminate:(NSNotification *)notification {

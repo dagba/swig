@@ -404,8 +404,12 @@ void * refToSelf;
         pj_status_t status;
         
         if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
-#warning experiment может быть, стоит возвращать ошибку?
+            
             status = PJ_SUCCESS;
+            if(handler) {
+                handler(status);
+            }
+            
             return;
         }
         
