@@ -8,6 +8,8 @@
 
 #import <Foundation/Foundation.h>
 
+@class SWRingtoneDescription;
+
 @interface SWEndpointConfiguration : NSObject
 
 //ua config
@@ -25,6 +27,8 @@
 
 //transport configurations
 @property (nonatomic, strong) NSArray *transportConfigurations; //empty by default must specify
+
+@property (nonatomic, readonly) NSMutableDictionary <NSString *, SWRingtoneDescription *> *ringtones;
 
 +(instancetype)configurationWithTransportConfigurations:(NSArray *)transportConfigurations;
 

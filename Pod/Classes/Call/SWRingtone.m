@@ -110,6 +110,11 @@
         NSLog(@"%@ %@", @(prepareToPlay), @(play));
         
         [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:nil];
+        
+        if(self.noVibrations) {
+            return;
+        }
+        
         self.virbateTimer = [NSTimer timerWithTimeInterval:kVibrateDuration target:self selector:@selector(vibrate) userInfo:nil repeats:YES];
         
         [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];

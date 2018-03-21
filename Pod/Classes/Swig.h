@@ -25,6 +25,7 @@
 #import "SWCall.h"
 #import "SWRingback.h"
 #import "SWRingtone.h"
+#import "SWRingtoneDescription.h"
 
 //Formatter
 #import "SWUriFormatter.h"

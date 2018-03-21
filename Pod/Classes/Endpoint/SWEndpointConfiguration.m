@@ -43,6 +43,7 @@
     _sndClockRate = kSWSndClockRate;
     
     _transportConfigurations = [NSArray new];
+    _ringtones = [NSMutableDictionary new];
         
     return self;
 }

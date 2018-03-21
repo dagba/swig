@@ -134,5 +134,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 
 - (void) startStandartRingtone;
 
++ (NSString *) getHeaderByName: (NSString *) hname forMessage: (pjsip_msg *) msg;
+
 
 @end

@@ -35,6 +35,7 @@
 
 #import "SWThreadManager.h"
 #import "SWAudioSessionObserver.h"
+#import "SWRingtoneDescription.h"
 
 @import CoreTelephony;
 
@@ -223,6 +224,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (atomic, assign) BOOL needResetPjPool;
 
 @property (nonatomic, strong) SWRingtone *standartRingtone;
+@property (nonatomic, readonly) NSMutableDictionary<NSString *, SWRingtone *>  *ringtones;
 
 @end
 
@@ -281,12 +283,15 @@ static SWEndpoint *_sharedEndpoint = nil;
     //[self registerThread];
     
     [self setStandartRingtone];
+    _ringtones = [NSMutableDictionary new];
     
     //TODO check if the reachability happens in background
     //FIX make sure connect doesnt get called too often
     //IP Change logic
     
     [[AFNetworkReachabilityManager sharedManager] setReachabilityStatusChangeBlock:^(AFNetworkReachabilityStatus status) {
+        
+        NSLog(@"<--network reachability--> status: %d", status);
         
         //        if ([AFNetworkReachabilityManager sharedManager].reachableViaWiFi) {
         //            [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
@@ -1248,7 +1253,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:callInfo.acc_id];
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+    
+    SWAccount *account = [endpoint lookupAccount:callInfo.acc_id];
     
     if (account) {
         
@@ -1313,7 +1320,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             NSLog(@"<--callStateChanged--> SWOnCallState: %d", callInfo.state);
             [call callStateChanged];
             
-            [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:call setCode:callInfo.state];
+            [endpoint runCallStateChangeBlockForCall:call setCode:callInfo.state];
             
             if (call.callState == SWCallStateDisconnected) {
                 [account removeCall:call.callId];
@@ -1321,6 +1328,15 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 resp_rport = 0;
                 rhost = pj_str("");
                 resp_rhost = pj_str("");
+                
+                NSString *hangupReason = [SWEndpoint getHeaderByName:@"X-Reason" forMessage:e->body.rx_msg.rdata->msg_info.msg];
+                
+                SWRingtone *ringtone = [endpoint getRingtoneForReason:hangupReason];
+                
+                if(ringtone) {
+                    [endpoint setRingtone:ringtone];
+                    [ringtone startRingtone];
+                }
             }
         }
     }
@@ -2448,10 +2464,46 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     self.ringtone = _standartRingtone;
 }
 
+- (SWRingtone *) getRingtoneForReason: (NSString *) reason {
+    
+    // withUrl: (NSURL *) url hasVibrations: (BOOL) hasVibrations
+    SWRingtone *ringtone = [self.ringtones valueForKey:reason];
+    
+    //Возможно, такой рингтон уже есть в кэше
+    if (ringtone == nil) {
+        //Или поищем в конфиге
+        SWRingtoneDescription *description = [self.endpointConfiguration.ringtones valueForKey:reason];
+        
+        if (description) {
+            //Если есть конфиг, создадим ринтон и поместим его в кэш
+            ringtone = [[SWRingtone alloc] initWithFileAtPath:description.url];
+            ringtone.noVibrations = !description.hasVibrations;
+            
+            
+            [self.ringtones setValue:ringtone forKey:reason];
+        }
+    }
+    
+    return ringtone;
+}
+
 - (void) startStandartRingtone {
     [self setStandartRingtone];
     
     [self.ringtone start];
+}
+
++ (NSString *) getHeaderByName: (NSString *) hname forMessage: (pjsip_msg *) msg {
+    NSString *result = nil;
+    
+    pj_str_t  hdr_name = pj_str((char *)[hname UTF8String]);
+    
+    pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &hdr_name, nil);
+    if (hdr != nil) {
+        result = [NSString stringWithPJString:hdr->hvalue];
+    }
+    
+    return result;
 }
 
 @end

@@ -14,6 +14,7 @@
 
 @property (nonatomic, readonly) BOOL isPlaying;
 @property (nonatomic) float volume;
+@property (nonatomic, assign) BOOL noVibrations;
 @property (nonatomic, strong, readonly) NSURL *fileURL;
 
 -(instancetype)initWithFileAtPath:(NSURL *)path;
