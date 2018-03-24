@@ -11,6 +11,7 @@
 @protocol SWCallProtocol <NSObject>
 
 -(void)callStateChanged;
+-(void)callStateChangedWithReason: (NSInteger) reason;
 -(void)mediaStateChanged;
 
 @end

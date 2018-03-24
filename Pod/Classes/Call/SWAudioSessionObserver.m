@@ -16,18 +16,20 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
+        
+        /*
         NSNotificationCenter *notCenter = [NSNotificationCenter defaultCenter];
         [notCenter addObserver:self selector:@selector(videoWasInterruptedNotification:) name:AVCaptureSessionWasInterruptedNotification object:nil];
-         /*
-          [notCenter addObserver:self selector:@selector(audioSessionInterruptionWithNotification:) name:AVAudioSessionInterruptionNotification object:nil];
+        
+        [notCenter addObserver:self selector:@selector(audioSessionInterruptionWithNotification:) name:AVAudioSessionInterruptionNotification object:nil];
         [notCenter addObserver:self selector:@selector(audioSessionRouteDidChangeWithNotification:) name:AVAudioSessionRouteChangeNotification object:nil];
         
         [notCenter addObserver:self selector:@selector(videoErrorNotification:) name:AVCaptureSessionRuntimeErrorNotification object:nil];
         [notCenter addObserver:self selector:@selector(videoStartNotification:) name:AVCaptureSessionDidStartRunningNotification object:nil];
         [notCenter addObserver:self selector:@selector(videoDidStopNotification:) name:AVCaptureSessionDidStopRunningNotification object:nil];
         [notCenter addObserver:self selector:@selector(videoWasInterruptedNotification:) name:AVCaptureSessionWasInterruptedNotification object:nil];
-        */
         
+        */
         
     }
     return self;

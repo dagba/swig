@@ -9,6 +9,7 @@
 #import "SWAccount.h"
 #import "SWAccountConfiguration.h"
 #import "SWEndpoint.h"
+#import "SWEndpointConfiguration.h"
 #import "SWThreadManager.h"
 #import "SWCall.h"
 #import "SWUriFormatter.h"
@@ -413,7 +414,11 @@ void * refToSelf;
             return;
         }
         
+        NSString *loguid = [[NSUUID UUID] UUIDString];
+        
+        NSLog(@"<--pjsua_acc_set_registration--> before. UID=%@", loguid);
         status = pjsua_acc_set_registration((int)self.accountId, state);
+        NSLog(@"<--pjsua_acc_set_registration--> after. UID=%@", loguid);
         
         if(handler) {
             handler(status);
@@ -606,6 +611,9 @@ void * refToSelf;
 
 -(void)addCall:(SWCall *)call {
     
+    while (self.calls.count >= SWEndpoint.sharedEndpoint.endpointConfiguration.maxCalls) {
+        [self.calls removeObject:self.calls[0]];
+    }
     [self.calls addObject:call];
     
     //TODO:: setup blocks

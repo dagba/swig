@@ -21,6 +21,7 @@
 @interface SWRingtone ()
 
 @property (nonatomic, strong) AVAudioPlayer *audioPlayer;
+@property (nonatomic, weak) id<AVAudioPlayerDelegate> playerDelegate;
 @property (nonatomic, strong) NSTimer *virbateTimer;
 
 @end
@@ -102,8 +103,9 @@
     if (!self.audioPlayer.isPlaying) {
         
         BOOL prepareToPlay = [self.audioPlayer prepareToPlay];
+        self.audioPlayer.delegate = self.playerDelegate;
         
-        [self configureAudioSession];
+        //[self configureAudioSession];
         
         BOOL play =  [self.audioPlayer play];
         
@@ -119,27 +121,10 @@
         
         [[NSRunLoop mainRunLoop] addTimer:self.virbateTimer forMode:NSRunLoopCommonModes];
     }
+    
 }
 
 -(void) stopRingtone {
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    
-    NSError *error = nil;
-    //[audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:&error];
-    
-    NSError *overrideError;
-    
-    /*
-     if ([audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&overrideError]) {
-     
-     }
-     */
-#warning experiment
-    /*
-     if ([audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:0 error:&overrideError]) {
-     
-     }
-     */
     
     if (self.audioPlayer.isPlaying) {
         [self.audioPlayer stop];
@@ -162,9 +147,13 @@
 }
 
 -(void)stop {
+#warning experiment
+    [self stopRingtone];
+    /*
     if ([[[UIDevice currentDevice] systemVersion] floatValue] < 10.0) {
         [self stopRingtone];
     }
+     */
 }
 
 -(void)setVolume:(float)volume {
@@ -253,6 +242,21 @@
 //    else {
 //        self.volume = 1.0;
 //    }
+}
+
+- (void) setAudioPlayerDelegate: (id<AVAudioPlayerDelegate>) delegate {
+    _playerDelegate = delegate;
+    if(self.audioPlayer.isPlaying) {
+        self.audioPlayer.delegate = delegate;
+    }
+}
+
+- (void)setIsFinite:(BOOL)isFinite {
+    _audioPlayer.numberOfLoops = isFinite ? 0 : -1;
+}
+
+- (BOOL)isFinite {
+    return _audioPlayer.numberOfLoops >= 0;
 }
 
 @end

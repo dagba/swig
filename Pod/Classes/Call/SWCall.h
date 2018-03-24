@@ -25,7 +25,8 @@ typedef NS_ENUM(NSInteger, SWCallState) {
     SWCallStateCalling,
     SWCallStateConnecting,
     SWCallStateConnected,
-    SWCallStateDisconnected
+    SWCallStateDisconnected,
+    SWCallStateDisconnectRingtone
 };
 
 typedef NS_ENUM(NSInteger, SWMediaState) {
@@ -36,7 +37,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
     SWMediaStateRemoteHold = PJSUA_CALL_MEDIA_REMOTE_HOLD
 };
 
-@interface SWCall : NSObject <SWCallProtocol, NSCopying, NSMutableCopying>
+@interface SWCall : NSObject <SWCallProtocol, NSCopying, NSMutableCopying, AVAudioPlayerDelegate>
 
 @property (nonatomic, readonly, strong) SWContact *contact;
 @property (nonatomic, readonly) NSInteger callId;
@@ -58,6 +59,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 
 @property (nonatomic, readonly) NSDate *date;
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
+@property (nonatomic, assign) NSInteger hangupReason;
 
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
@@ -68,7 +70,7 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 
 -(void)answer:(void(^)(NSError *error))handler;
 -(void)hangup:(void(^)(NSError *error))handler;
--(void)hangupOnReason: (NSString *)reason withCompletion:(void(^)(NSError *error))handler;
+-(void)hangupOnReason: (NSInteger) reason withCompletion:(void(^)(NSError *error))handler;
 -(void)terminateWithCompletion:(void(^)(NSError *error))handler;
 
 -(void)setHold:(void(^)(NSError *error))handler;

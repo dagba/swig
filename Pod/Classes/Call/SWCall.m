@@ -24,11 +24,13 @@
 
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
-@property (nonatomic, strong) NSString *hangupReason;
 
 #define PJMEDIA_NO_VID_DEVICE -100
 
 @property (nonatomic, assign) pjmedia_vid_dev_index currentVideoCaptureDevice;
+
+@property (nonatomic, assign) BOOL isHangupSent;
+@property (nonatomic, assign) BOOL wasConnected;
 
 @end
 
@@ -106,6 +108,8 @@
     if ((status == PJ_SUCCESS) && (info.rem_vid_cnt > 0 || (!_inbound && (info.setting.vid_cnt > 0)))) {
         _withVideo = YES;
     }
+    
+    NSLog(@"<--swcall--> initSipDataForCallId withVideo:%@", _withVideo ? @"true" : @"false");
     
     _mute = NO;
     _speaker = _withVideo && [SWCall isOnlySpeakerOutput];
@@ -194,7 +198,7 @@
         [[UIApplication sharedApplication] cancelLocalNotification:_notification];
     }
     
-    if (_callState != SWCallStateDisconnected && _callId != PJSUA_INVALID_ID) {
+    if (_callState != SWCallStateDisconnected && _callState != SWCallStateDisconnectRingtone && _callId != PJSUA_INVALID_ID) {
 #warning main thread!
         dispatch_async(dispatch_get_main_queue(), ^{
             pjsua_call_hangup((int)_callId, 0, NULL, NULL);
@@ -276,18 +280,33 @@
 }
 
 -(void)callStateChanged {
+    [self callStateChangedWithReason:-1];
+}
+
+-(void)callStateChangedWithReason: (NSInteger) reason {
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
+    
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
     switch (callInfo.state) {
         case PJSIP_INV_STATE_NULL: {
             [SWCall closeSoundTrack:nil];
-            self.callState = SWCallStateReady;
+            [self.ringback stop];
+            [endpoint.ringtone stop];
+            if (self.callState == SWCallStateDisconnectRingtone) {
+                self.callState = SWCallStateDisconnected;
+            }
+            else {
+                self.callState = SWCallStateReady;
+            }
+            [self updateOverrideSpeaker];
         } break;
             
         case PJSIP_INV_STATE_INCOMING: {
+            
             [SWCall closeSoundTrack:nil];
-            [[SWEndpoint sharedEndpoint] startStandartRingtone];
+            [endpoint startStandartRingtone];
             [self sendRinging];
             self.callState = SWCallStateIncoming;
             [self updateOverrideSpeaker];
@@ -295,7 +314,7 @@
             
         case PJSIP_INV_STATE_CALLING: {
             //[SWCall closeSoundTrack:nil];
-//            [self.ringback start]; //TODO probably not needed
+            //            [self.ringback start]; //TODO probably not needed
             self.callState = SWCallStateCalling;
             [self updateOverrideSpeaker];
         } break;
@@ -317,9 +336,13 @@
         } break;
             
         case PJSIP_INV_STATE_CONNECTING: {
+            if (self.ctcallId == nil) {
+                self.ctcallId = @"incoming polyphone";
+            }
+            
             [SWCall closeSoundTrack:nil];
             [self.ringback stop];
-            [[SWEndpoint sharedEndpoint].ringtone stop];
+            [endpoint.ringtone stop];
             
             self.callState = SWCallStateConnecting;
             [self updateOverrideSpeaker];
@@ -327,6 +350,7 @@
             
         case PJSIP_INV_STATE_CONFIRMED: {
             
+            self.wasConnected = YES;
             NSLog(@"<--starting--> SWCallStateConnected");
             //[self reRunVideo];
             
@@ -337,7 +361,7 @@
             [self updateOverrideSpeaker];
             
             __weak typeof(self) weakSelf = self;
-            #warning костыль
+#warning костыль
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
                 [weakSelf updateOverrideSpeaker];
             });
@@ -346,11 +370,34 @@
         case PJSIP_INV_STATE_DISCONNECTED: {
             [SWCall closeSoundTrack:nil];
             [self.ringback stop];
-            [[SWEndpoint sharedEndpoint].ringtone stop];
+            [endpoint.ringtone stop];
             
-            self.callState = SWCallStateDisconnected;
             [self disableVideoCaptureDevice];
-            [self updateOverrideSpeaker];
+            
+            SWRingtone *ringtone = nil;
+            
+            //Если отбой инициирован не нами, по причине отбоя найдём рингтон
+            //Если звонок не соединился и при этом не наш, гудки играть не нужно
+            if (!self.isHangupSent && (self.wasConnected || (!self.inbound))) {
+                ringtone = [endpoint getRingtoneForReason:reason];
+                [ringtone setAudioPlayerDelegate:self];
+            }
+            
+            //и есть ли соответствующий гудок
+            if (ringtone) {
+                self.callState = SWCallStateDisconnectRingtone;
+                
+                [endpoint setRingtone:ringtone];
+                
+#warning костыль. Если используется коллкит в 11 иос, рингтон стратует, когда он закроет сессию. Если звонок исходящий, он её не закрывает!
+                if (([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0) || (!self.inbound)) {
+                    [ringtone startRingtone];
+                }
+            }
+            else {
+                self.callState = SWCallStateDisconnected;
+                [self updateOverrideSpeaker];
+            }
         } break;
     }
     
@@ -577,20 +624,34 @@
     
     typeof (self) slf = self;
     
+    slf.isHangupSent = YES;
+    
     pj_status_t status;
     NSError *error;
+    
+    //Если звонок уже сброшен, но ещё идёт рингтон, просто обновим статус (перейдёт в состояние disconnected)
+    if (slf.callState == SWCallStateDisconnectRingtone) {
+        [slf callStateChanged];
+        [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:slf setCode:SWCallStateDisconnected];
+        return;
+    }
     
     
     //Если попали сюда из hangupOnReason, сгенерируем структуру, добавим в хедер и очистим свойство
     
     pjsua_msg_data *msg_data = NULL;
-     
-    NSString *reason = slf.hangupReason;
+    
+    NSString *reason;
+    
+    if (slf.hangupReason != -1) {
+        reason = [NSString stringWithFormat:@"SIP;cause=%d;text=””", slf.hangupReason];
+        NSLog(@"<--hangup--> reason sent: %@", reason);
+    }
      
     if (reason != nil) {
         msg_data = malloc(sizeof(pjsua_msg_data));
         
-        slf.hangupReason = nil;
+        slf.hangupReason = -1;
         pjsua_msg_data_init(msg_data);
         
         pj_str_t hname = pj_str((char *)[@"X-Reason" UTF8String]);
@@ -628,7 +689,7 @@
     slf.ringback = nil;
 }
 
--(void)hangupOnReason: (NSString *)reason withCompletion:(void(^)(NSError *error))handler {
+-(void)hangupOnReason: (NSInteger) reason withCompletion:(void(^)(NSError *error))handler {
     self.hangupReason = reason;
     
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
@@ -709,7 +770,7 @@
     pj_status_t status;
     NSError *error;
     
-    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected && self.callState != SWCallStateDisconnectRingtone) {
 
         pjsua_set_no_snd_dev();
 
@@ -905,7 +966,7 @@
     pj_status_t status;
     NSError *error;
     
-    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected) {
+    if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected && self.callState != SWCallStateDisconnectRingtone) {
 
 #warning experiment
         /*
@@ -1036,6 +1097,10 @@
         case SWCallStateDisconnected:
             sessionActive = NO;
             speaker = NO;
+            break;
+            
+        case SWCallStateDisconnectRingtone:
+            speaker = _speaker;
             break;
         default:
             break;
@@ -1175,6 +1240,12 @@
             return NO;
     }
     return YES;
+}
+
+- (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
+    if (self.callState == SWCallStateDisconnectRingtone) {
+        [self hangup:^(NSError *error) {}];
+    }
 }
 
 @end

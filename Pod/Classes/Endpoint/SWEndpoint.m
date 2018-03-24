@@ -37,6 +37,8 @@
 #import "SWAudioSessionObserver.h"
 #import "SWRingtoneDescription.h"
 
+#import "SWThreadManager.h"
+
 @import CoreTelephony;
 
 #define KEEP_ALIVE_INTERVAL 600
@@ -193,6 +195,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWMessageReceivedBlock messageReceivedBlock;
 @property (nonatomic, copy) SWMessageDeletedBlock messageDeletedBlock;
 @property (nonatomic, copy) SWMessageStatusBlock messageStatusBlock;
+@property (nonatomic, copy) SWMessageStatusBlockForAbonent messageStatusBlockForAbonent;
 @property (nonatomic, copy) SWAbonentStatusBlock abonentStatusBlock;
 @property (nonatomic, copy) SWGroupMembersUpdatedBlock groupMembersUpdatedBlock;
 @property (nonatomic, copy) SWTypingBlock typingBlock;
@@ -224,7 +227,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (atomic, assign) BOOL needResetPjPool;
 
 @property (nonatomic, strong) SWRingtone *standartRingtone;
-@property (nonatomic, readonly) NSMutableDictionary<NSString *, SWRingtone *>  *ringtones;
+@property (nonatomic, readonly) NSMutableDictionary<NSNumber *, SWRingtone *>  *ringtones;
 
 @end
 
@@ -325,6 +328,7 @@ static SWEndpoint *_sharedEndpoint = nil;
             return;
         }
         
+        /*
         if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
             
             if (swcall && swcall.mediaState == SWMediaStateActive) {
@@ -333,7 +337,6 @@ static SWEndpoint *_sharedEndpoint = nil;
                     }];
                 });
             }
-            
         } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
             
             if (swcall && swcall.mediaState == SWMediaStateLocalHold) {
@@ -345,6 +348,7 @@ static SWEndpoint *_sharedEndpoint = nil;
             }
             
         }
+         */
     }];
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
@@ -1123,6 +1127,10 @@ void logCallback (int level, const char *data, int len) {
     _messageStatusBlock = messageStatusBlock;
 }
 
+- (void) setMessageStatusBlockForAbonent: (SWMessageStatusBlockForAbonent) messageStatusBlockForAbonent {
+    _messageStatusBlockForAbonent = messageStatusBlockForAbonent;
+}
+
 - (void) setMessageDeletedBlock: (SWMessageDeletedBlock) messageDeletedBlock {
     _messageDeletedBlock = messageDeletedBlock;
 }
@@ -1246,9 +1254,12 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
             }
         }
     }
+    
 }
 
 static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
+    
+    pjsip_msg *msg = [SWEndpoint getMessageFromEvent:e];
     
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
@@ -1289,18 +1300,18 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 new_contact.slen = pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, contact_buf, 512);
                 
                 pjsip_tx_data *tdata;
-                pjsua_call *call;
+                pjsua_call *pjcall;
                 pjsip_dialog *dlg = NULL;
                 pj_status_t status;
                 
-                status = acquire_call("pjsua_call_update_contact()", call_id, &call, &dlg);
+                status = acquire_call("pjsua_call_update_contact()", call_id, &pjcall, &dlg);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"cannot aquire call");
                 }
                 
                 
                 //                / Create UPDATE with new offer /
-                status = pjsip_inv_update(call->inv, &new_contact, NULL, &tdata);
+                status = pjsip_inv_update(pjcall->inv, &new_contact, NULL, &tdata);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"Unable to create UPDATE request");
                 }
@@ -1309,7 +1320,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 //                pjsua_process_msg_data(tdata, e->body.tx_msg);
                 
                 //                / Send the request /
-                status = pjsip_inv_send_msg(call->inv, tdata);
+                status = pjsip_inv_send_msg(pjcall->inv, tdata);
                 if (status != PJ_SUCCESS) {
                     NSLog(@"Unable to send UPDATE");
                 }
@@ -1318,9 +1329,22 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
             }
             
             NSLog(@"<--callStateChanged--> SWOnCallState: %d", callInfo.state);
-            [call callStateChanged];
             
-            [endpoint runCallStateChangeBlockForCall:call setCode:callInfo.state];
+            NSInteger hangupReason = 0;
+            
+            NSString *hangupReasonStr = [SWEndpoint getHeaderByName:@"X-Reason" forMessage:msg];
+            
+            NSLog(@"<--hangupReason--> reason header: %@", hangupReasonStr);
+            
+            if (hangupReasonStr) {
+                NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@".*cause=(\\d*);.*" options:NSRegularExpressionCaseInsensitive error:nil];
+                
+                hangupReason = [[hangupReasonStr substringWithRange:[[regex firstMatchInString:hangupReasonStr options:0 range:NSMakeRange(0, hangupReasonStr.length)] rangeAtIndex:1]] integerValue];
+            }
+            
+            [call callStateChangedWithReason:hangupReason];
+            
+            [endpoint runCallStateChangeBlockForCall:call setCode:callInfo.last_status];
             
             if (call.callState == SWCallStateDisconnected) {
                 [account removeCall:call.callId];
@@ -1328,15 +1352,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 resp_rport = 0;
                 rhost = pj_str("");
                 resp_rhost = pj_str("");
-                
-                NSString *hangupReason = [SWEndpoint getHeaderByName:@"X-Reason" forMessage:e->body.rx_msg.rdata->msg_info.msg];
-                
-                SWRingtone *ringtone = [endpoint getRingtoneForReason:hangupReason];
-                
-                if(ringtone) {
-                    [endpoint setRingtone:ringtone];
-                    [ringtone startRingtone];
-                }
             }
         }
     }
@@ -1850,17 +1865,27 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             submitTime = [dateFormatter dateFromString:dateString];
         }
         
+        pjsip_sip_uri *fromUri = (pjsip_sip_uri*)pjsip_uri_get_uri(data->msg_info.from->uri);
+        NSString *fromUser = [NSString stringWithPJString:fromUri->user];
         
         /* Получаем SmID */
         NSUInteger sm_id = 0;
         pj_str_t  smid_hdr_str = pj_str((char *)"SMID");
         pjsip_generic_string_hdr* smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &smid_hdr_str, nil);
+        
         if (smid_hdr != nil) {
             sm_id = atoi(smid_hdr->hvalue.ptr);
             NSUInteger event_value = atoi(event_hdr->hvalue.ptr);
             
             /* Передаем идентификатор и статус сообщения в GUI */
-            if (_messageStatusBlock) {
+            if (_messageStatusBlockForAbonent) {
+                //                dispatch_async(dispatch_get_main_queue(), ^{
+                _messageStatusBlockForAbonent(account, sm_id, (SWMessageStatus) event_value, submitTime, (sync_hdr?YES:NO), lastMessageInPack, fromUser);
+                //                });
+            }
+            
+            /* Передаем идентификатор и статус сообщения в GUI */
+            else if (_messageStatusBlock) {
                 //                dispatch_async(dispatch_get_main_queue(), ^{
                 _messageStatusBlock(account, sm_id, (SWMessageStatus) event_value, submitTime, (sync_hdr?YES:NO), lastMessageInPack);
                 //                });
@@ -2335,7 +2360,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     SWAccount *account = [self lookupAccount:call.accountId];
     
     if (self.callStateChangeBlock) {
-        self.callStateChangeBlock(account, call, statusCode);
+        self.callStateChangeBlock(account, call, PJSIP_SC_OK);
     }
 }
 
@@ -2464,23 +2489,24 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     self.ringtone = _standartRingtone;
 }
 
-- (SWRingtone *) getRingtoneForReason: (NSString *) reason {
+- (SWRingtone *) getRingtoneForReason: (NSInteger) reason {
+    
     
     // withUrl: (NSURL *) url hasVibrations: (BOOL) hasVibrations
-    SWRingtone *ringtone = [self.ringtones valueForKey:reason];
+    SWRingtone *ringtone = [self.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
     
     //Возможно, такой рингтон уже есть в кэше
     if (ringtone == nil) {
         //Или поищем в конфиге
-        SWRingtoneDescription *description = [self.endpointConfiguration.ringtones valueForKey:reason];
+        SWRingtoneDescription *description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
         
         if (description) {
             //Если есть конфиг, создадим ринтон и поместим его в кэш
             ringtone = [[SWRingtone alloc] initWithFileAtPath:description.url];
             ringtone.noVibrations = !description.hasVibrations;
+            ringtone.isFinite = description.isFinite;
             
-            
-            [self.ringtones setValue:ringtone forKey:reason];
+            [self.ringtones setObject:ringtone forKey:[NSNumber numberWithInteger:reason]];
         }
     }
     
@@ -2496,14 +2522,90 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 + (NSString *) getHeaderByName: (NSString *) hname forMessage: (pjsip_msg *) msg {
     NSString *result = nil;
     
+    if (msg == nil) {
+        return nil;
+    }
+    
     pj_str_t  hdr_name = pj_str((char *)[hname UTF8String]);
     
-    pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &hdr_name, nil);
+    pjsip_generic_string_hdr* hdr;
+    
+    /*
+    //Процедура pjsip_msg_find_hdr_by_name подвисает, если не находит нужного хедера. Проверим вручную.
+    pjsip_hdr *currenthdr = msg->hdr.next;
+    pjsip_hdr *lasthdr = &msg->hdr;
+    BOOL found = NO;
+    
+    while (currenthdr != lasthdr) {
+        if (pj_strcmp(&currenthdr->name, &hdr_name) == 0) {
+            found = YES;
+            break;
+        }
+        currenthdr = currenthdr->next;
+    }
+    
+    //не нашли
+    if(!found) {
+        return nil;
+    }
+    */
+     
+    hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &hdr_name, nil);
+    
     if (hdr != nil) {
         result = [NSString stringWithPJString:hdr->hvalue];
     }
     
     return result;
+}
+
++ (pjsip_msg *) getMessageFromEvent: (pjsip_event *) e {
+    pjsip_rx_data     *rdata = nil;
+    pjsip_tx_data     *tdata = nil;
+    pjsip_msg         *msg   = nil;
+    switch (e->type)
+    {
+        case PJSIP_EVENT_TIMER :
+            break;
+            
+        case PJSIP_EVENT_RX_MSG :
+            rdata = e->body.rx_msg.rdata;
+            break;
+            
+        case PJSIP_EVENT_TX_MSG :
+            tdata = e->body.tx_msg.tdata;
+            break;
+            
+        case PJSIP_EVENT_TRANSPORT_ERROR :
+            tdata = e->body.tx_error.tdata;
+            //tsx   = e->body.tx_error.tsx;
+            break;
+            
+        case PJSIP_EVENT_TSX_STATE :
+            switch (e->body.tsx_state.type)
+        {
+            case PJSIP_EVENT_TIMER :
+                break;
+                
+            case PJSIP_EVENT_RX_MSG :
+                rdata = e->body.tsx_state.src.rdata;
+                break;
+                
+            case PJSIP_EVENT_TX_MSG :
+                tdata = e->body.tsx_state.src.tdata;
+                break;
+                
+            case PJSIP_EVENT_TRANSPORT_ERROR :
+                break;
+        }
+            break;
+    }
+    if (rdata)
+        msg = rdata->msg_info.msg;
+    else if (tdata)
+        msg = tdata->msg;
+    
+    return msg;
 }
 
 @end

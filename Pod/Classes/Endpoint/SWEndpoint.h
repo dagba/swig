@@ -42,6 +42,7 @@ typedef void (^SWChatDeletedBlock)(SWAccount *account, NSString* partner, NSUInt
 typedef void (^SWNeedConfirmBlock)(SWAccount *account, NSUInteger status, NSDictionary *headers);
 typedef void (^SWConfirmationBlock)(SWAccount *account, NSError *error);
 typedef void (^SWMessageStatusBlock) (SWAccount *account, NSUInteger messageID, SWMessageStatus status, NSDate *date, BOOL sync, BOOL lastMessageInPack);
+typedef void (^SWMessageStatusBlockForAbonent) (SWAccount *account, NSUInteger messageID, SWMessageStatus status, NSDate *date, BOOL sync, BOOL lastMessageInPack, NSString *abonent);
 typedef void (^SWAbonentStatusBlock) (SWAccount *account, NSString *abonent, SWPresenseState loginStatus, NSDate *lastOnline);
 typedef void (^SWGroupMembersUpdatedBlock) (SWAccount *account, NSString *abonent, NSString *admin, NSInteger groupID, BOOL abonentAdded);
 //typedef void (^SWReadyToSendFileBlock) (SWAccount *account, NSString *to, NSUInteger messageID, SWFileType fileType, NSString *fileHash);
@@ -101,6 +102,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (void) setMessageReceivedBlock: (SWMessageReceivedBlock) messageReceivedBlock;
 - (void) setMessageDeletedBlock: (SWMessageDeletedBlock) messageDeletedBlock;
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock;
+- (void) setMessageStatusBlockForAbonent: (SWMessageStatusBlockForAbonent) messageStatusBlockForAbonent;
 - (void) setAbonentStatusBlock: (SWAbonentStatusBlock) abonentStatusBlock;
 - (void) setGroupMembersUpdatedBlock: (SWGroupMembersUpdatedBlock) groupMembersUpdatedBlock;
 - (void) setTypingBlock: (SWTypingBlock) typingBlock;
@@ -133,6 +135,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (pj_bool_t) txRequestPackageProcessing: (pjsip_tx_data *)tdata;
 
 - (void) startStandartRingtone;
+- (SWRingtone *) getRingtoneForReason: (NSInteger) reason;
 
 + (NSString *) getHeaderByName: (NSString *) hname forMessage: (pjsip_msg *) msg;
 

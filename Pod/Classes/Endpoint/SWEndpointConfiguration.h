@@ -28,7 +28,7 @@
 //transport configurations
 @property (nonatomic, strong) NSArray *transportConfigurations; //empty by default must specify
 
-@property (nonatomic, readonly) NSMutableDictionary <NSString *, SWRingtoneDescription *> *ringtones;
+@property (nonatomic, readonly) NSMutableDictionary <NSNumber *, SWRingtoneDescription *> *ringtones;
 
 +(instancetype)configurationWithTransportConfigurations:(NSArray *)transportConfigurations;
 
