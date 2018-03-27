@@ -19,6 +19,7 @@
  */
 
 #include <pjmedia/vid_stream.h>
+#include <pjmedia/stream.h>
 #include <pj/assert.h>
 #include <pj/pool.h>
 #include <pj/log.h>
@@ -54,7 +55,7 @@ typedef struct fec_ext_hdr
  */
 #define K_MIN                4                                    /* Source symbols min count in sequence */
 #define K_MAX                10                                    /* Source symbols max count in sequence */
-#define CODE_RATE_MAX        0.667                                /* k/n = 2/3 means we add max 50% of repair symbols */
+#define CODE_RATE_MAX        .667                                /* k/n = 2/3 means we add max 50% of repair symbols */
 #define N_MAX                shift_ceil(K_MAX / CODE_RATE_MAX)    /* n value = k/code_rate means we add 50% of repair symbols */
 
 #if defined(K_MIN) && defined(K_MAX) && (K_MIN >= K_MAX)
@@ -63,16 +64,17 @@ typedef struct fec_ext_hdr
 
 /*
  * Max symbol buffer size, in bytes.
- * NOTE: PJMEDIA_MAX_VID_PAYLOAD_SIZE redefinition must be made in confgi_site.h to reserve place for RTP Extension and FEC headers
+ * NOTE: PJMEDIA_MAX_VID_PAYLOAD_SIZE redefinition must be made in confgi_site.h to reserve place for RTP Extension and FEC headers for video
  */
 #define SYMBOL_SIZE_MAX    PJMEDIA_MAX_MTU
 #define PKT_HDR_SIZE    (sizeof(fec_ext_hdr) + sizeof(pjmedia_rtp_ext_hdr) + sizeof(pjmedia_rtp_hdr))
 
 /* RTP and RTCP decoding specific macros */
-#define RTP_VERSION 2                                            /* RTP version sanity check */
-#define RTCP_SR   200                                            /* RTCP sender report payload type check */
-#define RTCP_RR   201                                            /* RTCP reciever report payload type check */
-#define RTCP_FIR  206                                            /* RTCP FIR request payload type check */
+#define RTP_VERSION    2                                            /* RTP version sanity check */
+#define RTCP_SR        200                                            /* RTCP sender report payload type check */
+#define RTCP_RR        201                                            /* RTCP reciever report payload type check */
+#define RTCP_FIR    206                                            /* RTCP FIR request payload type check */
+#define RTP_EXT_PT  127                                            /* RTP extension header profile data */
 
 /* For logging purposes */
 #define THIS_FILE   "tp_adap_fec"
@@ -167,6 +169,8 @@ struct tp_adapter
     void                (*stream_rtp_cb)(void *user_data, void *pkt, pj_ssize_t);
     void                (*stream_rtcp_cb)(void *user_data, void *pkt, pj_ssize_t);
     
+    pjmedia_type        stream_type;
+    
     
     pjmedia_transport        *slave_tp;                    /* Base transport pointer */
     
@@ -184,7 +188,6 @@ struct tp_adapter
     of_rs_2_m_parameters_t    dec_rs_params;                /* Structure used to store Reed-Solomon codes over GF(2^m) params */
     of_ldpc_parameters_t    dec_ldps_params;            /* Structure used to store LDPC-Staircase large block FEC codes params */
     
-    //pjmedia_stream_rtp_sess_info rtp_ses_info;
     pjmedia_rtp_session        *rtp_tx_ses;                /* Pointer to encoding RTP session */
     pjmedia_rtcp_session    *rtcp_ses;                    /* Pointer to encoding RTCP session for statistics update purpose */
     
@@ -336,7 +339,7 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     pjmedia_rtp_hdr * rtp_hdr = (pjmedia_rtp_hdr *)pkt;
     
     /*
-     * If symbol is mark packet (end of frame packets sequence)
+     * If symbol is mark packet (end of frame packets sequence) 
      * and collected count over min value
      * or collected count equal max value,
      * stop collect source symbols, build repair symbols
@@ -653,16 +656,30 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
     {
         if (adapter->dec_ses && !of_is_decoding_complete(adapter->dec_ses))
         {
+            k = adapter->dec_params->nb_source_symbols;
+            n = adapter->dec_params->nb_source_symbols + adapter->dec_params->nb_repair_symbols;
+            
             PJ_LOG(4, (THIS_FILE, "Decoding incomplete for sn=%u k=%u n=%u len=%u rcv=%u, reset for new sn=%u",
                        adapter->rcv_sn,
-                       adapter->dec_params->nb_source_symbols,
-                       adapter->dec_params->nb_source_symbols + adapter->dec_params->nb_repair_symbols,
+                       k,
+                       n,
                        adapter->dec_params->encoding_symbol_length,
                        adapter->rcv_k,
                        fec_hdr.sn));
             
-            /* Request key frame */
-            transport_send_rtcp_fir(user_data);
+            /* Request key frame if video stream */
+            if (adapter->stream_type == PJMEDIA_TYPE_VIDEO)
+                transport_send_rtcp_fir(user_data);
+            
+            if (adapter->stream_type == PJMEDIA_TYPE_AUDIO)
+            {
+                /* Call stream's callback for all source symbols in buffer */
+                for (esi = 0; esi < k; esi++)
+                {
+                    if (dec_symbols_size[esi])
+                        adapter->stream_rtp_cb(adapter->stream_user_data, dec_symbols_ptr[esi], dec_symbols_size[esi]);
+                }
+            }
         }
         
         // DEBUG
@@ -740,7 +757,7 @@ static void transport_rtcp_cb(void *user_data, void *pkt, pj_ssize_t size)
     //    pj_uint32_t rr_loss;
     
     /* RTCP key frame request */
-    if (common->pt == RTCP_FIR)
+    if (common->pt == RTCP_FIR && adapter->stream_type == PJMEDIA_TYPE_VIDEO /* not necessary, FIR not send for audio */)
     {
         pjmedia_vid_stream_send_keyframe(adapter->stream_ref);
         return;
@@ -762,22 +779,33 @@ static void transport_rtcp_cb(void *user_data, void *pkt, pj_ssize_t size)
     if (rr)
     {
         /* Get packet fraction loss */
-        /* Percents */
+        /* Percents with reduancy */
         //rr_loss = (rr->fract_lost * 100) >> 8;
-        /* Fraction */
+        /* Fraction without reduancy */
         adapter->tx_loss = adapter->tx_code_rate + rr->fract_lost / 256.0 - 1;
         // TODO update code_rate
-        //adapter->tx_code_rate = adapter->tx_code_rate - adapter->tx_loss;
+        //if (adapter->tx_loss < .1)
+        //{
+        //    adapter->tx_code_rate = .9; // 10%
+        //    pj_assert(11, shift_ceil(10 / adapter->tx_code_rate));
+        //}
+        //else if (adapter->tx_loss > .1 && adapter->tx_loss < .33)
+        //{
+        //    adapter->tx_code_rate = .75; // 33%
+        //    pj_assert(13, shift_ceil(10 / adapter->tx_code_rate));
+        //}
+        //else if (adapter->tx_loss > .33 && adapter->tx_loss < .5)
+        //{
+        //    adapter->tx_code_rate = .667; // 50%
+        //    pj_assert(15, shift_ceil(10 / adapter->tx_code_rate));
+        //}
+        //else if (adapter->tx_loss > .5)
+        //{
+        //    adapter->tx_code_rate = .5; // 100%
+        //    pj_assert(20, shift_ceil(10 / adapter->tx_code_rate));
+        //}
         
-        
-        /* Update current code_rate
-         * tx_loss store reciever report value of lost packets percents
-         * This value is not real packets loss, because we don't pass repair packets to RTP transport callback
-         * Casting source+repair packets lost to only source packets lost
-         * l2 = 1 - (1 - l1) / code_rate, where l2 - source packets lost and l1 - complex packets lost fractions (not percents)
-         */
-        
-        PJ_LOG(5, (THIS_FILE, "Current TX tx_loss=%3.3f -> code_rate=%1.3f", adapter->tx_loss, adapter->tx_code_rate - adapter->tx_loss));
+        PJ_LOG(5, (THIS_FILE, "Current TX tx_loss=%3.3f -> code_rate=%1.3f", adapter->tx_loss, adapter->tx_code_rate));
     }
     
     pj_assert(adapter->stream_rtcp_cb != NULL);
@@ -809,7 +837,13 @@ static pj_status_t transport_attach(pjmedia_transport *tp,
     adapter->stream_ref = user_data;
     
     /* Get pointer RTP session information of the media stream */
-    pjmedia_vid_stream_get_rtp_session_tx(adapter->stream_ref, &adapter->rtp_tx_ses);
+    if (adapter->stream_type == PJMEDIA_TYPE_VIDEO)
+        pjmedia_vid_stream_get_rtp_session_tx(adapter->stream_ref, &adapter->rtp_tx_ses);
+    /* Not implemented */
+    else
+        return PJ_EINVALIDOP;
+    
+    
     /* Not implemented */
     adapter->rtcp_ses = NULL;
     
@@ -850,10 +884,23 @@ static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_at
     adapter->stream_rtp_cb = att_param->rtp_cb;
     adapter->stream_rtcp_cb = att_param->rtcp_cb;
     adapter->stream_ref = att_param->stream;
+    adapter->stream_type = att_param->media_type;
     
     /* Get pointer RTP session information of the media stream */
     pjmedia_stream_rtp_sess_info session_info;
-    pjmedia_vid_stream_get_rtp_session_info(adapter->stream_ref, &session_info);
+    
+    switch (att_param->media_type)
+    {
+        case PJMEDIA_TYPE_VIDEO:
+            pjmedia_vid_stream_get_rtp_session_info(adapter->stream_ref, &session_info);
+            break;
+        case PJMEDIA_TYPE_AUDIO:
+            pjmedia_stream_get_rtp_session_info(adapter->stream_ref, &session_info);
+            break;
+        default:
+            return PJ_EINVALIDOP;
+    }
+    
     adapter->rtp_tx_ses = session_info.tx_rtp;
     adapter->rtcp_ses = session_info.rtcp;
     
@@ -995,6 +1042,7 @@ static pj_status_t transport_send_rtcp_fir(pjmedia_transport *tp)
     pj_size_t len;
     pj_uint32_t ssrc;
     
+    /* Not implemented for 2.4 */
     if (!adapter->rtcp_ses)
         return PJ_EINVALIDOP;
     
@@ -1113,7 +1161,7 @@ static pj_status_t transport_encode_sdp(pjmedia_transport *tp, pj_pool_t *sdp_po
         pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, my_attr);
     }
     
-    /* And then pass the call to slave transport to let it encode its
+    /* And then pass the call to slave transport to let it encode its 
      * information in the SDP. You may choose to call encode_sdp() to slave
      * first before adding your custom attributes if you want.
      */
@@ -1135,7 +1183,7 @@ static pj_status_t transport_media_start(pjmedia_transport *tp, pj_pool_t *pool,
     adapter->tx_code_rate = CODE_RATE_MAX;
     
     /* Init Extension headers with default values */
-    adapter->ext_hdr.profile_data = pj_htons(97);
+    adapter->ext_hdr.profile_data = pj_htons(RTP_EXT_PT);
     adapter->ext_hdr.length = pj_htons(sizeof(fec_ext_hdr) / sizeof(pj_uint32_t));
     
     adapter->rcv_sn = 0;

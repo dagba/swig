@@ -337,7 +337,7 @@
             
         case PJSIP_INV_STATE_CONNECTING: {
             if (self.ctcallId == nil) {
-                self.ctcallId = @"incoming polyphone";
+                self.ctcallId = self.inbound ? @"incoming polyphone" : @"outgoing polyphone";
             }
             
             [SWCall closeSoundTrack:nil];
@@ -389,8 +389,8 @@
                 
                 [endpoint setRingtone:ringtone];
                 
-#warning костыль. Если используется коллкит в 11 иос, рингтон стратует, когда он закроет сессию. Если звонок исходящий, он её не закрывает!
-                if (([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0) || (!self.inbound)) {
+#warning костыль. Если используется коллкит в 11 иос, рингтон стратует, когда он закроет сессию.
+                if ([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0) {
                     [ringtone startRingtone];
                 }
             }
@@ -633,6 +633,11 @@
     if (slf.callState == SWCallStateDisconnectRingtone) {
         [slf callStateChanged];
         [[SWEndpoint sharedEndpoint] runCallStateChangeBlockForCall:slf setCode:SWCallStateDisconnected];
+        
+        SWAccount *account = [self getAccount];
+        
+        [account removeCall:self.callId];
+        
         return;
     }
     

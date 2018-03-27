@@ -416,9 +416,9 @@ void * refToSelf;
         
         NSString *loguid = [[NSUUID UUID] UUIDString];
         
-        NSLog(@"<--pjsua_acc_set_registration--> before. UID=%@", loguid);
+        NSLog(@"<--pjsip freeze--> before pjsua_acc_set_registration. UID=%@", loguid);
         status = pjsua_acc_set_registration((int)self.accountId, state);
-        NSLog(@"<--pjsua_acc_set_registration--> after. UID=%@", loguid);
+        NSLog(@"<--pjsip freeze--> after pjsua_acc_set_registration. UID=%@", loguid);
         
         if(handler) {
             handler(status);
@@ -698,7 +698,7 @@ void * refToSelf;
         
         SWCall *call = [SWCall callBeforeSipForAccountId:self.accountId inBound:NO withVideo:withVideo forUri: uri];
         
-        call.ctcallId = @"outgoing polyphone";
+        //call.ctcallId = @"outgoing polyphone";
         
         [self addCall:call];
         

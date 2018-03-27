@@ -984,7 +984,12 @@ void logCallback (int level, const char *data, int len) {
         return;
     }
     
+    NSString *loguid = [[NSUUID UUID] UUIDString];
+    
+    NSLog(@"<--pjsip freeze--> before pjsua_destroy2. UID=%@", loguid);
     pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+    NSLog(@"<--pjsip freeze--> after pjsua_destroy2. UID=%@", loguid);
+    
     self.needResetPjPool = YES;
         
     [[SWEndpoint sharedEndpoint] configure:self.endpointConfiguration completionHandler:^(NSError *error) {
@@ -1463,7 +1468,7 @@ static void SWOnSrtpTransportCreate (pjsua_call_id call_id,
                                                    unsigned media_idx,
                                                    pjmedia_srtp_setting *srtp_opt) {
 #warning отличать видеопоток от аудио-
-    if (media_idx == 0) return;
+    //if (media_idx == 0) return;
     
     pjmedia_transport *adapter;
     pj_status_t status;
