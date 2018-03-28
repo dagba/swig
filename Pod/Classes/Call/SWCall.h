@@ -37,6 +37,12 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
     SWMediaStateRemoteHold = PJSUA_CALL_MEDIA_REMOTE_HOLD
 };
 
+typedef NS_ENUM(NSInteger, SWCallReason) {
+    SWCallReasonSilence = -1,
+    SWCallReasonUnknown = 0,
+    SWCallReasonTerminatedRemote = 799
+};
+
 @interface SWCall : NSObject <SWCallProtocol, NSCopying, NSMutableCopying, AVAudioPlayerDelegate>
 
 @property (nonatomic, readonly, strong) SWContact *contact;

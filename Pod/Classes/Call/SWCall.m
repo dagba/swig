@@ -289,6 +289,8 @@
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
+    NSLog(@"<--SWCall callStateChangedWithReason--> callInfo.state: %d", callInfo.state);
+    
     switch (callInfo.state) {
         case PJSIP_INV_STATE_NULL: {
             [SWCall closeSoundTrack:nil];
@@ -556,7 +558,6 @@
     }
     
 }
-
 
 #pragma Call Management
 

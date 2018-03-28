@@ -74,21 +74,21 @@ typedef struct fec_ext_hdr
 #define RTCP_SR        200                                            /* RTCP sender report payload type check */
 #define RTCP_RR        201                                            /* RTCP reciever report payload type check */
 #define RTCP_FIR    206                                            /* RTCP FIR request payload type check */
-#define RTP_EXT_PT  127                                            /* RTP extension header profile data */
+#define RTP_EXT_PT  127                                            /* RTP extension header profile data for FEC header */
 
 /* For logging purposes */
 #define THIS_FILE   "tp_adap_fec"
 
 /* Encoding buffers. We'll update it progressively without reallocation */
-static void*        enc_symbols_ptr[N_MAX];                        /* Table containing pointers to the encoding (i.e. source + repair) symbols buffers */
-static pj_uint8_t    enc_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing encoding (i.e. source + repair) symbols */
-static pj_uint32_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
-static pj_uint8_t    enc_symbol_buf[SYMBOL_SIZE_MAX];            /* Runtime buffer for single encoding packet */
-
-/* Decoding buffers. We'll update it progressively without reallocation */
-static void*        dec_symbols_ptr[N_MAX];                        /* Table containing pointers to the decoding (i.e. source + repair) symbols buffers */
-static pj_uint8_t    dec_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing decoding (i.e. source + repair) symbols */
-static pj_uint32_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
+//static void*        enc_symbols_ptr[N_MAX];                        /* Table containing pointers to the encoding (i.e. source + repair) symbols buffers */
+//static pj_uint8_t    enc_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing encoding (i.e. source + repair) symbols */
+//static pj_uint32_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
+//static pj_uint8_t    enc_symbol_buf[SYMBOL_SIZE_MAX];            /* Runtime buffer for single encoding packet */
+//
+///* Decoding buffers. We'll update it progressively without reallocation */
+//static void*        dec_symbols_ptr[N_MAX];                        /* Table containing pointers to the decoding (i.e. source + repair) symbols buffers */
+//static pj_uint8_t    dec_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing decoding (i.e. source + repair) symbols */
+//static pj_uint32_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
 
 /* Transport functions prototypes */
 static pj_status_t    transport_get_info        (pjmedia_transport *tp, pjmedia_transport_info *info);
@@ -204,10 +204,21 @@ struct tp_adapter
     pj_uint32_t                rcv_k;                        /* Current count of recieved source/repair symbols of decoding block */
     pj_uint32_t                rcv_sn;                        /* Current number of decoding symbol's sequence */
     
-    pj_uint8_t                rtcp_fir_sn;
+    pj_uint8_t                rtcp_fir_sn;                /* Full Intra Request number */
     
     double                    tx_loss;                    /* Current TX packets lost fraction based on RTCP fraction lost field, updates by each incoming RTCP packet callback */
     double                    tx_code_rate;                /* Current TX code rate */
+    
+    /* Encoding buffers. We'll update it progressively without reallocation */
+    void*        enc_symbols_ptr[N_MAX];                        /* Table containing pointers to the encoding (i.e. source + repair) symbols buffers */
+    pj_uint8_t    enc_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing encoding (i.e. source + repair) symbols */
+    pj_uint32_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
+    pj_uint8_t    enc_symbol_buf[SYMBOL_SIZE_MAX];            /* Runtime buffer for single encoding packet */
+    
+    /* Decoding buffers. We'll update it progressively without reallocation */
+    void*        dec_symbols_ptr[N_MAX];                        /* Table containing pointers to the decoding (i.e. source + repair) symbols buffers */
+    pj_uint8_t    dec_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing decoding (i.e. source + repair) symbols */
+    pj_uint32_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
 };
 
 /**
@@ -243,8 +254,8 @@ static pj_status_t fec_enc_reset(void *user_data, unsigned n, unsigned len)
     for (esi = 0; esi < n; esi++)
     {
         //memset(enc_symbols_ptr[esi], 0, len);
-        memset(enc_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
-        enc_symbols_size[esi] = 0;
+        memset(adapter->enc_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
+        adapter->enc_symbols_size[esi] = 0;
     }
     
     /* Reset runtime params */
@@ -272,8 +283,8 @@ static pj_status_t fec_dec_reset(void *user_data, unsigned k, unsigned n, unsign
     for (esi = 0; esi < n; esi++)
     {
         //memset(dec_symbols_ptr[esi], 0, len);
-        memset(dec_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
-        dec_symbols_size[esi] = 0;
+        memset(adapter->dec_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
+        adapter->dec_symbols_size[esi] = 0;
     }
     
     adapter->rcv_k = 0;
@@ -324,10 +335,10 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     if (adapter->snd_k < K_MAX)
     {
         /* Copy source symbol to buffer */
-        memcpy(enc_symbols_ptr[adapter->snd_k], pkt, size);
+        memcpy(adapter->enc_symbols_ptr[adapter->snd_k], pkt, size);
         
         /* Remember real size for source symbols */
-        enc_symbols_size[adapter->snd_k] = size;
+        adapter->enc_symbols_size[adapter->snd_k] = size;
         
         adapter->snd_k++;
         
@@ -339,7 +350,7 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     pjmedia_rtp_hdr * rtp_hdr = (pjmedia_rtp_hdr *)pkt;
     
     /*
-     * If symbol is mark packet (end of frame packets sequence) 
+     * If symbol is mark packet (end of frame packets sequence)
      * and collected count over min value
      * or collected count equal max value,
      * stop collect source symbols, build repair symbols
@@ -382,14 +393,14 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     /* Build the n-k repair symbols if count of symbols is enough */
     for (esi = k; esi < n; esi++)
     {
-        if (of_build_repair_symbol(ses, enc_symbols_ptr, esi) != OF_STATUS_OK)
+        if (of_build_repair_symbol(ses, adapter->enc_symbols_ptr, esi) != OF_STATUS_OK)
         {
             PJ_LOG(4, (THIS_FILE, "Build repair symbol failed for esi=%u", esi));
         }
         else
         {
             /* Set repair symbol length to max value */
-            enc_symbols_size[esi] = len;
+            adapter->enc_symbols_size[esi] = len;
         }
     }
     
@@ -404,8 +415,10 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
 /* Single restore callback for source and repair packets */
 static void* fec_dec_cb(void *context, pj_uint32_t size, pj_uint32_t esi)
 {
+    struct tp_adapter    *adapter = (struct tp_adapter *)context;
+    
     /* Must return buffer pointer for decoder to save restored source packet in adapter buffer */
-    return dec_symbols_ptr[esi];
+    return adapter->dec_symbols_ptr[esi];
 }
 
 /* Construct in destination buffer packet with Extension header and data based on original RTP source symbol */
@@ -676,8 +689,8 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
                 /* Call stream's callback for all source symbols in buffer */
                 for (esi = 0; esi < k; esi++)
                 {
-                    if (dec_symbols_size[esi])
-                        adapter->stream_rtp_cb(adapter->stream_user_data, dec_symbols_ptr[esi], dec_symbols_size[esi]);
+                    if (adapter->dec_symbols_size[esi])
+                        adapter->stream_rtp_cb(adapter->stream_user_data, adapter->dec_symbols_ptr[esi], adapter->dec_symbols_size[esi]);
                 }
             }
         }
@@ -708,8 +721,8 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
     }
     
     /* Decode packet */
-    len = fec_dec_pkt(dec_symbols_ptr[fec_hdr.esi], pkt, size, fec_hdr.esi < fec_hdr.k ? PJ_TRUE : PJ_FALSE);
-    dec_symbols_size[fec_hdr.esi] = len;
+    len = fec_dec_pkt(adapter->dec_symbols_ptr[fec_hdr.esi], pkt, size, fec_hdr.esi < fec_hdr.k ? PJ_TRUE : PJ_FALSE);
+    adapter->dec_symbols_size[fec_hdr.esi] = len;
     
     pj_assert(len > 0);
     
@@ -717,7 +730,7 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
      * Submit each fresh symbol to the library, upon reception
      * using the standard of_decode_with_new_symbol() function.
      */
-    if (of_decode_with_new_symbol(adapter->dec_ses, dec_symbols_ptr[fec_hdr.esi], fec_hdr.esi) == OF_STATUS_ERROR)
+    if (of_decode_with_new_symbol(adapter->dec_ses, adapter->dec_symbols_ptr[fec_hdr.esi], fec_hdr.esi) == OF_STATUS_ERROR)
         PJ_LOG(4, (THIS_FILE, "Decode with new symbol failed esi=%u, len=%u", fec_hdr.esi, adapter->dec_params->encoding_symbol_length));
     
     /* Exit if decoding not complete */
@@ -733,11 +746,11 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
     for (esi = 0; esi < k; esi++)
     {
         /* Get repaired packet real size */
-        if (!dec_symbols_size[esi])
+        if (!adapter->dec_symbols_size[esi])
         /* TODO : replace by packet length repair */
-            dec_symbols_size[esi] = fec_symbol_size(dec_symbols_ptr[esi], adapter->dec_params->encoding_symbol_length);
+            adapter->dec_symbols_size[esi] = fec_symbol_size(adapter->dec_symbols_ptr[esi], adapter->dec_params->encoding_symbol_length);
         
-        adapter->stream_rtp_cb(adapter->stream_user_data, dec_symbols_ptr[esi], dec_symbols_size[esi]);
+        adapter->stream_rtp_cb(adapter->stream_user_data, adapter->dec_symbols_ptr[esi], adapter->dec_symbols_size[esi]);
     }
     
     // DEBUG
@@ -994,10 +1007,10 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
     {
         /* Setup FEC header encoding symbol ID */
         fec_hdr.esi = pj_htons(esi);
-        len = fec_enc_src((void *)enc_symbol_buf, enc_symbols_ptr[esi], enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
+        len = fec_enc_src((void *)adapter->enc_symbol_buf, adapter->enc_symbols_ptr[esi], adapter->enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
         
         if (len)
-            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)enc_symbol_buf, len);
+            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)adapter->enc_symbol_buf, len);
         
         if (status != PJ_SUCCESS || !len)
             PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
@@ -1009,10 +1022,10 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
     {
         /* Setup FEC header encoding symbol ID */
         fec_hdr.esi = pj_htons(esi);
-        len = fec_enc_rpr((void *)enc_symbol_buf, adapter->rtp_tx_ses, 0, enc_symbols_ptr[esi], enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
+        len = fec_enc_rpr((void *)adapter->enc_symbol_buf, adapter->rtp_tx_ses, 0, adapter->enc_symbols_ptr[esi], adapter->enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
         
         if (len)
-            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)enc_symbol_buf, len);
+            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)adapter->enc_symbol_buf, len);
         
         if (status != PJ_SUCCESS || !len)
             PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
@@ -1136,6 +1149,8 @@ static pj_status_t transport_media_create(pjmedia_transport *tp, pj_pool_t *sdp_
 static pj_status_t transport_encode_sdp(pjmedia_transport *tp, pj_pool_t *sdp_pool, pjmedia_sdp_session *local_sdp, const pjmedia_sdp_session *rem_sdp, unsigned media_index)
 {
     struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    const char *attr_name = "fec-repair-flow";
+    const char *attr_value = "encoding-id=";
     
     /* If "rem_sdp" is not NULL, it means we're encoding SDP answer. You may
      * do some more checking on the SDP's once again to make sure that
@@ -1143,25 +1158,30 @@ static pj_status_t transport_encode_sdp(pjmedia_transport *tp, pj_pool_t *sdp_po
      */
     if (rem_sdp)
     {
-        /* Do checking stuffs here.. */
+        /* Copy FEC params from remote SDP */
+        
     }
-    
-    /* You may do anything to the local_sdp, e.g. adding new attributes, or
-     * even modifying the SDP if you want.
-     */
-    if (0)
+    if(0)//else
     {
-        /* Say we add a proprietary attribute here.. */
-        pjmedia_sdp_attr *my_attr;
+        /* Set FEC params */
+        pjmedia_sdp_attr *fec_attr;
+        char buf[128];
+        pj_str_t value;
         
-        my_attr = PJ_POOL_ALLOC_T(sdp_pool, pjmedia_sdp_attr);
-        pj_strdup2(sdp_pool, &my_attr->name, "X-adapter");
-        pj_strdup2(sdp_pool, &my_attr->value, "some value");
+        value.ptr = buf;
         
-        pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, my_attr);
+        pj_strcpy2(&value, attr_value);
+        pj_utoa(adapter->codec_id, buf + strlen(attr_value));
+        
+        
+        fec_attr = PJ_POOL_ALLOC_T(sdp_pool, pjmedia_sdp_attr);
+        pj_strdup2(sdp_pool, &fec_attr->name, attr_name);
+        pj_strdup(sdp_pool, &fec_attr->value, &value);
+        
+        pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, fec_attr);
     }
     
-    /* And then pass the call to slave transport to let it encode its 
+    /* And then pass the call to slave transport to let it encode its
      * information in the SDP. You may choose to call encode_sdp() to slave
      * first before adding your custom attributes if you want.
      */
@@ -1193,8 +1213,8 @@ static pj_status_t transport_media_start(pjmedia_transport *tp, pj_pool_t *pool,
     /* Init pointers to symbol's buffers */
     for (esi = 0; esi < N_MAX; esi++)
     {
-        enc_symbols_ptr[esi] = (void *)&enc_symbols_buf[esi * SYMBOL_SIZE_MAX];
-        dec_symbols_ptr[esi] = (void *)&dec_symbols_buf[esi * SYMBOL_SIZE_MAX];
+        adapter->enc_symbols_ptr[esi] = (void *)&adapter->enc_symbols_buf[esi * SYMBOL_SIZE_MAX];
+        adapter->dec_symbols_ptr[esi] = (void *)&adapter->dec_symbols_buf[esi * SYMBOL_SIZE_MAX];
     }
     
     /* Fill in the code specific part of the of_..._parameters_t structure */
@@ -1268,4 +1288,3 @@ static pj_status_t transport_destroy(pjmedia_transport *tp)
     
     return PJ_SUCCESS;
 }
-

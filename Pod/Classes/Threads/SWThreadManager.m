@@ -9,6 +9,8 @@
 
 #import "SWEndpoint.h"
 
+#import "EWFileLogger.h"
+
 @interface SWThreadManager () {
     NSThread *_messageThread;
     NSThread *_callManagementThread;
@@ -29,6 +31,9 @@
 }
 
 - (NSThread *) getMessageThread {
+    
+    NSLog(@"<--threads--> requesting: <MessageThread> from: <%@>", [NSThread currentThread]);
+    
     if (_messageThread == nil) {
         _messageThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
         _messageThread.name = @"messageThread";
@@ -41,6 +46,12 @@
 }
 
 - (NSThread *) getCallManagementThread {
+    
+#warning experiment работа со звонками и с аккаунтами лочат друг друга
+    return [self getRegistrationThread];
+    
+    NSLog(@"<--threads--> requesting: <CallManagementThread> from: <%@>", [NSThread currentThread]);
+    
     if (_callManagementThread == nil) {
         _callManagementThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
         _callManagementThread.name = @"callManagementThread";
@@ -53,6 +64,8 @@
 }
 
 - (NSThread *) getRegistrationThread {
+    
+    NSLog(@"<--threads--> requesting: <RegistrationThread> from: <%@>", [NSThread currentThread]);
     
     @synchronized (self) {
         if (_registrationThread == nil) {
@@ -80,6 +93,7 @@
 }
 
 - (void) runBlock: (void (^)(void)) block onThread: (NSThread *) thread wait: (BOOL) wait {
+    NSLog(@"<--threads--> requesting: <%@> from: <%@>", thread, [NSThread currentThread]);
     [self performSelector: @selector(runBlock:) onThread: thread withObject: [block copy] waitUntilDone: wait];
 }
 
