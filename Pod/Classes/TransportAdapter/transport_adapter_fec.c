@@ -40,13 +40,34 @@
  */
 typedef struct fec_ext_hdr
 {
-    
     pj_uint32_t                sn;                        /* Symbol sequence number (ecnoding block number) */
     pj_uint16_t                esi;                    /* Encoding symbol ID */
     pj_uint16_t                k;                        /* Source symbols in block */
     pj_uint16_t                n;                        /* Source+repair symbols in block */
-    pj_uint16_t                len;                    /* Max symbol size in block */
+    pj_uint16_t                esl;                    /* Encoding (max) symbol size in block */
+    pj_uint16_t                s;                        /* Encoded by FEC coder symbol size for repair */
+    pj_uint16_t                rsrv;                    /* Reserve */
 } fec_ext_hdr;
+
+/*
+ * FEC SDP attributes by
+ * 3GPP TS 26.346 version 12.3.0 Release 12
+ */
+
+const char *fec_sdp_attrs [] =
+{
+    "FEC-declaration",
+    "FEC-redundancy-level",
+    "FEC",
+    "FEC-OTI-extension",
+    //"FEC-OTI-FEC-Encoding-ID",
+    //"FEC-OTI-Maximum-Source-Block-Length",
+    //"FEC-OTI-Encoding-Symbol-Length",
+    //"FEC-OTI-Max-Number-of-Encoding-Symbols",
+    //"FEC-OTI-FEC-Instance-ID",
+    //"FEC-OTI-Scheme-Specific-Info",
+    NULL
+};
 
 /*
  * Redundancy parameters K_MAX, N_MAX, CODE_RATE_MAX
@@ -54,7 +75,7 @@ typedef struct fec_ext_hdr
  * Change if required
  */
 #define K_MIN                4                                    /* Source symbols min count in sequence */
-#define K_MAX                10                                    /* Source symbols max count in sequence */
+#define K_MAX                20                                    /* Source symbols max count in sequence */
 #define CODE_RATE_MAX        .667                                /* k/n = 2/3 means we add max 50% of repair symbols */
 #define N_MAX                shift_ceil(K_MAX / CODE_RATE_MAX)    /* n value = k/code_rate means we add 50% of repair symbols */
 
@@ -67,28 +88,16 @@ typedef struct fec_ext_hdr
  * NOTE: PJMEDIA_MAX_VID_PAYLOAD_SIZE redefinition must be made in confgi_site.h to reserve place for RTP Extension and FEC headers for video
  */
 #define SYMBOL_SIZE_MAX    PJMEDIA_MAX_MTU
-#define PKT_HDR_SIZE    (sizeof(fec_ext_hdr) + sizeof(pjmedia_rtp_ext_hdr) + sizeof(pjmedia_rtp_hdr))
 
 /* RTP and RTCP decoding specific macros */
-#define RTP_VERSION    2                                            /* RTP version sanity check */
-#define RTCP_SR        200                                            /* RTCP sender report payload type check */
-#define RTCP_RR        201                                            /* RTCP reciever report payload type check */
-#define RTCP_FIR    206                                            /* RTCP FIR request payload type check */
+#define RTP_VERSION    2                                            /* RTP version */
+#define RTCP_SR        200                                            /* RTCP sender report payload type */
+#define RTCP_RR        201                                            /* RTCP reciever report payload type */
+#define RTCP_FIR    206                                            /* RTCP FIR request payload type */
 #define RTP_EXT_PT  127                                            /* RTP extension header profile data for FEC header */
 
 /* For logging purposes */
 #define THIS_FILE   "tp_adap_fec"
-
-/* Encoding buffers. We'll update it progressively without reallocation */
-//static void*        enc_symbols_ptr[N_MAX];                        /* Table containing pointers to the encoding (i.e. source + repair) symbols buffers */
-//static pj_uint8_t    enc_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing encoding (i.e. source + repair) symbols */
-//static pj_uint32_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
-//static pj_uint8_t    enc_symbol_buf[SYMBOL_SIZE_MAX];            /* Runtime buffer for single encoding packet */
-//
-///* Decoding buffers. We'll update it progressively without reallocation */
-//static void*        dec_symbols_ptr[N_MAX];                        /* Table containing pointers to the decoding (i.e. source + repair) symbols buffers */
-//static pj_uint8_t    dec_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing decoding (i.e. source + repair) symbols */
-//static pj_uint32_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
 
 /* Transport functions prototypes */
 static pj_status_t    transport_get_info        (pjmedia_transport *tp, pjmedia_transport_info *info);
@@ -111,23 +120,27 @@ static pj_status_t    transport_destroy        (pjmedia_transport *tp);
 
 /* FEC functions prototypes */
 
-/* FEC decoder callback for source and repair restored symbols */
+/* openfec.org FEC framework decoder callback for source and repair restored symbols */
 static void*        fec_dec_cb                (void *context /* TP adapter */, pj_uint32_t size, pj_uint32_t esi);
 /* Decode from RTP packet FEC extension header */
 static void*        fec_dec_hdr                (const void *pkt, fec_ext_hdr *fec_hdr);
 /* Decode source and repair symbols and copy to decoding buffer */
-static pj_uint32_t    fec_dec_pkt                (void * const dst, void *pkt, pj_uint32_t size, pj_bool_t rtp);
+static pj_uint16_t    fec_dec_pkt                (void * const dst, void *pkt, pj_ssize_t size, pj_bool_t rtp);
 /* Clear adapter decoding buffers and init decoder instance with new params */
-static pj_status_t    fec_dec_reset            (void *user_data, unsigned k, unsigned n, unsigned len);
+static pj_status_t    fec_dec_reset            (void *user_data /* TP adapter */, pj_uint16_t k, pj_uint16_t n, pj_uint16_t len);
+/* Decode packets length */
+static pj_status_t    fec_dec_len                (void *user_data /* TP adapter */);
 
 /* Add packets to encoding buffer and call encoder */
 static pj_status_t    fec_enc_pkt                (void *user_data /* TP adapter */, const void *pkt, pj_size_t size);
 /* Add FEC extension header to sources packets and copy to encoding buffer */
-static pj_uint32_t    fec_enc_src                (void *dst, const void *pkt, pj_uint32_t size, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr);
+static pj_uint16_t    fec_enc_src                (void *dst, const void *pkt, pj_uint16_t size, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr);
 /* Add RTP and FEC extension headers to repair packets and copy to encoding buffer */
-static pj_uint32_t  fec_enc_rpr                (void *dst, pjmedia_rtp_session *ses, int ts_len, const void *payload, pj_uint32_t payload_len, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr);
+static pj_uint16_t  fec_enc_rpr                (void *dst, pjmedia_rtp_session *ses, int ts_len, const void *payload, pj_uint16_t payload_len, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr);
 /* Clear adapter encoding buffers */
-static pj_status_t    fec_enc_reset            (void *user_data /* TP adapter */, unsigned n, unsigned len);
+static pj_status_t    fec_enc_reset            (void *user_data /* TP adapter */, pj_uint16_t n, pj_uint16_t len);
+/* Encode packets length */
+static pj_status_t    fec_enc_len                (void *user_data /* TP adapter */);
 
 /* RTCP functions prototypes */
 static pj_status_t    transport_send_rtcp_fir(pjmedia_transport *tp);
@@ -196,12 +209,13 @@ struct tp_adapter
     fec_ext_hdr                fec_hdr;                    /* RTP Extension header data with common FEC encoding session values */
     
     /* FEC specific runtime values */
-    pj_uint32_t                snd_k;                        /* Current count of ready to send source symbols in the block */
+    pj_uint16_t                snd_k_max;                    /* Max count of source symbols in the block, depends on stream type */
+    pj_uint16_t                snd_k;                        /* Current count of ready to send source symbols in the block */
     pj_uint32_t                snd_sn;                        /* Current number of encoding symbol's sequence */
-    pj_uint32_t                snd_len;                    /* Current packet max length of encoding symbol's sequence */
+    pj_uint16_t                snd_len;                    /* Current max packet length of encoding symbol's sequence */
     pj_bool_t                snd_ready;
     
-    pj_uint32_t                rcv_k;                        /* Current count of recieved source/repair symbols of decoding block */
+    pj_uint16_t                rcv_k;                        /* Current count of recieved source/repair symbols of decoding block */
     pj_uint32_t                rcv_sn;                        /* Current number of decoding symbol's sequence */
     
     pj_uint8_t                rtcp_fir_sn;                /* Full Intra Request number */
@@ -212,13 +226,18 @@ struct tp_adapter
     /* Encoding buffers. We'll update it progressively without reallocation */
     void*        enc_symbols_ptr[N_MAX];                        /* Table containing pointers to the encoding (i.e. source + repair) symbols buffers */
     pj_uint8_t    enc_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing encoding (i.e. source + repair) symbols */
-    pj_uint32_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
+    pj_uint16_t    enc_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the encoding symbols(packets) (i.e. source + repair) */
     pj_uint8_t    enc_symbol_buf[SYMBOL_SIZE_MAX];            /* Runtime buffer for single encoding packet */
     
     /* Decoding buffers. We'll update it progressively without reallocation */
     void*        dec_symbols_ptr[N_MAX];                        /* Table containing pointers to the decoding (i.e. source + repair) symbols buffers */
     pj_uint8_t    dec_symbols_buf[SYMBOL_SIZE_MAX * N_MAX];    /* Buffer containing decoding (i.e. source + repair) symbols */
-    pj_uint32_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
+    pj_uint16_t    dec_symbols_size[N_MAX];                    /* Table containing network(real) sizes of the decoding symbols(packets) (i.e. source + repair) */
+    
+#if 1
+    pj_bool_t    old_client;
+#endif // 1
+    
 };
 
 /**
@@ -242,112 +261,200 @@ static void dump_pkt(const void *buf, const pj_uint32_t size, pj_uint16_t esi, c
 }
 
 /* Clear runtime params and encoding buffer */
-static pj_status_t fec_enc_reset(void *user_data, unsigned n, unsigned len)
+static pj_status_t fec_enc_reset(void *user_data, pj_uint16_t n, pj_uint16_t len)
 {
-    struct tp_adapter *adapter = (struct tp_adapter *)user_data;
-    pj_uint32_t esi;
+    struct tp_adapter *a = (struct tp_adapter *)user_data;
+    pj_uint16_t esi;
     
-    if (!adapter)
+    if (!a)
         return PJ_EINVAL;
     
     /* Clear buffer */
     for (esi = 0; esi < n; esi++)
     {
-        //memset(enc_symbols_ptr[esi], 0, len);
-        memset(adapter->enc_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
-        adapter->enc_symbols_size[esi] = 0;
+        memset(a->enc_symbols_ptr[esi], 0, len);
+        //memset(a->enc_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
+        a->enc_symbols_size[esi] = 0;
     }
     
     /* Reset runtime params */
-    adapter->snd_k = 0;
-    adapter->snd_len = 0;
-    adapter->snd_ready = PJ_FALSE;
+    a->snd_k = 0;
+    a->snd_len = 0;
+    a->snd_ready = PJ_FALSE;
     
     return PJ_SUCCESS;
 }
 
 /* New decoder creation for adaptive decoding */
-static pj_status_t fec_dec_reset(void *user_data, unsigned k, unsigned n, unsigned len)
+static pj_status_t fec_dec_reset(void *user_data, pj_uint16_t k, pj_uint16_t n, pj_uint16_t len)
 {
-    struct tp_adapter *adapter = (struct tp_adapter *)user_data;
+    struct tp_adapter *a = (struct tp_adapter *)user_data;
     pj_status_t status = PJ_SUCCESS;
-    pj_uint32_t esi;
+    pj_uint16_t esi;
     
-    if (!adapter)
+    if (!a)
         return PJ_EINVAL;
     
     /* Decoder reinit */
-    if (adapter->dec_ses)
-        of_release_codec_instance(adapter->dec_ses);
+    if (a->dec_ses)
+        of_release_codec_instance(a->dec_ses);
     
-    for (esi = 0; esi < n; esi++)
+    //for (esi = 0; esi < n; esi++)
+    esi = a->dec_params->nb_source_symbols + a->dec_params->nb_repair_symbols;
+    while (esi--)
     {
-        //memset(dec_symbols_ptr[esi], 0, len);
-        memset(adapter->dec_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
-        adapter->dec_symbols_size[esi] = 0;
+        memset(a->dec_symbols_ptr[esi], 0, a->dec_params->encoding_symbol_length);
+        //memset(a->dec_symbols_ptr[esi], 0, SYMBOL_SIZE_MAX);
+        a->dec_symbols_size[esi] = 0;
     }
     
-    adapter->rcv_k = 0;
-    adapter->dec_params->nb_source_symbols = k;
-    adapter->dec_params->nb_repair_symbols = n - k;
-    adapter->dec_params->encoding_symbol_length = len;
+    a->rcv_k = 0;
+    a->dec_params->nb_source_symbols = k;
+    a->dec_params->nb_repair_symbols = n - k;
+    a->dec_params->encoding_symbol_length = len;
     
     /* Open and initialize the openfec session */
-    if (of_create_codec_instance(&adapter->dec_ses, adapter->codec_id, OF_DECODER, 2 /* Verbosity */) != OF_STATUS_OK)
+    if (of_create_codec_instance(&a->dec_ses, a->codec_id, OF_DECODER, 2 /* Verbosity */) != OF_STATUS_OK)
     {
         status = PJ_EINVAL;
         PJ_LOG(4, (THIS_FILE, "Create decoder instance failed"));
     }
     /* Set session parameters */
-    if (status == PJ_SUCCESS && of_set_fec_parameters(adapter->dec_ses, adapter->dec_params) != OF_STATUS_OK)
+    if (status == PJ_SUCCESS && of_set_fec_parameters(a->dec_ses, a->dec_params) != OF_STATUS_OK)
     {
         status = PJ_EINVAL;
-        PJ_LOG(4, (THIS_FILE, "Set parameters failed for decoder codec_id=%d", adapter->codec_id));
+        PJ_LOG(4, (THIS_FILE, "Set parameters failed for decoder codec_id=%d", a->codec_id));
     }
     
     /* Setup callbacks for decoding */
-    if (of_set_callback_functions(adapter->dec_ses, fec_dec_cb, NULL, adapter) != OF_STATUS_OK)
+    if (of_set_callback_functions(a->dec_ses, &fec_dec_cb, NULL, a) != OF_STATUS_OK)
     {
         status = PJ_EINVAL;
-        PJ_LOG(4, (THIS_FILE, "Set callback functions failed for decoder with codec_id=%d", adapter->codec_id));
+        PJ_LOG(4, (THIS_FILE, "Set callback functions failed for decoder with codec_id=%d", a->codec_id));
     }
     
     
     /* Cleanup session on fail */
-    if (status != PJ_SUCCESS && adapter->dec_ses)
-        of_release_codec_instance(adapter->dec_ses);
+    if (status != PJ_SUCCESS && a->dec_ses)
+        of_release_codec_instance(a->dec_ses);
     
     return status;
 }
 
-static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
+static void* fec_dec_len_cb(void *context, unsigned size, unsigned esi)
 {
-    struct tp_adapter    *adapter = (struct tp_adapter *)user_data;
-    pj_status_t            status = PJ_SUCCESS;
-    pj_uint32_t            esi;
-    pj_uint32_t            n, k, len;
-    of_session_t        *ses;
+    pj_uint16_t *dec_len_tab = (pj_uint16_t *)context;
     
-    if (!adapter || !pkt)
+    return &dec_len_tab[esi];
+}
+
+static pj_status_t    fec_dec_len(void *user_data)
+{
+    struct tp_adapter        *a = (struct tp_adapter *)user_data;
+    of_session_t            *dec_ses;
+    pj_uint16_t                esi, k, n;
+    of_rs_2_m_parameters_t    dec_params;
+    
+    if (of_create_codec_instance(&dec_ses, OF_CODEC_REED_SOLOMON_GF_2_M_STABLE, OF_DECODER, 2) != OF_STATUS_OK)
         return PJ_EINVAL;
     
-    /* Put to table only if current count of symbols less than k */
-    if (adapter->snd_k < K_MAX)
+    dec_params.nb_source_symbols = a->dec_params->nb_source_symbols;
+    dec_params.nb_repair_symbols = a->dec_params->nb_repair_symbols;
+    dec_params.encoding_symbol_length = sizeof(pj_uint16_t);
+    dec_params.m = 8;
+    
+    if (of_set_fec_parameters(dec_ses, (of_parameters_t *)&dec_params) != OF_STATUS_OK
+        || of_set_callback_functions(dec_ses, &fec_dec_len_cb, NULL, (void *)a->dec_symbols_size) != OF_STATUS_OK)
     {
-        /* Copy source symbol to buffer */
-        memcpy(adapter->enc_symbols_ptr[adapter->snd_k], pkt, size);
+        PJ_LOG(4, (THIS_FILE, "Set parameters failed for length decoder codec_id=%d", a->codec_id));
         
-        /* Remember real size for source symbols */
-        adapter->enc_symbols_size[adapter->snd_k] = size;
+        of_release_codec_instance(dec_ses);
         
-        adapter->snd_k++;
-        
-        /* Update max packet length in sequence */
-        if (size > adapter->snd_len)
-            adapter->snd_len = size;
+        return PJ_EINVAL;
     }
     
-    pjmedia_rtp_hdr * rtp_hdr = (pjmedia_rtp_hdr *)pkt;
+    k = dec_params.nb_source_symbols;
+    n = dec_params.nb_source_symbols + dec_params.nb_repair_symbols;
+    
+    for (esi = 0; esi < n; esi++)
+    {
+        if(a->dec_symbols_size[esi])
+            of_decode_with_new_symbol(dec_ses, (void *)&a->dec_symbols_size[esi], esi);
+        
+        if (of_is_decoding_complete(dec_ses))
+            break;
+    }
+    
+    of_release_codec_instance(dec_ses);
+    
+    return PJ_SUCCESS;
+}
+
+static pj_status_t    fec_enc_len(void *user_data)
+{
+    struct tp_adapter        *a = (struct tp_adapter *)user_data;
+    of_session_t            *enc_ses;
+    pj_uint16_t                esi, n, k;
+    of_rs_2_m_parameters_t    enc_params;
+    void*                    enc_symbols_tab[N_MAX];
+    
+    if (of_create_codec_instance(&enc_ses, OF_CODEC_REED_SOLOMON_GF_2_M_STABLE, OF_ENCODER, 2) != OF_STATUS_OK)
+        return PJ_EINVAL;
+    
+    enc_params.nb_source_symbols = a->enc_params->nb_source_symbols;
+    enc_params.nb_repair_symbols = a->enc_params->nb_repair_symbols;
+    enc_params.encoding_symbol_length = sizeof(pj_uint16_t);
+    enc_params.m = 8;
+    
+    
+    if (of_set_fec_parameters(enc_ses, (of_parameters_t *)&enc_params) != OF_STATUS_OK)
+    {
+        PJ_LOG(4, (THIS_FILE, "Set parameters failed for length encoder codec_id=%d", a->codec_id));
+        
+        of_release_codec_instance(enc_ses);
+        
+        return PJ_EINVAL;
+    }
+    
+    k = enc_params.nb_source_symbols;
+    n = enc_params.nb_source_symbols + enc_params.nb_repair_symbols;
+    
+    for (esi = 0; esi < n; esi++)
+        enc_symbols_tab[esi] = (void *)&a->enc_symbols_size[esi];
+    
+    for (esi = k; esi < n; esi++)
+        of_build_repair_symbol(enc_ses, enc_symbols_tab, esi);
+    
+    of_release_codec_instance(enc_ses);
+    
+    return PJ_SUCCESS;
+}
+
+static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
+{
+    struct tp_adapter    *a = (struct tp_adapter *)user_data;
+    pj_status_t            status = PJ_SUCCESS;
+    pj_uint16_t            esi, n, k, len;
+    of_session_t        *enc_ses;
+    
+    /* Put to table only if current count of symbols less than k */
+    //if (a->snd_k < K_MAX) // TODO replace by param depending on stream type
+    if (a->snd_k < a->snd_k_max)
+    {
+        /* Copy source symbol to buffer */
+        memcpy(a->enc_symbols_ptr[a->snd_k], pkt, size);
+        
+        /* Remember real size for source symbols */
+        a->enc_symbols_size[a->snd_k] = (pj_uint16_t)size;
+        
+        a->snd_k++;
+        
+        /* Update max packet length in sequence */
+        if (size > a->snd_len)
+            a->snd_len = (pj_uint16_t)size;
+    }
+    
+    pjmedia_rtp_hdr *rtp_hdr = (pjmedia_rtp_hdr *)pkt;
     
     /*
      * If symbol is mark packet (end of frame packets sequence)
@@ -355,24 +462,25 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
      * or collected count equal max value,
      * stop collect source symbols, build repair symbols
      */
-    if ((adapter->snd_k < K_MAX && !rtp_hdr->m) || (rtp_hdr->m && adapter->snd_k < K_MIN))
+    //if ((a->snd_k < K_MAX && !rtp_hdr->m) || (rtp_hdr->m && a->snd_k < K_MIN)) // TODO replace by param depending on stream type
+    if ((a->snd_k < a->snd_k_max && !rtp_hdr->m) || (rtp_hdr->m && a->snd_k < K_MIN))
         return PJ_SUCCESS;
     
-    k = adapter->snd_k;
-    /* For dynamic reduancy using variable with packet loss info from RTCP callback */
-    n = shift_ceil(k / adapter->tx_code_rate);
-    len = adapter->snd_len;
+    k = a->snd_k;
+    /* For dynamic reduancy use variable with packet loss info from RTCP callback */
+    n = shift_ceil(k / a->tx_code_rate);
+    len = a->snd_len;
     
     /* Sequence counter for new symbols block */
-    adapter->snd_sn++;
+    a->snd_sn++;
     
     /* Setup current encoder params */
-    adapter->enc_params->nb_source_symbols = k;
-    adapter->enc_params->nb_repair_symbols = n - k;
-    adapter->enc_params->encoding_symbol_length = len;
+    a->enc_params->nb_source_symbols = k;
+    a->enc_params->nb_repair_symbols = n - k;
+    a->enc_params->encoding_symbol_length = len;
     
     /* Open and initialize the new openfec session */
-    if (of_create_codec_instance(&ses, adapter->codec_id, OF_ENCODER, 2 /* Verbosity */) != OF_STATUS_OK)
+    if (of_create_codec_instance(&enc_ses, a->codec_id, OF_ENCODER, 2 /* Verbosity */) != OF_STATUS_OK)
     {
         PJ_LOG(4, (THIS_FILE, "Create encoder instance failed"));
         
@@ -380,12 +488,12 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     }
     
     /* Set session parameters */
-    if (of_set_fec_parameters(ses, adapter->enc_params) != OF_STATUS_OK)
+    if (of_set_fec_parameters(enc_ses, a->enc_params) != OF_STATUS_OK)
     {
-        PJ_LOG(4, (THIS_FILE, "Set parameters failed for encoder codec_id=%d", adapter->codec_id));
+        PJ_LOG(4, (THIS_FILE, "Set parameters failed for encoder codec_id=%d", a->codec_id));
         
         /* Cleanup session on fail before return */
-        of_release_codec_instance(ses);
+        of_release_codec_instance(enc_ses);
         
         return PJ_EINVAL;
     }
@@ -393,36 +501,36 @@ static pj_status_t fec_enc_pkt(void *user_data, const void *pkt, pj_size_t size)
     /* Build the n-k repair symbols if count of symbols is enough */
     for (esi = k; esi < n; esi++)
     {
-        if (of_build_repair_symbol(ses, adapter->enc_symbols_ptr, esi) != OF_STATUS_OK)
+        if (of_build_repair_symbol(enc_ses, a->enc_symbols_ptr, esi) != OF_STATUS_OK)
         {
             PJ_LOG(4, (THIS_FILE, "Build repair symbol failed for esi=%u", esi));
         }
         else
         {
             /* Set repair symbol length to max value */
-            adapter->enc_symbols_size[esi] = len;
+            a->enc_symbols_size[esi] = len;
         }
     }
     
-    adapter->snd_ready = PJ_TRUE;
+    a->snd_ready = PJ_TRUE;
     
     /* Cleanup session on fail or success */
-    of_release_codec_instance(ses);
+    of_release_codec_instance(enc_ses);
     
     return status;
 }
 
-/* Single restore callback for source and repair packets */
+/* Unified restore callback for source and repair packets */
 static void* fec_dec_cb(void *context, pj_uint32_t size, pj_uint32_t esi)
 {
-    struct tp_adapter    *adapter = (struct tp_adapter *)context;
+    struct tp_adapter *a = (struct tp_adapter *)context;
     
     /* Must return buffer pointer for decoder to save restored source packet in adapter buffer */
-    return adapter->dec_symbols_ptr[esi];
+    return a->dec_symbols_ptr[esi];
 }
 
 /* Construct in destination buffer packet with Extension header and data based on original RTP source symbol */
-static pj_uint32_t fec_enc_src(void *dst, const void *pkt, pj_uint32_t size, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr)
+static pj_uint16_t fec_enc_src(void *dst, const void *pkt, pj_uint16_t size, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr)
 {
     unsigned num;
     pj_uint8_t *ptr = (pj_uint8_t *)dst;
@@ -447,7 +555,6 @@ static pj_uint32_t fec_enc_src(void *dst, const void *pkt, pj_uint32_t size, con
     ptr += num;
     
     /* Remember payload offset in original packet and decrease copy left size */
-    //(pj_uint8_t *)pkt += num;
     pkt = (pj_uint8_t *)pkt + num;
     size -= num;
     
@@ -457,7 +564,8 @@ static pj_uint32_t fec_enc_src(void *dst, const void *pkt, pj_uint32_t size, con
     ptr += num;
     
     /* Insert FEC header as Extension header data */
-    num = sizeof(fec_ext_hdr);
+    //num = sizeof(fec_ext_hdr);
+    num = pj_ntohs(ext_hdr->length) * sizeof(pj_uint32_t);
     memcpy(ptr, fec_hdr, num);
     ptr += num;
     
@@ -469,18 +577,16 @@ static pj_uint32_t fec_enc_src(void *dst, const void *pkt, pj_uint32_t size, con
 }
 
 /* Construct in destination buffer RTP packet with Extension header and data based on FEC repair symbol */
-static pj_uint32_t fec_enc_rpr(void *dst, pjmedia_rtp_session *ses, int ts_len, const void *payload, pj_uint32_t payload_len, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr)
+static pj_uint16_t fec_enc_rpr(void *dst, pjmedia_rtp_session *ses, int ts_len, const void *payload, pj_uint16_t payload_len, const fec_ext_hdr *fec_hdr, const pjmedia_rtp_ext_hdr *ext_hdr)
 {
     int num;
     pj_uint8_t *ptr = (pj_uint8_t *)dst;
     pjmedia_rtp_hdr *hdr;
     
     /* Get RTP header */
-    //rtp_hdr = (pjmedia_rtp_hdr *)hdr;
     pjmedia_rtp_encode_rtp(ses, ses->out_pt, 0, payload_len, ts_len, &hdr, &num);
     
     /* Copy RTP header */
-    //num = sizeof(pjmedia_rtp_hdr) + rtp_hdr->cc * sizeof(pj_uint32_t);
     memcpy(ptr, hdr, num);
     ((pjmedia_rtp_hdr *)dst)->x = 1;
     ptr += num;
@@ -491,7 +597,8 @@ static pj_uint32_t fec_enc_rpr(void *dst, pjmedia_rtp_session *ses, int ts_len, 
     ptr += num;
     
     /* Copy FEC header as Extension header data */
-    num = sizeof(fec_ext_hdr);
+    //num = sizeof(fec_ext_hdr);
+    num = pj_ntohs(ext_hdr->length) * sizeof(pj_uint32_t);
     memcpy(ptr, fec_hdr, num);
     ptr += num;
     
@@ -513,7 +620,7 @@ static void* fec_dec_hdr(const void *pkt, fec_ext_hdr *fec_hdr)
     pj_assert(rtp_hdr->v == RTP_VERSION);
     
     /* Sanity check */
-    if (rtp_hdr->v != RTP_VERSION)
+    if (rtp_hdr->v != RTP_VERSION || !rtp_hdr->x)
     {
         PJ_LOG(4, (THIS_FILE, "FEC header in RTP packet decode failed"));
         return 0;
@@ -531,13 +638,17 @@ static void* fec_dec_hdr(const void *pkt, fec_ext_hdr *fec_hdr)
     ptr += sizeof(pj_uint16_t);
     fec_hdr->n = pj_ntohs(*(pj_uint16_t *)ptr);
     ptr += sizeof(pj_uint16_t);
-    fec_hdr->len = pj_ntohs(*(pj_uint16_t *)ptr);
+    fec_hdr->esl = pj_ntohs(*(pj_uint16_t *)ptr);
+    ptr += sizeof(pj_uint16_t);
+    fec_hdr->s = pj_ntohs(*(pj_uint16_t *)ptr);
+    ptr += sizeof(pj_uint16_t);
+    fec_hdr->rsrv = pj_ntohs(*(pj_uint16_t *)ptr);
     ptr += sizeof(pj_uint16_t);
     
     return ptr;
 }
 
-static pj_uint32_t fec_dec_pkt(void * const dst, void *pkt, pj_uint32_t size, pj_bool_t rtp)
+static pj_uint16_t fec_dec_pkt(void * const dst, void *pkt, pj_ssize_t size, pj_bool_t rtp)
 {
     unsigned num;
     pj_uint8_t *ptr = (pj_uint8_t *)dst;
@@ -559,10 +670,10 @@ static pj_uint32_t fec_dec_pkt(void * const dst, void *pkt, pj_uint32_t size, pj
     
     /* Skip Extension header and data */
     num += sizeof(pjmedia_rtp_ext_hdr);
-    num += sizeof(fec_ext_hdr);
+    //    num += sizeof(fec_ext_hdr);
+    num += pj_ntohs(((pjmedia_rtp_ext_hdr *)((pj_uint8_t *)pkt + sizeof(pjmedia_rtp_hdr)))->length) * sizeof(pj_uint32_t);
     
     /* Set payload offset in original packet and decrease copy left size */
-    //(pj_uint8_t *)pkt += num;
     pkt = (pj_uint8_t *)pkt + num;
     size -= num;
     
@@ -578,25 +689,56 @@ static pj_uint32_t fec_dec_pkt(void * const dst, void *pkt, pj_uint32_t size, pj
 PJ_DEF(pj_status_t) pjmedia_fec_adapter_create(pjmedia_endpt *endpt, const char *name, pjmedia_transport *transport, pj_bool_t del_base, pjmedia_transport **p_tp)
 {
     pj_pool_t *pool;
-    struct tp_adapter *adapter;
+    struct tp_adapter *a;
     
     if (name == NULL)
         name = "tpad%p";
     
     /* Create the pool and initialize the adapter structure */
     pool = pjmedia_endpt_create_pool(endpt, name, 512, 512);
-    adapter = PJ_POOL_ZALLOC_T(pool, struct tp_adapter);
-    adapter->pool = pool;
-    pj_ansi_strncpy(adapter->base.name, pool->obj_name, sizeof(adapter->base.name));
-    adapter->base.type = (pjmedia_transport_type)(PJMEDIA_TRANSPORT_TYPE_USER + 1);
-    adapter->base.op = &tp_adapter_op;
+    a = PJ_POOL_ZALLOC_T(pool, struct tp_adapter);
+    a->pool = pool;
+    pj_ansi_strncpy(a->base.name, pool->obj_name, sizeof(a->base.name));
+    a->base.type = (pjmedia_transport_type)(PJMEDIA_TRANSPORT_TYPE_USER + 1);
+    a->base.op = &tp_adapter_op;
     
     /* Save the transport as the slave transport */
-    adapter->slave_tp = transport;
-    adapter->del_base = del_base;
+    a->slave_tp = transport;
+    a->del_base = del_base;
+    
+    a->tx_code_rate = CODE_RATE_MAX;
+    a->snd_k_max = K_MAX;
+    a->old_client = 0;
+    
+    /* Choose codec before SDP negotiation
+     * Fill default in the code specific part of the of_..._parameters_t structure
+     * Currently choose codec on n value
+     */
+    if (N_MAX <= 255)
+    {
+        a->codec_id = OF_CODEC_REED_SOLOMON_GF_2_M_STABLE;
+        
+        a->enc_rs_params.m = 8;
+        a->enc_params = (of_parameters_t *)&a->enc_rs_params;
+        
+        a->dec_rs_params.m = 8;
+        a->dec_params = (of_parameters_t *)&a->dec_rs_params;
+    }
+    else
+    {
+        a->codec_id = OF_CODEC_LDPC_STAIRCASE_STABLE;
+        
+        a->enc_ldps_params.prng_seed = rand();
+        a->enc_ldps_params.N1 = 7;
+        a->enc_params = (of_parameters_t *)&a->enc_ldps_params;
+        
+        a->dec_ldps_params.prng_seed = rand();
+        a->dec_ldps_params.N1 = 7;
+        a->dec_params = (of_parameters_t *)&a->dec_ldps_params;
+    }
     
     /* Done */
-    *p_tp = &adapter->base;
+    *p_tp = &a->base;
     return PJ_SUCCESS;
 }
 
@@ -607,26 +749,28 @@ PJ_DEF(pj_status_t) pjmedia_fec_adapter_create(pjmedia_endpt *endpt, const char 
  */
 static pj_status_t transport_get_info(pjmedia_transport *tp, pjmedia_transport_info *info)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     /* Since we don't have our own connection here, we just pass
      * this function to the slave transport.
      */
-    return pjmedia_transport_get_info(adapter->slave_tp, info);
+    return pjmedia_transport_get_info(a->slave_tp, info);
 }
 
+#if 1 /* Old clients support (w/o SDP) */
 /* Currently get packet real size, because openfec encode repair packet using size padding */
-static pj_size_t fec_symbol_size(const void * const pkt, const pj_uint32_t symbol_size)
+static pj_uint16_t fec_symbol_size_old(const void * const pkt, const pj_uint32_t symbol_size)
 {
     /* Pointer to end of packet buffer */
     pj_uint8_t *ptr = (pj_uint8_t *)pkt + symbol_size - 1;
-    pj_uint32_t size = symbol_size;
+    pj_uint16_t size = symbol_size;
     
     while (!*ptr-- && size)
         --size;
     
     return size;
 }
+#endif
 
 // DEBUG
 //pj_time_val t1, t2;
@@ -636,18 +780,21 @@ static pj_size_t fec_symbol_size(const void * const pkt, const pj_uint32_t symbo
  */
 static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)user_data;
-    pj_uint32_t esi, k, n, len;
+    struct tp_adapter *a = (struct tp_adapter*)user_data;
+    pj_uint16_t esi, k, n, len;
     fec_ext_hdr fec_hdr;
     pjmedia_rtp_hdr *rtp_hdr = (pjmedia_rtp_hdr *)pkt;
     
-    adapter->rcv_k++;
+    if (a->codec_id == OF_CODEC_NIL)
+    {
+        a->stream_rtp_cb(a->stream_user_data, pkt, size);
+        return;
+    }
+    
+    a->rcv_k++;
     
     /* Decode FEC header before FEC decoding */
     fec_dec_hdr(pkt, &fec_hdr);
-    
-    //if (fec_hdr.esi >= fec_hdr.k)
-    //    pjmedia_rtcp_rx_rtp(adapter->rtcp_ses, rtp_hdr->seq, rtp_hdr->ts, fec_hdr.len);
     
     //PJ_LOG(4, (THIS_FILE, "DEBUG recieved packet sn=%u k=%u n=%u len=%u esi=%u, decoder sn=%u k=%u",
     //    fec_hdr.sn,
@@ -655,42 +802,42 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
     //    fec_hdr.n,
     //    fec_hdr.len,
     //    fec_hdr.esi,
-    //    adapter->rcv_sn,
-    //    adapter->rcv_k));
+    //    a->rcv_sn,
+    //    a->rcv_k));
     
     /* Check packet FEC sequence number */
-    if (fec_hdr.sn < adapter->rcv_sn)
+    if (fec_hdr.sn < a->rcv_sn)
     {
-        PJ_LOG(4, (THIS_FILE, "Too late sn=%u received in a packet while decoder sn=%u, drop packet", fec_hdr.sn, adapter->rcv_sn));
+        PJ_LOG(5, (THIS_FILE, "Too late sn=%u received in a packet while decoder sn=%u, drop packet", fec_hdr.sn, a->rcv_sn));
         return;
     }
     /* New FEC sequence packet */
-    else if (fec_hdr.sn > adapter->rcv_sn)
+    else if (fec_hdr.sn > a->rcv_sn)
     {
-        if (adapter->dec_ses && !of_is_decoding_complete(adapter->dec_ses))
+        if (a->dec_ses && !of_is_decoding_complete(a->dec_ses))
         {
-            k = adapter->dec_params->nb_source_symbols;
-            n = adapter->dec_params->nb_source_symbols + adapter->dec_params->nb_repair_symbols;
+            k = a->dec_params->nb_source_symbols;
+            n = a->dec_params->nb_source_symbols + a->dec_params->nb_repair_symbols;
             
-            PJ_LOG(4, (THIS_FILE, "Decoding incomplete for sn=%u k=%u n=%u len=%u rcv=%u, reset for new sn=%u",
-                       adapter->rcv_sn,
+            PJ_LOG(5, (THIS_FILE, "Decoding incomplete for sn=%u k=%u n=%u len=%u rcv=%u, reset for new sn=%u",
+                       a->rcv_sn,
                        k,
                        n,
-                       adapter->dec_params->encoding_symbol_length,
-                       adapter->rcv_k,
+                       a->dec_params->encoding_symbol_length,
+                       a->rcv_k,
                        fec_hdr.sn));
             
             /* Request key frame if video stream */
-            if (adapter->stream_type == PJMEDIA_TYPE_VIDEO)
+            if (a->stream_type == PJMEDIA_TYPE_VIDEO)
                 transport_send_rtcp_fir(user_data);
             
-            if (adapter->stream_type == PJMEDIA_TYPE_AUDIO)
+            if (a->stream_type == PJMEDIA_TYPE_AUDIO)
             {
                 /* Call stream's callback for all source symbols in buffer */
                 for (esi = 0; esi < k; esi++)
                 {
-                    if (adapter->dec_symbols_size[esi])
-                        adapter->stream_rtp_cb(adapter->stream_user_data, adapter->dec_symbols_ptr[esi], adapter->dec_symbols_size[esi]);
+                    if (a->dec_symbols_size[esi])
+                        a->stream_rtp_cb(a->stream_user_data, a->dec_symbols_ptr[esi], a->dec_symbols_size[esi]);
                 }
             }
         }
@@ -698,31 +845,37 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
         // DEBUG
         //pj_gettickcount(&t1);
         
-        adapter->rcv_sn = fec_hdr.sn;
+        a->rcv_sn = fec_hdr.sn;
         /* Create new decoder session for new FEC sequence */
-        if (fec_dec_reset(adapter, fec_hdr.k, fec_hdr.n, fec_hdr.len) != PJ_SUCCESS)
+        if (fec_dec_reset(a, fec_hdr.k, fec_hdr.n, fec_hdr.esl) != PJ_SUCCESS)
         {
             PJ_LOG(4, (THIS_FILE, "Decoder instance creation failed for sn=%u k=%u n=%u len=%u",
                        fec_hdr.sn,
                        fec_hdr.k,
                        fec_hdr.n,
-                       fec_hdr.len));
+                       fec_hdr.esl));
         }
     }
     /* Drop packet if sequence already decoded */
-    else if (of_is_decoding_complete(adapter->dec_ses))
+    else if (of_is_decoding_complete(a->dec_ses))
     {
-        pj_assert(fec_hdr.sn == adapter->rcv_sn);
+        pj_assert(fec_hdr.sn == a->rcv_sn);
         
-        if (fec_hdr.sn != adapter->rcv_sn)
-            PJ_LOG(4, (THIS_FILE, "Decoding already complete for sn=%u, but decoder sn=%u, drop packet", fec_hdr.sn, adapter->rcv_sn));
+        if (fec_hdr.sn != a->rcv_sn)
+            PJ_LOG(5, (THIS_FILE, "Decoding already complete for sn=%u, but decoder sn=%u, drop packet", fec_hdr.sn, a->rcv_sn));
         
         return;
     }
     
     /* Decode packet */
-    len = fec_dec_pkt(adapter->dec_symbols_ptr[fec_hdr.esi], pkt, size, fec_hdr.esi < fec_hdr.k ? PJ_TRUE : PJ_FALSE);
-    adapter->dec_symbols_size[fec_hdr.esi] = len;
+    len = fec_dec_pkt(a->dec_symbols_ptr[fec_hdr.esi], pkt, size, fec_hdr.esi < fec_hdr.k ? PJ_TRUE : PJ_FALSE);
+    
+    /* Fill length table using FEC encoded size-value for future decoding */
+#if 1
+    a->dec_symbols_size[fec_hdr.esi] = a->old_client ? len : fec_hdr.s;
+#else
+    a->dec_symbols_size[fec_hdr.esi] = fec_hdr.s;
+#endif
     
     pj_assert(len > 0);
     
@@ -730,27 +883,36 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
      * Submit each fresh symbol to the library, upon reception
      * using the standard of_decode_with_new_symbol() function.
      */
-    if (of_decode_with_new_symbol(adapter->dec_ses, adapter->dec_symbols_ptr[fec_hdr.esi], fec_hdr.esi) == OF_STATUS_ERROR)
-        PJ_LOG(4, (THIS_FILE, "Decode with new symbol failed esi=%u, len=%u", fec_hdr.esi, adapter->dec_params->encoding_symbol_length));
+    if (of_decode_with_new_symbol(a->dec_ses, a->dec_symbols_ptr[fec_hdr.esi], fec_hdr.esi) == OF_STATUS_ERROR)
+        PJ_LOG(4, (THIS_FILE, "Decode with new symbol failed esi=%u, len=%u", fec_hdr.esi, a->dec_params->encoding_symbol_length));
     
     /* Exit if decoding not complete */
-    if (!of_is_decoding_complete(adapter->dec_ses))
+    if (!of_is_decoding_complete(a->dec_ses))
         return;
     
     //PJ_LOG(4, (THIS_FILE, "DEBUG Decoded sequence sn=%u k=%u n=%u len=%u", fec_hdr.sn, fec_hdr.k, fec_hdr.n, fec_hdr.len));
     
-    k = adapter->dec_params->nb_source_symbols;
-    n = adapter->dec_params->nb_source_symbols + adapter->dec_params->nb_repair_symbols;
+    k = a->dec_params->nb_source_symbols;
+    n = a->dec_params->nb_source_symbols + a->dec_params->nb_repair_symbols;
+    
+    /* Decode lengths */
+#if 1
+    if(!a->old_client)
+        fec_dec_len(a);
+#else
+    fec_dec_len(a);
+#endif
     
     /* Call stream's callback for all source symbols in buffer */
     for (esi = 0; esi < k; esi++)
     {
-        /* Get repaired packet real size */
-        if (!adapter->dec_symbols_size[esi])
-        /* TODO : replace by packet length repair */
-            adapter->dec_symbols_size[esi] = fec_symbol_size(adapter->dec_symbols_ptr[esi], adapter->dec_params->encoding_symbol_length);
+#if 1 /* Old clients support (w/o SDP) */
+        /* Get repaired packet unpadded size */
+        if (!a->dec_symbols_size[esi])
+            a->dec_symbols_size[esi] = fec_symbol_size_old(a->dec_symbols_ptr[esi], a->dec_params->encoding_symbol_length);
+#endif
         
-        adapter->stream_rtp_cb(adapter->stream_user_data, adapter->dec_symbols_ptr[esi], adapter->dec_symbols_size[esi]);
+        a->stream_rtp_cb(a->stream_user_data, a->dec_symbols_ptr[esi], a->dec_symbols_size[esi]);
     }
     
     // DEBUG
@@ -763,16 +925,21 @@ static void transport_rtp_cb(void *user_data, void *pkt, pj_ssize_t size)
  */
 static void transport_rtcp_cb(void *user_data, void *pkt, pj_ssize_t size)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)user_data;
+    struct tp_adapter *a = (struct tp_adapter*)user_data;
     pjmedia_rtcp_common *common = (pjmedia_rtcp_common*)pkt;
     const pjmedia_rtcp_rr *rr = NULL;
     const pjmedia_rtcp_sr *sr = NULL;
-    //    pj_uint32_t rr_loss;
+    
+    if (a->codec_id == OF_CODEC_NIL)
+    {
+        a->stream_rtcp_cb(a->stream_user_data, pkt, size);
+        return;
+    }
     
     /* RTCP key frame request */
-    if (common->pt == RTCP_FIR && adapter->stream_type == PJMEDIA_TYPE_VIDEO /* not necessary, FIR not send for audio */)
+    if (common->pt == RTCP_FIR && a->stream_type == PJMEDIA_TYPE_VIDEO /* not necessary, FIR not send for audio */)
     {
-        pjmedia_vid_stream_send_keyframe(adapter->stream_ref);
+        pjmedia_vid_stream_send_keyframe(a->stream_ref);
         return;
     }
     
@@ -795,36 +962,36 @@ static void transport_rtcp_cb(void *user_data, void *pkt, pj_ssize_t size)
         /* Percents with reduancy */
         //rr_loss = (rr->fract_lost * 100) >> 8;
         /* Fraction without reduancy */
-        adapter->tx_loss = adapter->tx_code_rate + rr->fract_lost / 256.0 - 1;
+        a->tx_loss = a->tx_code_rate + rr->fract_lost / 256.0 - 1;
         // TODO update code_rate
-        //if (adapter->tx_loss < .1)
+        //if (a->tx_loss < .1)
         //{
-        //    adapter->tx_code_rate = .9; // 10%
-        //    pj_assert(11, shift_ceil(10 / adapter->tx_code_rate));
+        //    a->tx_code_rate = .9; // 10%
+        //    pj_assert(11, shift_ceil(10 / a->tx_code_rate));
         //}
-        //else if (adapter->tx_loss > .1 && adapter->tx_loss < .33)
+        //else if (a->tx_loss > .1 && a->tx_loss < .33)
         //{
-        //    adapter->tx_code_rate = .75; // 33%
-        //    pj_assert(13, shift_ceil(10 / adapter->tx_code_rate));
+        //    a->tx_code_rate = .75; // 33%
+        //    pj_assert(13, shift_ceil(10 / a->tx_code_rate));
         //}
-        //else if (adapter->tx_loss > .33 && adapter->tx_loss < .5)
+        //else if (a->tx_loss > .33 && a->tx_loss < .5)
         //{
-        //    adapter->tx_code_rate = .667; // 50%
-        //    pj_assert(15, shift_ceil(10 / adapter->tx_code_rate));
+        //    a->tx_code_rate = .667; // 50%
+        //    pj_assert(15, shift_ceil(10 / a->tx_code_rate));
         //}
-        //else if (adapter->tx_loss > .5)
+        //else if (a->tx_loss > .5)
         //{
-        //    adapter->tx_code_rate = .5; // 100%
-        //    pj_assert(20, shift_ceil(10 / adapter->tx_code_rate));
+        //    a->tx_code_rate = .5; // 100%
+        //    pj_assert(20, shift_ceil(10 / a->tx_code_rate));
         //}
         
-        PJ_LOG(5, (THIS_FILE, "Current TX tx_loss=%3.3f -> code_rate=%1.3f", adapter->tx_loss, adapter->tx_code_rate));
+        PJ_LOG(5, (THIS_FILE, "Current TX tx_loss=%3.3f -> code_rate=%1.3f", a->tx_loss, a->tx_code_rate));
     }
     
-    pj_assert(adapter->stream_rtcp_cb != NULL);
+    pj_assert(a->stream_rtcp_cb != NULL);
     
     /* Call stream's callback */
-    adapter->stream_rtcp_cb(adapter->stream_user_data, pkt, size);
+    a->stream_rtcp_cb(a->stream_user_data, pkt, size);
 }
 
 #if defined(PJ_VERSION_NUM_MAJOR) && (PJ_VERSION_NUM_MAJOR == 2) && defined(PJ_VERSION_NUM_MINOR) && (PJ_VERSION_NUM_MINOR < 6)
@@ -839,38 +1006,38 @@ static pj_status_t transport_attach(pjmedia_transport *tp,
                                     void(*rtp_cb)(void*, void*, pj_ssize_t),
                                     void(*rtcp_cb)(void*, void*, pj_ssize_t))
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     pj_status_t status;
     
-    pj_assert(adapter->stream_user_data == NULL);
-    adapter->stream_user_data = user_data;
-    adapter->stream_rtp_cb = rtp_cb;
-    adapter->stream_rtcp_cb = rtcp_cb;
+    pj_assert(a->stream_user_data == NULL);
+    a->stream_user_data = user_data;
+    a->stream_rtp_cb = rtp_cb;
+    a->stream_rtcp_cb = rtcp_cb;
     /* pjsip assign stream pointer to user_data  */
-    adapter->stream_ref = user_data;
+    a->stream_ref = user_data;
     
     /* Get pointer RTP session information of the media stream */
-    if (adapter->stream_type == PJMEDIA_TYPE_VIDEO)
-        pjmedia_vid_stream_get_rtp_session_tx(adapter->stream_ref, &adapter->rtp_tx_ses);
+    if (a->stream_type == PJMEDIA_TYPE_VIDEO)
+        pjmedia_vid_stream_get_rtp_session_tx(a->stream_ref, &a->rtp_tx_ses);
     /* Not implemented */
     else
         return PJ_EINVALIDOP;
     
     
     /* Not implemented */
-    adapter->rtcp_ses = NULL;
+    a->rtcp_ses = NULL;
     
     rtp_cb = &transport_rtp_cb;
     rtcp_cb = &transport_rtcp_cb;
-    user_data = adapter;
+    user_data = a;
     
-    status = pjmedia_transport_attach(adapter->slave_tp, user_data, rem_addr, rem_rtcp, addr_len, rtp_cb, rtcp_cb);
+    status = pjmedia_transport_attach(a->slave_tp, user_data, rem_addr, rem_rtcp, addr_len, rtp_cb, rtcp_cb);
     if (status != PJ_SUCCESS)
     {
-        adapter->stream_user_data = NULL;
-        adapter->stream_rtp_cb = NULL;
-        adapter->stream_rtcp_cb = NULL;
-        adapter->stream_ref = NULL;
+        a->stream_user_data = NULL;
+        a->stream_rtp_cb = NULL;
+        a->stream_rtcp_cb = NULL;
+        a->stream_ref = NULL;
         return status;
     }
     
@@ -885,19 +1052,19 @@ static pj_status_t transport_attach(pjmedia_transport *tp,
  */
 static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_attach_param *att_param)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     pj_status_t status;
     
     /* In this example, we will save the stream information and callbacks
      * to our structure, and we will register different RTP/RTCP callbacks
      * instead.
      */
-    pj_assert(adapter->stream_user_data == NULL);
-    adapter->stream_user_data = att_param->user_data;
-    adapter->stream_rtp_cb = att_param->rtp_cb;
-    adapter->stream_rtcp_cb = att_param->rtcp_cb;
-    adapter->stream_ref = att_param->stream;
-    adapter->stream_type = att_param->media_type;
+    pj_assert(a->stream_user_data == NULL);
+    a->stream_user_data = att_param->user_data;
+    a->stream_rtp_cb = att_param->rtp_cb;
+    a->stream_rtcp_cb = att_param->rtcp_cb;
+    a->stream_ref = att_param->stream;
+    a->stream_type = att_param->media_type;
     
     /* Get pointer RTP session information of the media stream */
     pjmedia_stream_rtp_sess_info session_info;
@@ -905,29 +1072,53 @@ static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_at
     switch (att_param->media_type)
     {
         case PJMEDIA_TYPE_VIDEO:
-            pjmedia_vid_stream_get_rtp_session_info(adapter->stream_ref, &session_info);
+        {
+#if 1 /* Old clients support (w/o SDP) */
+            if (a->codec_id == OF_CODEC_NIL)
+            {
+                /*
+                 * Old client use OF_CODEC_REED_SOLOMON_GF_2_M_STABLE and k_max 10
+                 * Header size is less on 32bit word
+                 */
+                a->old_client = 1;
+                a->codec_id = OF_CODEC_REED_SOLOMON_GF_2_M_STABLE;
+                a->snd_k_max = 10;
+                a->ext_hdr.length = pj_htons(sizeof(fec_ext_hdr) / sizeof(pj_uint32_t) - 1);
+            }
+            else
+                a->snd_k_max = 20;
+#else
+            a->snd_k_max = 20;
+#endif
+            pjmedia_vid_stream_get_rtp_session_info(a->stream_ref, &session_info);
             break;
+        }
         case PJMEDIA_TYPE_AUDIO:
-            pjmedia_stream_get_rtp_session_info(adapter->stream_ref, &session_info);
+        {
+            a->snd_k_max = 10;
+            pjmedia_stream_get_rtp_session_info(a->stream_ref, &session_info);
             break;
+        }
         default:
             return PJ_EINVALIDOP;
     }
     
-    adapter->rtp_tx_ses = session_info.tx_rtp;
-    adapter->rtcp_ses = session_info.rtcp;
+    pj_assert(a->snd_k_max <= K_MAX);
+    
+    a->rtp_tx_ses = session_info.tx_rtp;
+    a->rtcp_ses = session_info.rtcp;
     
     att_param->rtp_cb = &transport_rtp_cb;
     att_param->rtcp_cb = &transport_rtcp_cb;
-    att_param->user_data = adapter;
+    att_param->user_data = a;
     
-    status = pjmedia_transport_attach2(adapter->slave_tp, att_param);
+    status = pjmedia_transport_attach2(a->slave_tp, att_param);
     if (status != PJ_SUCCESS)
     {
-        adapter->stream_user_data = NULL;
-        adapter->stream_rtp_cb = NULL;
-        adapter->stream_rtcp_cb = NULL;
-        adapter->stream_ref = NULL;
+        a->stream_user_data = NULL;
+        a->stream_rtp_cb = NULL;
+        a->stream_rtcp_cb = NULL;
+        a->stream_ref = NULL;
         return status;
     }
     
@@ -941,17 +1132,17 @@ static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_at
  */
 static void transport_detach(pjmedia_transport *tp, void *strm)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     PJ_UNUSED_ARG(strm);
     
-    if (adapter->stream_user_data != NULL)
+    if (a->stream_user_data != NULL)
     {
-        pjmedia_transport_detach(adapter->slave_tp, adapter);
-        adapter->stream_user_data = NULL;
-        adapter->stream_rtp_cb = NULL;
-        adapter->stream_rtcp_cb = NULL;
-        adapter->stream_ref = NULL;
+        pjmedia_transport_detach(a->slave_tp, a);
+        a->stream_user_data = NULL;
+        a->stream_rtp_cb = NULL;
+        a->stream_rtcp_cb = NULL;
+        a->stream_ref = NULL;
     }
 }
 
@@ -966,16 +1157,19 @@ static void transport_detach(pjmedia_transport *tp, void *strm)
 
 static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj_size_t size)
 {
-    struct tp_adapter *adapter = (struct tp_adapter *)tp;
+    struct tp_adapter *a = (struct tp_adapter *)tp;
     pj_uint16_t esi, len, n, k;
     fec_ext_hdr fec_hdr;
+    
+    if (a->codec_id == OF_CODEC_NIL)
+        return pjmedia_transport_send_rtp(a->slave_tp, pkt, size);
     
     // DEBUG
     //if (!adapter->snd_k)
     //    pj_gettickcount(&snd_t1);
     
     /* Encode the RTP packet with FEC Framework */
-    pj_status_t status = fec_enc_pkt(adapter, pkt, size);
+    pj_status_t status = fec_enc_pkt(a, pkt, size);
     
     
     if (status != PJ_SUCCESS)
@@ -985,54 +1179,63 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
     }
     
     /* Send the packet using the UDP transport if symbols block encoding complete */
-    if (adapter->snd_ready == PJ_FALSE)
+    if (a->snd_ready == PJ_FALSE)
         return status;
     
-    k = adapter->enc_params->nb_source_symbols;
-    n = adapter->enc_params->nb_repair_symbols + adapter->enc_params->nb_source_symbols;
+    k = a->enc_params->nb_source_symbols;
+    n = a->enc_params->nb_repair_symbols + a->enc_params->nb_source_symbols;
     
     /* Setup FEC header fields */
-    fec_hdr.sn = pj_htonl(adapter->snd_sn);
+    fec_hdr.sn = pj_htonl(a->snd_sn);
     fec_hdr.k = pj_htons(k);
     fec_hdr.n = pj_htons(n);
-    fec_hdr.len = pj_htons(adapter->enc_params->encoding_symbol_length);
+    fec_hdr.esl = pj_htons(a->enc_params->encoding_symbol_length);
+    
+    /* Encode lengths */
+#if 1
+    if (!a->old_client)
+        fec_enc_len(a);
+#else
+    fec_enc_len(a);
+#endif
     
     //PJ_LOG(4, (THIS_FILE, "DEBUG Encoded sequence sn=%u k=%u n=%u len=%u",
-    //    adapter->snd_sn,
+    //    a->snd_sn,
     //    k,
     //    n,
-    //    adapter->enc_params->encoding_symbol_length));
+    //    a->enc_params->encoding_symbol_length));
     
     for (esi = 0; esi < k; esi++)
     {
         /* Setup FEC header encoding symbol ID */
         fec_hdr.esi = pj_htons(esi);
-        len = fec_enc_src((void *)adapter->enc_symbol_buf, adapter->enc_symbols_ptr[esi], adapter->enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
+        fec_hdr.s = pj_htons(a->enc_symbols_size[esi]);
+        len = fec_enc_src((void *)a->enc_symbol_buf, a->enc_symbols_ptr[esi], a->enc_symbols_size[esi], &fec_hdr, &a->ext_hdr);
         
         if (len)
-            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)adapter->enc_symbol_buf, len);
+            status = pjmedia_transport_send_rtp(a->slave_tp, (void *)a->enc_symbol_buf, len);
         
         if (status != PJ_SUCCESS || !len)
-            PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
+            PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u pkt_len=%u", a->snd_sn, k, n, esi, a->enc_params->encoding_symbol_length, len));
         //else
-        //    PJ_LOG(4, (THIS_FILE, "DEBUG Sended RTP packet sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
+        //    PJ_LOG(4, (THIS_FILE, "DEBUG Sended RTP packet sn=%u k=%u n=%u esi=%u len=%u pkt_len=%u", a->snd_sn, k, n, esi, a->enc_params->encoding_symbol_length, len));
     }
     
     for (; esi < n; esi++)
     {
         /* Setup FEC header encoding symbol ID */
         fec_hdr.esi = pj_htons(esi);
-        len = fec_enc_rpr((void *)adapter->enc_symbol_buf, adapter->rtp_tx_ses, 0, adapter->enc_symbols_ptr[esi], adapter->enc_symbols_size[esi], &fec_hdr, &adapter->ext_hdr);
+        fec_hdr.s = pj_htons(a->enc_symbols_size[esi]);
+        //len = fec_enc_rpr((void *)a->enc_symbol_buf, a->rtp_tx_ses, 0, a->enc_symbols_ptr[esi], a->enc_symbols_size[esi], &fec_hdr, &a->ext_hdr);
+        len = fec_enc_rpr((void *)a->enc_symbol_buf, a->rtp_tx_ses, 0, a->enc_symbols_ptr[esi], a->snd_len, &fec_hdr, &a->ext_hdr);
         
         if (len)
-            status = pjmedia_transport_send_rtp(adapter->slave_tp, (void *)adapter->enc_symbol_buf, len);
+            status = pjmedia_transport_send_rtp(a->slave_tp, (void *)a->enc_symbol_buf, len);
         
         if (status != PJ_SUCCESS || !len)
-            PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
+            PJ_LOG(4, (THIS_FILE, "Send RTP packet failed sn=%u k=%u n=%u esi=%u len=%u pkt_len=%u", a->snd_sn, k, n, esi, a->enc_params->encoding_symbol_length, len));
         //else
-        //    pjmedia_rtcp_tx_rtp(adapter->rtcp_ses, len - PKT_HDR_SIZE);
-        //else
-        //    PJ_LOG(4, (THIS_FILE, "DEBUG Sended RTP packet sn=%u k=%u n=%u esi=%u len=%u", adapter->snd_sn, k, n, esi, len));
+        //    PJ_LOG(4, (THIS_FILE, "DEBUG Sended RTP packet sn=%u k=%u n=%u esi=%u len=%u pkt_len=%u", a->snd_sn, k, n, esi, a->enc_params->encoding_symbol_length, len));
     }
     
     // DEBUG
@@ -1040,7 +1243,7 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
     //PJ_LOG(4, (THIS_FILE, "Encoding FEC buffering  delay=%dms k=%u n=%u", (snd_t2.sec * 1000 + snd_t2.msec) - (snd_t1.sec * 1000 + snd_t1.msec), k, n));
     
     /* Reset runtime encoding params */
-    fec_enc_reset(adapter, n, adapter->enc_params->encoding_symbol_length);
+    fec_enc_reset(a, n, a->enc_params->encoding_symbol_length);
     
     return status;
 }
@@ -1048,7 +1251,7 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
 /* Request to send a RTCP Full Intra Request */
 static pj_status_t transport_send_rtcp_fir(pjmedia_transport *tp)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     pj_uint8_t buf[256];
     pjmedia_rtcp_common *hdr = (pjmedia_rtcp_common*)buf;
     pj_uint8_t *p;
@@ -1056,12 +1259,12 @@ static pj_status_t transport_send_rtcp_fir(pjmedia_transport *tp)
     pj_uint32_t ssrc;
     
     /* Not implemented for 2.4 */
-    if (!adapter->rtcp_ses)
+    if (!a->rtcp_ses)
         return PJ_EINVALIDOP;
     
     /* Build RTCP packet */
     len = sizeof(*hdr);
-    pj_memcpy(hdr, &adapter->rtcp_ses->rtcp_sr_pkt.common, sizeof(*hdr));
+    pj_memcpy(hdr, &a->rtcp_ses->rtcp_sr_pkt.common, sizeof(*hdr));
     hdr->pt = RTCP_FIR;
     p = (pj_uint8_t*)hdr + sizeof(*hdr);
     
@@ -1070,13 +1273,13 @@ static pj_status_t transport_send_rtcp_fir(pjmedia_transport *tp)
      */
     
     /* The SSRC value of the media sender */
-    ssrc = pj_htonl(adapter->rtcp_ses->peer_ssrc);
+    ssrc = pj_htonl(a->rtcp_ses->peer_ssrc);
     pj_memcpy(p, &ssrc, sizeof(ssrc));
     len += sizeof(ssrc);
     p += sizeof(ssrc);
     
     /* FIR command sequence number */
-    *p++ = ++adapter->rtcp_fir_sn;
+    *p++ = ++a->rtcp_fir_sn;
     len++;
     
     /* Pad to 32bit */
@@ -1099,12 +1302,12 @@ static pj_status_t transport_send_rtcp_fir(pjmedia_transport *tp)
  */
 static pj_status_t transport_send_rtcp(pjmedia_transport *tp, const void *pkt, pj_size_t size)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     /* You may do some processing to the RTCP packet here if you want. */
     
     /* Send the packet using the slave transport */
-    return pjmedia_transport_send_rtcp(adapter->slave_tp, pkt, size);
+    return pjmedia_transport_send_rtcp(a->slave_tp, pkt, size);
 }
 
 
@@ -1114,8 +1317,9 @@ static pj_status_t transport_send_rtcp(pjmedia_transport *tp, const void *pkt, p
  */
 static pj_status_t transport_send_rtcp2(pjmedia_transport *tp, const pj_sockaddr_t *addr, unsigned addr_len, const void *pkt, pj_size_t size)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
-    return pjmedia_transport_send_rtcp2(adapter->slave_tp, addr, addr_len, pkt, size);
+    struct tp_adapter *a = (struct tp_adapter*)tp;
+    
+    return pjmedia_transport_send_rtcp2(a->slave_tp, addr, addr_len, pkt, size);
 }
 
 /*
@@ -1124,7 +1328,7 @@ static pj_status_t transport_send_rtcp2(pjmedia_transport *tp, const pj_sockaddr
  */
 static pj_status_t transport_media_create(pjmedia_transport *tp, pj_pool_t *sdp_pool, unsigned options, const pjmedia_sdp_session *rem_sdp, unsigned media_index)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     /* if "rem_sdp" is not NULL, it means we are UAS. You may do some
      * inspections on the incoming SDP to verify that the SDP is acceptable
@@ -1133,13 +1337,91 @@ static pj_status_t transport_media_create(pjmedia_transport *tp, pj_pool_t *sdp_
      */
     if (rem_sdp)
     {
-        /* Do your stuff.. */
+        
     }
     
     /* Once we're done with our initialization, pass the call to the
      * slave transports to let it do it's own initialization too.
      */
-    return pjmedia_transport_media_create(adapter->slave_tp, sdp_pool, options, rem_sdp, media_index);
+    return pjmedia_transport_media_create(a->slave_tp, sdp_pool, options, rem_sdp, media_index);
+}
+
+/* Create FEC declaration */
+static pjmedia_sdp_attr *fec_sdp_decl_create(pj_pool_t *pool, unsigned ref, unsigned enc_id)
+{
+    pj_str_t value;
+    pjmedia_sdp_attr *attr = PJ_POOL_ALLOC_T(pool, pjmedia_sdp_attr);
+    char buf[128];
+    
+    value.ptr = buf;
+    
+    /* fec-ref */
+    value.slen = 0;
+    value.slen += pj_utoa(ref, buf);
+    
+    /* fec-enc-id */
+    pj_strcat2(&value, " encoding-id=");
+    value.slen += pj_utoa(enc_id, buf + value.slen);
+    
+    pj_strdup2(pool, &attr->name, "FEC-declaration");
+    pj_strdup(pool, &attr->value, &value);
+    
+    return attr;
+}
+
+/* Create FEC OTI extension attribute for max params (dont use base64) */
+static pjmedia_sdp_attr *fec_sdp_oti_create(pj_pool_t *pool, unsigned ref, unsigned block_len, unsigned symbol_len)
+{
+    pj_str_t value;
+    pjmedia_sdp_attr *attr = PJ_POOL_ALLOC_T(pool, pjmedia_sdp_attr);
+    char buf[128];
+    
+    value.ptr = buf;
+    
+    /* fec-ref */
+    value.slen = 0;
+    value.slen += pj_utoa(ref, buf);
+    
+    /* Max block length */
+    pj_strcat2(&value, " max-block-len=");
+    value.slen += pj_utoa(block_len, buf + value.slen);
+    
+    /* Max symbol length */
+    pj_strcat2(&value, " max-symbol-len=");
+    value.slen += pj_utoa(symbol_len, buf + value.slen);
+    
+    pj_strdup2(pool, &attr->name, "FEC-OTI-extension");
+    pj_strdup(pool, &attr->value, &value);
+    
+    return attr;
+}
+
+static of_codec_id_t fec_sdp_check(unsigned attr_count, pjmedia_sdp_attr * const *attr_array, unsigned media_index)
+{
+    pjmedia_sdp_attr *attr;
+    unsigned ref, enc_id, block_len, symbol_len;
+    
+    /* Check FEC declaration */
+    attr = pjmedia_sdp_attr_find2(attr_count, attr_array, "FEC-declaration", NULL);
+    
+    if (attr && sscanf(attr->value.ptr, "%u encoding-id=%u", &ref, &enc_id) == 2
+        && enc_id < OF_CODEC_LDPC_FROM_FILE_ADVANCED)
+    {
+        pj_assert(media_index == ref);
+        
+        /* Check FEC OTI params */
+        attr = pjmedia_sdp_attr_find2(attr_count, attr_array, "FEC-OTI-extension", NULL);
+        
+        if (attr && sscanf(attr->value.ptr, "%u max-block-len=%u max-symbol-len=%u", &ref, &block_len, &symbol_len) == 3
+            && block_len <= N_MAX && symbol_len <= SYMBOL_SIZE_MAX)
+        {
+            pj_assert(media_index == ref);
+            
+            return (of_codec_id_t)enc_id;
+        }
+    }
+    
+    return OF_CODEC_NIL;
 }
 
 /*
@@ -1148,44 +1430,56 @@ static pj_status_t transport_media_create(pjmedia_transport *tp, pj_pool_t *sdp_
  */
 static pj_status_t transport_encode_sdp(pjmedia_transport *tp, pj_pool_t *sdp_pool, pjmedia_sdp_session *local_sdp, const pjmedia_sdp_session *rem_sdp, unsigned media_index)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
-    const char *attr_name = "fec-repair-flow";
-    const char *attr_value = "encoding-id=";
+    struct tp_adapter *a = (struct tp_adapter*)tp;
+    pjmedia_sdp_attr *fec_attr;
+    pj_status_t status = PJ_EINVAL;
+    unsigned i;
     
-    /* If "rem_sdp" is not NULL, it means we're encoding SDP answer. You may
-     * do some more checking on the SDP's once again to make sure that
-     * everything is okay before we send SDP.
+    /* If "rem_sdp" is not NULL, it means we're encoding SDP answer.
+     * We can check remote side FEC support level before we send SDP.
      */
     if (rem_sdp)
     {
-        /* Copy FEC params from remote SDP */
+        /* Check FEC support from remote SDP */
+        a->codec_id = fec_sdp_check(rem_sdp->media[media_index]->attr_count, rem_sdp->media[media_index]->attr, media_index);
         
+        /* Copy all FEC attributes from remote SDP excluding declaration */
+        if (a->codec_id != OF_CODEC_NIL)
+        {
+            /* Add FEC declaration */
+            status = pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, fec_sdp_decl_create(sdp_pool, media_index, a->codec_id));
+            
+            for (i = 1; fec_sdp_attrs[i]; i++)
+            {
+                fec_attr = pjmedia_sdp_attr_find2(rem_sdp->media[media_index]->attr_count, rem_sdp->media[media_index]->attr, fec_sdp_attrs[i], NULL);
+                
+                if (fec_attr)
+                    status = pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, pjmedia_sdp_attr_clone(sdp_pool, fec_attr));
+            }
+        }
     }
-    if(0)//else
+    /* Set our FEC params in local SDP if we are sending offer */
+    else
     {
-        /* Set FEC params */
-        pjmedia_sdp_attr *fec_attr;
-        char buf[128];
-        pj_str_t value;
         
-        value.ptr = buf;
+        /* Format target attribute string as "a=FEC-declaration:0 encoding-id=1"
+         * according to ETSI TS 126 346 V12.3.0 (2014-10)
+         * where in 'FEC-declaration' instead of "FEC:0" value we use stream media index value
+         * and 'encoding-id' is openfec.org codec id from 'of_codec_id_t' enum
+         */
         
-        pj_strcpy2(&value, attr_value);
-        pj_utoa(adapter->codec_id, buf + strlen(attr_value));
+        /* Add FEC declaration */
+        status = pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, fec_sdp_decl_create(sdp_pool, media_index, a->codec_id));
         
-        
-        fec_attr = PJ_POOL_ALLOC_T(sdp_pool, pjmedia_sdp_attr);
-        pj_strdup2(sdp_pool, &fec_attr->name, attr_name);
-        pj_strdup(sdp_pool, &fec_attr->value, &value);
-        
-        pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, fec_attr);
+        /* Add FEC OTI max values information */
+        status = pjmedia_sdp_attr_add(&local_sdp->media[media_index]->attr_count, local_sdp->media[media_index]->attr, fec_sdp_oti_create(sdp_pool, media_index, N_MAX, SYMBOL_SIZE_MAX));
     }
     
     /* And then pass the call to slave transport to let it encode its
      * information in the SDP. You may choose to call encode_sdp() to slave
      * first before adding your custom attributes if you want.
      */
-    return pjmedia_transport_encode_sdp(adapter->slave_tp, sdp_pool, local_sdp, rem_sdp, media_index);
+    return pjmedia_transport_encode_sdp(a->slave_tp, sdp_pool, local_sdp, rem_sdp, media_index);
 }
 
 /*
@@ -1195,57 +1489,45 @@ static pj_status_t transport_encode_sdp(pjmedia_transport *tp, pj_pool_t *sdp_po
  */
 static pj_status_t transport_media_start(pjmedia_transport *tp, pj_pool_t *pool, const pjmedia_sdp_session *local_sdp, const pjmedia_sdp_session *rem_sdp, unsigned media_index)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
-    pj_uint32_t esi;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
+    pjmedia_sdp_attr *fec_attr = NULL;
+    pj_status_t status = PJ_EINVAL;
+    pj_uint16_t esi;
     
-    adapter->dec_ses = NULL;
-    adapter->tx_loss = .0;
-    adapter->tx_code_rate = CODE_RATE_MAX;
+    /* Check FEC support by remote side */
+    if (rem_sdp)
+        a->codec_id = fec_sdp_check(rem_sdp->media[media_index]->attr_count, rem_sdp->media[media_index]->attr, media_index);
     
-    /* Init Extension headers with default values */
-    adapter->ext_hdr.profile_data = pj_htons(RTP_EXT_PT);
-    adapter->ext_hdr.length = pj_htons(sizeof(fec_ext_hdr) / sizeof(pj_uint32_t));
-    
-    adapter->rcv_sn = 0;
-    
-    adapter->rtcp_fir_sn = 0;
-    
-    /* Init pointers to symbol's buffers */
-    for (esi = 0; esi < N_MAX; esi++)
+    //    if (a->codec_id != OF_CODEC_NIL)
     {
-        adapter->enc_symbols_ptr[esi] = (void *)&adapter->enc_symbols_buf[esi * SYMBOL_SIZE_MAX];
-        adapter->dec_symbols_ptr[esi] = (void *)&adapter->dec_symbols_buf[esi * SYMBOL_SIZE_MAX];
+        a->dec_ses = NULL;
+        a->tx_loss = .0;
+        //a->tx_code_rate = CODE_RATE_MAX;
+        
+        /* Init Extension headers with default values */
+        a->ext_hdr.profile_data = pj_htons(RTP_EXT_PT);
+        a->ext_hdr.length = pj_htons(sizeof(fec_ext_hdr) / sizeof(pj_uint32_t));
+        
+        a->rcv_sn = 0;
+        
+        a->rtcp_fir_sn = 0;
+        
+        /* Init all pointers to symbol's buffers */
+        for (esi = 0; esi < N_MAX; esi++)
+        {
+            a->enc_symbols_ptr[esi] = (void *)&a->enc_symbols_buf[esi * SYMBOL_SIZE_MAX];
+            a->dec_symbols_ptr[esi] = (void *)&a->dec_symbols_buf[esi * SYMBOL_SIZE_MAX];
+        }
+        
+        PJ_LOG(5, (THIS_FILE, "FEC adapter init for media_index=%u succeed with max values: k=%u n=%u len=%u",
+                   media_index,
+                   K_MAX,
+                   N_MAX,
+                   SYMBOL_SIZE_MAX));
     }
-    
-    /* Fill in the code specific part of the of_..._parameters_t structure */
-    /* Currently choose codec on n value */
-    if (N_MAX <= 255)
-    {
-        adapter->codec_id = OF_CODEC_REED_SOLOMON_GF_2_M_STABLE;
-        
-        adapter->enc_rs_params.m = 8;
-        adapter->enc_params = (of_parameters_t *)&adapter->enc_rs_params;
-        
-        adapter->dec_rs_params.m = 8;
-        adapter->dec_params = (of_parameters_t *)&adapter->dec_rs_params;
-    }
-    else
-    {
-        adapter->codec_id = OF_CODEC_LDPC_STAIRCASE_STABLE;
-        
-        adapter->enc_ldps_params.prng_seed = rand();
-        adapter->enc_ldps_params.N1 = 7;
-        adapter->enc_params = (of_parameters_t *)&adapter->enc_ldps_params;
-        
-        adapter->dec_ldps_params.prng_seed = rand();
-        adapter->dec_ldps_params.N1 = 7;
-        adapter->dec_params = (of_parameters_t *)&adapter->dec_ldps_params;
-    }
-    
-    PJ_LOG(5, (THIS_FILE, "FEC adapter init succeed with max values: k=%u n=%u len=%u", K_MAX, N_MAX, SYMBOL_SIZE_MAX));
     
     /* And pass the call to the slave transport */
-    return pjmedia_transport_media_start(adapter->slave_tp, pool, local_sdp, rem_sdp, media_index);
+    return pjmedia_transport_media_start(a->slave_tp, pool, local_sdp, rem_sdp, media_index);
 }
 
 /*
@@ -1253,14 +1535,14 @@ static pj_status_t transport_media_start(pjmedia_transport *tp, pj_pool_t *pool,
  */
 static pj_status_t transport_media_stop(pjmedia_transport *tp)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     /* Destroy FEC codecs */
-    if (adapter->dec_ses)
-        of_release_codec_instance(adapter->dec_ses);
+    if (a->dec_ses)
+        of_release_codec_instance(a->dec_ses);
     
     /* And pass the call to the slave transport */
-    return pjmedia_transport_media_stop(adapter->slave_tp);
+    return pjmedia_transport_media_stop(a->slave_tp);
 }
 
 /*
@@ -1268,8 +1550,9 @@ static pj_status_t transport_media_stop(pjmedia_transport *tp)
  */
 static pj_status_t transport_simulate_lost(pjmedia_transport *tp, pjmedia_dir dir, unsigned pct_lost)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
-    return pjmedia_transport_simulate_lost(adapter->slave_tp, dir, pct_lost);
+    struct tp_adapter *a = (struct tp_adapter*)tp;
+    
+    return pjmedia_transport_simulate_lost(a->slave_tp, dir, pct_lost);
 }
 
 /*
@@ -1277,14 +1560,15 @@ static pj_status_t transport_simulate_lost(pjmedia_transport *tp, pjmedia_dir di
  */
 static pj_status_t transport_destroy(pjmedia_transport *tp)
 {
-    struct tp_adapter *adapter = (struct tp_adapter*)tp;
+    struct tp_adapter *a = (struct tp_adapter*)tp;
     
     /* Close the slave transport */
-    if (adapter->del_base)
-        pjmedia_transport_close(adapter->slave_tp);
+    if (a->del_base)
+        pjmedia_transport_close(a->slave_tp);
     
     /* Self destruct.. */
-    pj_pool_release(adapter->pool);
+    pj_pool_release(a->pool);
     
     return PJ_SUCCESS;
 }
+

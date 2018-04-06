@@ -55,6 +55,7 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 @property (nonatomic, readonly) BOOL missed;
 @property (nonatomic, assign) BOOL speaker;
 @property (nonatomic, assign) BOOL mute;
+@property (assign, nonatomic) BOOL callkitAreHandlingAudioSession;
 
 @property (nonatomic, strong) NSString *ctcallId;
 

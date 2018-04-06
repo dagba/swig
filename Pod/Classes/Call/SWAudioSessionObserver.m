@@ -17,8 +17,9 @@
     self = [super init];
     if (self) {
         
-        /*
         NSNotificationCenter *notCenter = [NSNotificationCenter defaultCenter];
+        
+        /*
         [notCenter addObserver:self selector:@selector(videoWasInterruptedNotification:) name:AVCaptureSessionWasInterruptedNotification object:nil];
         
         [notCenter addObserver:self selector:@selector(audioSessionInterruptionWithNotification:) name:AVAudioSessionInterruptionNotification object:nil];
@@ -84,7 +85,7 @@
 }
 
 - (void) audioSessionInterruptionWithNotification: (NSNotification *) notification {
-    NSLog(@"<--AudioSession notification--> InterruptionNotification:%@",notification);
+    NSLog(@"<--audiosession interruption--> notification received");
 }
 
 - (void) videoErrorNotification: (NSNotification *) notification {

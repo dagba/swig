@@ -60,6 +60,8 @@
     
     self = [super init];
     
+    [[NSNotificationCenter defaultCenter] postNotificationName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] userInfo:@{AVAudioSessionInterruptionTypeKey: [NSNumber numberWithUnsignedInteger:AVAudioSessionInterruptionTypeBegan]}];
+    
     _callId = -2;
     _accountId = accountId;
     _inbound = inbound;
@@ -391,8 +393,8 @@
                 
                 [endpoint setRingtone:ringtone];
                 
-#warning костыль. Если используется коллкит в 11 иос, рингтон стратует, когда он закроет сессию.
-                if ([[[UIDevice currentDevice] systemVersion] floatValue] < 11.0) {
+//Если используется коллкит, рингтон стратует, когда он закроет сессию. Звонок отслеживает, контролирует ли коллкит сессию
+                if (!self.callkitAreHandlingAudioSession) {
                     [ringtone startRingtone];
                 }
             }
@@ -1100,10 +1102,20 @@
             //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
             break;
             
-        case SWCallStateDisconnected:
+        case SWCallStateDisconnected: {
             sessionActive = NO;
             speaker = NO;
+            
+#warning костыль
+            dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
+            
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), queue, ^{
+                
+                [[NSNotificationCenter defaultCenter] postNotificationName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] userInfo:@{AVAudioSessionInterruptionTypeKey: [NSNumber numberWithUnsignedInteger:AVAudioSessionInterruptionTypeEnded]}];
+            });
+            
             break;
+        }
             
         case SWCallStateDisconnectRingtone:
             speaker = _speaker;
