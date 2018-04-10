@@ -38,8 +38,17 @@ typedef NS_ENUM(NSInteger, SWMediaState) {
 };
 
 typedef NS_ENUM(NSInteger, SWCallReason) {
+    SWCallReasonLocalBusy = -3,
+    SWCallReasonConnecting = -2,
     SWCallReasonSilence = -1,
     SWCallReasonUnknown = 0,
+    SWCallReasonRemoteBusy = 600,
+    SWCallReasonRemoteHold = 608,
+    SWCallReasonRestricted = 603,
+    SWCallReasonNotAnswered = 607,
+    SWCallReasonNotExists = 406,
+    SWCallReasonUnavailiable = 480,
+    SWCallReasonNoMoney = 402,
     SWCallReasonTerminatedRemote = 799
 };
 

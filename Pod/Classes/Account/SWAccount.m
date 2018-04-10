@@ -693,6 +693,13 @@ void * refToSelf;
         pj_status_t status;
         NSError *error;
         
+        if ([[SWEndpoint sharedEndpoint] areOtherCalls]) {
+            NSError *error = [NSError errorWithDomain:@"There are other calls" code:SWCallReasonLocalBusy userInfo:nil];
+            
+            handler(error);
+            return;
+        }
+        
         NSString *uri = [SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM];
         pj_str_t pjuri = [uri pjString];
         

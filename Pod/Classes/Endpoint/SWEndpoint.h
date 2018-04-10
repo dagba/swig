@@ -67,6 +67,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 //@property (nonatomic, readonly) pj_pool_t *pjPool;
 @property (nonatomic, strong, readonly) NSArray *accounts;
 @property (nonatomic, strong) SWRingtone *ringtone;
+@property (nonatomic, readonly) BOOL areOtherCalls;
 
 @property (nonatomic, strong) SWThreadManager *threadFactory;
 

@@ -179,7 +179,9 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
     }
 }
 
-@interface SWEndpoint ()
+@interface SWEndpoint () {
+    BOOL _areOtherCalls;
+}
 
 @property (atomic, assign) pj_pool_t *pool;
 
@@ -311,12 +313,32 @@ static SWEndpoint *_sharedEndpoint = nil;
     [[AFNetworkReachabilityManager sharedManager] startMonitoring];
     
     self.callCenter = [[CTCallCenter alloc] init]; // get a CallCenter somehow; most likely as a global object or something similar?
-    //
+    
+    __weak typeof(self) weakSelf = self;
+    
     [_callCenter setCallEventHandler:^(CTCall *call) {
         
-        SWAccount *account = [self firstAccount];
+        __strong typeof(weakSelf) slf = weakSelf;
+        if(!slf) return;
+        
+        SWAccount *account = [slf firstAccount];
         
         SWCall *swcall = [account firstCall];
+        
+        //Может ли звонок в коллцентре появиться до СИПа?
+        if (!swcall) {
+            
+            NSUInteger callCount = [[self.callCenter currentCalls] count];
+            if((call.callState == CTCallStateDisconnected) && (callCount > 0)) {
+                callCount--;
+            }
+            
+            slf->_areOtherCalls = (callCount > 0);
+            return;
+        }
+        else {
+            slf->_areOtherCalls = NO;
+        }
         
         //Если звонок не привязан к звонку коллцентра, привяжем
         if (swcall.ctcallId == nil) {
@@ -350,6 +372,8 @@ static SWEndpoint *_sharedEndpoint = nil;
         }
          */
     }];
+    
+    _areOtherCalls = ([[self.callCenter currentCalls] count] > 0);
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
     
@@ -2618,6 +2642,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         msg = tdata->msg;
     
     return msg;
+}
+
+- (BOOL)areOtherCalls {
+    return _areOtherCalls;
 }
 
 @end

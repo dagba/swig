@@ -20,6 +20,8 @@
 #import "EWFileLogger.h"
 #import <pjsua-lib/pjsua_internal.h>
 
+@import CoreTelephony;
+
 @interface SWCall ()
 
 @property (nonatomic, strong) UILocalNotification *notification;
@@ -308,6 +310,11 @@
         } break;
             
         case PJSIP_INV_STATE_INCOMING: {
+            if([endpoint areOtherCalls]) {
+#warning rewrite должна быть другая причина
+                [self hangupOnReason:0 withCompletion:nil];
+                return;
+            }
             
             [SWCall closeSoundTrack:nil];
             [endpoint startStandartRingtone];
@@ -317,8 +324,23 @@
         } break;
             
         case PJSIP_INV_STATE_CALLING: {
-            //[SWCall closeSoundTrack:nil];
-            //            [self.ringback start]; //TODO probably not needed
+            SWRingtone *ringtone = nil;
+            
+            if([endpoint areOtherCalls]) {
+#warning rewrite должна быть другая причина
+                [self hangupOnReason:0 withCompletion:nil];
+                return;
+            }
+            
+            ringtone = [endpoint getRingtoneForReason:SWCallReasonConnecting];
+            
+            //Если мы звоним, до прихода гудков с сервера играем свои
+            if ((!self.inbound) && (ringtone != nil)) {
+                [ringtone setAudioPlayerDelegate:self];
+                [endpoint setRingtone:ringtone];
+                [ringtone startRingtone];
+            }
+            
             self.callState = SWCallStateCalling;
             [self updateOverrideSpeaker];
         } break;
@@ -1078,6 +1100,8 @@
 - (void) updateOverrideSpeaker {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     NSString *sessionMode = AVAudioSessionModeDefault;
+    NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
+    
     
     BOOL speaker = NO;
     BOOL sessionActive = YES;
@@ -1085,12 +1109,16 @@
     switch (self.callState) {
         case SWCallStateReady:
             speaker = YES;
+            //AVAudioSessionCategoryPlayAndRecord не глушится silent switch'ом
+            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
             break;
         case SWCallStateIncoming:
             speaker = YES;
+            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
             break;
         case SWCallStateCalling:
             speaker = _speaker || self.inbound;
+            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
             break;
         case SWCallStateConnecting:
             sessionActive = NO;
@@ -1134,12 +1162,12 @@
     
     //NSLog(@"<--speaker--> value:%@", speaker ? @"true" : @"false");
     if (speaker) {
-        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
+        [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
     }
     
     else {
         
-        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
+        [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
         
         if (error) {
             NSLog(@"<--speaker--> setCategory error: %@", error);
