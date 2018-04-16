@@ -32,7 +32,7 @@
 
 - (NSThread *) getMessageThread {
     
-    NSLog(@"<--threads--> requesting: <MessageThread> from: <%@>", [NSThread currentThread]);
+    NSLog(@"<--threads--> requesting: <MessageThread>");
     
     if (_messageThread == nil) {
         _messageThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
@@ -50,7 +50,7 @@
 #warning experiment работа со звонками и с аккаунтами лочат друг друга
     return [self getRegistrationThread];
     
-    NSLog(@"<--threads--> requesting: <CallManagementThread> from: <%@>", [NSThread currentThread]);
+    NSLog(@"<--threads--> requesting: <CallManagementThread>");
     
     if (_callManagementThread == nil) {
         _callManagementThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
@@ -65,7 +65,7 @@
 
 - (NSThread *) getRegistrationThread {
     
-    NSLog(@"<--threads--> requesting: <RegistrationThread> from: <%@>", [NSThread currentThread]);
+    NSLog(@"<--threads--> requesting: <RegistrationThread>");
     
     @synchronized (self) {
         if (_registrationThread == nil) {
@@ -93,11 +93,12 @@
 }
 
 - (void) runBlock: (void (^)(void)) block onThread: (NSThread *) thread wait: (BOOL) wait {
-    NSLog(@"<--threads--> requesting: <%@> from: <%@>", thread, [NSThread currentThread]);
+    NSLog(@"<--threads--> runBlock to thread: <%@>", thread);
     [self performSelector: @selector(runBlock:) onThread: thread withObject: [block copy] waitUntilDone: wait];
 }
 
 - (void) runBlock: (void (^)(void)) block {
+    NSLog(@"<--threads--> runBlock started");
     block();
 }
 

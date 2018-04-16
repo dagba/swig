@@ -30,7 +30,7 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
     }
     
     format = [format stringByAppendingString:@"\n"];
-    NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithFormat:@"(%@)%@",[ewLogDateFormat stringFromDate: [NSDate date]],format] arguments:ap];
+    NSString *msg = [[NSString alloc] initWithFormat:[NSString stringWithFormat:@"(%@ thread: %@)%@",[ewLogDateFormat stringFromDate: [NSDate date]], [NSThread currentThread],format] arguments:ap];
     va_end (ap);
     fprintf(stderr,"%s%50s:%3d - %s",[prefix UTF8String], funcName, lineNumber, [msg UTF8String]);
     
