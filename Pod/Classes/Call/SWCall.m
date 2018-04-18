@@ -1110,7 +1110,9 @@
         case SWCallStateReady:
             speaker = YES;
             //AVAudioSessionCategoryPlayAndRecord не глушится silent switch'ом
+
             sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
+            
             break;
         case SWCallStateIncoming:
             speaker = YES;
@@ -1126,6 +1128,7 @@
             break;
         case SWCallStateConnected:
             sessionActive = YES;
+            NSLog(@"<--swcall--> ", audioSession);
             speaker = _speaker;
             //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
             break;
@@ -1152,6 +1155,11 @@
             break;
     }
     
+    //Если используется коллкит, нам не нужно проигрывать звонок самостоятельно, поэтому не нужен режим, который глушится свитчом (и не запускается в бэкграунде!)
+    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 10.0) {
+        sessionCategory = AVAudioSessionCategoryPlayAndRecord;
+    }
+    
     NSError *error = nil;
     
     NSTimeInterval bufferDuration = .005;
@@ -1160,19 +1168,20 @@
     
     [audioSession setMode:sessionMode error:&error];
     
-    //NSLog(@"<--speaker--> value:%@", speaker ? @"true" : @"false");
+    NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
     if (speaker) {
         [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
     }
     
     else {
-        
         [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
         
         if (error) {
             NSLog(@"<--speaker--> setCategory error: %@", error);
         }
     }
+    
+    NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
     
     for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
         NSString *porttype = [desc portType];

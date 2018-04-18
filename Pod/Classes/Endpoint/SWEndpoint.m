@@ -1217,6 +1217,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
                     NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
                     for (NSString *key in observersKeys) {
                         SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+#warning mainthread
                         dispatch_async(dispatch_get_main_queue(), ^{
                             observer(account);
                         });
@@ -1233,9 +1234,11 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
             SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
             if (account) {
                 [account accountStateChanged];
+                
                 NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
                 for (NSString *key in observersKeys) {
                     SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+#warning mainthread
                     dispatch_async(dispatch_get_main_queue(), ^{
                         observer(account);
                     });
@@ -1255,6 +1258,7 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
         NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
         for (NSString *key in observersKeys) {
             SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
+#warning mainthread
             dispatch_async(dispatch_get_main_queue(), ^{
                 observer(account);
             });

@@ -598,7 +598,7 @@ void * refToSelf;
         if ((self.accountState == SWAccountStateDisconnected) && self.neededRegisterState) {
             [self requestRegisterState:PJ_TRUE];
         }
-    } onThread:regThread wait:NO];
+    } onThread:regThread wait:YES];
     
 }
 

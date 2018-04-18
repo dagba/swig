@@ -31,6 +31,8 @@
 }
 
 - (NSThread *) getMessageThread {
+#warning experiment работа со звонками и с сообщениями тоже лочат друг друга
+    return [self getRegistrationThread];
     
     NSLog(@"<--threads--> requesting: <MessageThread>");
     

@@ -18,7 +18,6 @@
     if (self) {
         
         NSNotificationCenter *notCenter = [NSNotificationCenter defaultCenter];
-        
         /*
         [notCenter addObserver:self selector:@selector(videoWasInterruptedNotification:) name:AVCaptureSessionWasInterruptedNotification object:nil];
         
