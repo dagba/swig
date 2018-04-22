@@ -293,7 +293,7 @@
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
-    NSLog(@"<--SWCall callStateChangedWithReason--> callInfo.state: %d", callInfo.state);
+    NSLog(@"<--SWCall callStateChangedWithReason--> callInfo.state: %d reason: %d", callInfo.state, reason);
     
     switch (callInfo.state) {
         case PJSIP_INV_STATE_NULL: {
