@@ -1830,6 +1830,67 @@ static void groupModifyCallback(void *token, pjsip_event *e) {
     
 }
 
+-(void)modifyGroup:(NSInteger) groupID groupName:(NSString *) groupName completionHandler:(void(^)(NSError *error))handler {
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = [thrManager getRegistrationThread];
+    [thrManager runBlock:^{
+        if (self.accountState != SWAccountStateConnected) {
+            NSError *error = [NSError errorWithDomain:@"Not Connected" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        
+        pj_status_t    status;
+        pjsip_tx_data *tx_msg;
+        
+        pjsua_acc_info info;
+        
+        pjsua_acc_get_info((int)self.accountId, &info);
+        
+        pjsip_method method;
+        pj_str_t method_string = pj_str("COMMAND");
+        
+        pjsip_method_init_np(&method, &method_string);
+        
+        /* Создаем непосредственно запрос */
+        status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Failed to create group modify request" code:0 userInfo:nil];
+            handler(error);
+            return;
+        }
+        pj_str_t hname_name = pj_str((char *)"Command-Name");
+        pj_str_t hvalue_name = pj_str((char *)"SetChatName");
+        
+        pjsip_generic_string_hdr* hdr_name = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_name, &hvalue_name);
+        
+        pj_str_t hname_value = pj_str((char *)"Command-Value");
+        
+        char buffer[50];
+        pj_str_t hvalue_value;
+        hvalue_value.ptr = buffer;
+        hvalue_value.slen = snprintf(buffer, 50, "%d", groupID);
+        
+        pjsip_generic_string_hdr* hdr_value = pjsip_generic_string_hdr_create(tx_msg->pool, &hname_value, &hvalue_value);
+        
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_name);
+        pjsip_msg_add_hdr(tx_msg->msg, (pjsip_hdr*)hdr_value);
+        
+        pj_str_t pjMessage = [groupName pjString];
+        
+        pj_str_t type = pj_str((char *)"text");
+        pj_str_t subtype = pj_str((char *)"plain");
+        
+        pjsip_msg_body *body = pjsip_msg_body_create(tx_msg->pool, &type, &subtype, &pjMessage);
+        
+        tx_msg->msg->body = body;
+        
+        pjsip_endpt_send_request(pjsua_get_pjsip_endpt(), tx_msg, 1000, (__bridge_retained void *) [handler copy], &groupModifyCallback);
+    } onThread:regThread wait:NO];
+    
+}
+
 #pragma mark - Logout
 
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler {

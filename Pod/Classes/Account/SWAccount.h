@@ -125,6 +125,7 @@ typedef NS_ENUM(NSInteger, SWMessageDirection) {
 -(void)groupRemoveAbonents:(NSArray *)abonents groupID: (NSInteger) groupID completionHandler:(void(^)(NSError *error))handler;
 -(void)modifyGroup:(NSInteger) groupID action:(SWGroupAction) groupAction abonents:(NSArray *)abonents completionHandler:(void(^)(NSError *error))handler;
 -(void)modifyGroup:(NSInteger) groupID avatarPath:(NSString *) avatarPath completionHandler:(void(^)(NSError *error))handler;
+-(void)modifyGroup:(NSInteger) groupID groupName:(NSString *) groupName completionHandler:(void(^)(NSError *error))handler;
 
 - (void) logoutCompletitionHandler:(void(^)(NSError *error))handler;
 - (void) deleteAccountCompletitionHandler:(void(^)(NSError *error))handler;
