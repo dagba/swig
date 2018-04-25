@@ -1361,7 +1361,7 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 if (dlg) pjsip_dlg_dec_lock(dlg);
             }
             
-            NSLog(@"<--callStateChanged--> SWOnCallState: %d", callInfo.state);
+            NSLog(@"<--callStateChanged--> SWOnCallState: %d callInfo.last_status: %d", callInfo.state, callInfo.last_status);
             
             NSInteger hangupReason = 0;
             
@@ -1373,6 +1373,25 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@".*cause=(\\d*);.*" options:NSRegularExpressionCaseInsensitive error:nil];
                 
                 hangupReason = [[hangupReasonStr substringWithRange:[[regex firstMatchInString:hangupReasonStr options:0 range:NSMakeRange(0, hangupReasonStr.length)] rangeAtIndex:1]] integerValue];
+            }
+#warning костыль
+            else {
+                switch (callInfo.last_status) {
+                    case PJSIP_SC_NOT_ACCEPTABLE:
+                        hangupReason = SWCallReasonUnavailiable;
+                        break;
+                        
+                    case PJSIP_SC_TEMPORARILY_UNAVAILABLE:
+                        hangupReason = SWCallReasonNotAnswered;
+                        break;
+                        
+                    case PJSIP_SC_BUSY_HERE:
+                        hangupReason = SWCallReasonRemoteBusy;
+                        break;
+                        
+                    default:
+                        break;
+                }
             }
             
             [call callStateChangedWithReason:hangupReason];

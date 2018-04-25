@@ -332,7 +332,13 @@
                 return;
             }
             
-            ringtone = [endpoint getRingtoneForReason:SWCallReasonConnecting];
+            NSInteger localReason = reason;
+            
+            if ((localReason == 0) || (localReason == -1)) {
+                localReason = SWCallReasonConnecting;
+            }
+            
+            ringtone = [endpoint getRingtoneForReason: localReason];
             
             //Если мы звоним, до прихода гудков с сервера играем свои
             if ((!self.inbound) && (ringtone != nil)) {
