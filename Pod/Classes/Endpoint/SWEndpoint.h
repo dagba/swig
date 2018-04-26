@@ -71,6 +71,8 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 
 @property (nonatomic, strong) SWThreadManager *threadFactory;
 
+@property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+
 +(instancetype)sharedEndpoint;
 
 - (pj_pool_t *) pjPool;
@@ -113,7 +115,6 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 
 //- (void) setReceiveAbonentStatusBlock: (void(^)() receiveAbonentStatusBlock);
 //- (void) setReceiveNotifyBlock: (void(^)() receiveNotifyBlock);
-- (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock;
 - (void) setConfirmationBlock: (SWConfirmationBlock) confirmationBlock;
 
 - (void) setUnauthorizedBlock: (SWUnauthorizedBlock) unauthorizedBlock;

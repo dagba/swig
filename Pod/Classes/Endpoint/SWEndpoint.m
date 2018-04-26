@@ -202,7 +202,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWGroupMembersUpdatedBlock groupMembersUpdatedBlock;
 @property (nonatomic, copy) SWTypingBlock typingBlock;
 
-@property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 @property (nonatomic, copy) SWConfirmationBlock confirmationBlock;
 
 @property (nonatomic, copy) SWUnauthorizedBlock unauthorizedBlock;
@@ -1139,10 +1138,6 @@ void logCallback (int level, const char *data, int len) {
 //- (void) setMessageSentBlock: (SWMessageSentBlock) messageSentBlock {
 //    _messageSentBlock = messageSentBlock;
 //}
-
-- (void) setNeedConfirmBlock: (SWNeedConfirmBlock) needConfirmBlock {
-    _needConfirmBlock = needConfirmBlock;
-}
 
 - (void) setChatDeletedBlock: (SWChatDeletedBlock) chatDeletedBlock {
     _chatDeletedBlock = chatDeletedBlock;
