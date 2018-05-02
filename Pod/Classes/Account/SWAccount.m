@@ -728,7 +728,7 @@ void * refToSelf;
         
         if (status != PJ_SUCCESS) {
             
-            error = [NSError errorWithDomain:@"Error hanging up call" code:0 userInfo:nil];
+            error = [NSError errorWithDomain:@"Error making call" code:0 userInfo:nil];
             
             [call terminateWithCompletion:nil];
             [self removeCall:-2];

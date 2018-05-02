@@ -56,6 +56,7 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 
 @property (nonatomic, readonly, strong) SWContact *contact;
 @property (nonatomic, readonly) NSInteger callId;
+@property (nonatomic, readonly) NSString *sipCallId;
 @property (nonatomic, readonly) NSInteger accountId;
 @property (nonatomic, readonly) SWCallState callState;
 @property (nonatomic, readonly) SWMediaState mediaState;
@@ -74,6 +75,9 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 @property (nonatomic, assign) CGSize videoPreviewSize;
 
 @property (nonatomic, readonly) NSDate *date;
+@property (strong, readonly) NSDate *dateStartSpeaking;
+@property (readonly) NSTimeInterval spendTime;
+
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
 @property (nonatomic, assign) NSInteger hangupReason;
 

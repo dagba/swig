@@ -36,7 +36,9 @@
 
 @end
 
-@implementation SWCall
+@implementation SWCall {
+    NSTimeInterval _spendTime;
+}
 
 -(instancetype)init {
     
@@ -67,6 +69,7 @@
     _callId = -2;
     _accountId = accountId;
     _inbound = inbound;
+    _spendTime = -1;
     
     self.currentVideoCaptureDevice = PJMEDIA_NO_VID_DEVICE;
     
@@ -102,7 +105,7 @@
     pjsua_call_info info;
     
     pj_status_t status = pjsua_call_get_info(_callId, &info);
-    
+    _sipCallId = [NSString stringWithPJString:info.call_id];
     //configure ringback
     
     _ringback = [SWRingback new];
@@ -311,8 +314,7 @@
             
         case PJSIP_INV_STATE_INCOMING: {
             if([endpoint areOtherCalls]) {
-#warning rewrite должна быть другая причина
-                [self hangupOnReason:0 withCompletion:nil];
+                [self hangupOnReason:SWCallReasonLocalBusy withCompletion:nil];
                 return;
             }
             
@@ -324,11 +326,12 @@
         } break;
             
         case PJSIP_INV_STATE_CALLING: {
+            
+            [SWCall closeSoundTrack:nil];
             SWRingtone *ringtone = nil;
             
             if([endpoint areOtherCalls]) {
-#warning rewrite должна быть другая причина
-                [self hangupOnReason:0 withCompletion:nil];
+                [self hangupOnReason:SWCallReasonLocalBusy withCompletion:nil];
                 return;
             }
             
@@ -389,6 +392,7 @@
             [SWCall openSoundTrack:nil];
             
             self.callState = SWCallStateConnected;
+            self->_dateStartSpeaking = [NSDate date];
             [self updateMuteStatus];
             [self updateOverrideSpeaker];
             
@@ -414,6 +418,8 @@
                 ringtone = [endpoint getRingtoneForReason:reason];
                 [ringtone setAudioPlayerDelegate:self];
             }
+            
+            _spendTime = [[NSDate date] timeIntervalSinceDate:self.dateStartSpeaking];
             
             //и есть ли соответствующий гудок
             if (ringtone) {
@@ -678,10 +684,18 @@
     pjsua_msg_data *msg_data = NULL;
     
     NSString *reason;
+    unsigned hangupCode = 0;
     
-    if (slf.hangupReason != -1) {
+    //исторически сложилось, что этот код отправляется другим способом
+    if (slf.hangupReason == SWCallReasonTerminatedRemote) {
         reason = [NSString stringWithFormat:@"SIP;cause=%d;text=””", slf.hangupReason];
         NSLog(@"<--hangup--> reason sent: %@", reason);
+    }
+    else if (slf.hangupReason > 0) {
+        hangupCode = slf.hangupReason;
+    }
+    else if (slf.hangupReason == SWCallReasonLocalBusy) {
+        hangupCode = PJSIP_SC_BUSY_HERE;
     }
      
     if (reason != nil) {
@@ -706,7 +720,7 @@
     
     if (slf.callId != PJSUA_INVALID_ID && slf.callState != SWCallStateDisconnected) {
         
-        status = pjsua_call_hangup((int)slf.callId, 0, NULL, msg_data);
+        status = pjsua_call_hangup((int)slf.callId, hangupCode, NULL, msg_data);
         //status = pjsua_call_hangup((int)self.callId, 0, NULL, NULL);
         
         if (status != PJ_SUCCESS) {
@@ -772,7 +786,6 @@
 
 +(void)closeSoundTrack:(void(^)(NSError *error))handler {
     NSLog(@"<--starting call--> closeSoundTrack");
-    
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
     NSThread *callThread = [thrManager getCallManagementThread];
     
@@ -1307,6 +1320,21 @@
     if (self.callState == SWCallStateDisconnectRingtone) {
         [self hangup:^(NSError *error) {}];
     }
+}
+
+- (NSTimeInterval)spendTime {
+    //Либо время разговора уже сохранено
+    if (_spendTime > 0) {
+        return _spendTime;
+    }
+    
+    //...либо разговор еще не начался
+    if (_dateStartSpeaking == nil) {
+        return 0;
+    }
+    
+    //...либо посчитаем по дате начала разговора
+    return [[NSDate date] timeIntervalSinceDate:self.dateStartSpeaking];
 }
 
 @end

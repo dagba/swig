@@ -333,9 +333,12 @@ static SWEndpoint *_sharedEndpoint = nil;
             }
             
             slf->_areOtherCalls = (callCount > 0);
+            NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf->_areOtherCalls ? @"true" : @"false");
             return;
         }
         else {
+            //TODO: areOtherCalls wrong! Зафиксирован случай, когда прошли по этой ветке при активном GSM-звонке. (Эвент был вызван самим СИП-звонком)
+            NSLog(@"<--check other calls--> setting areOtherCalls: false");
             slf->_areOtherCalls = NO;
         }
         
@@ -373,6 +376,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     }];
     
     _areOtherCalls = ([[self.callCenter currentCalls] count] > 0);
+    NSLog(@"<--check other calls--> setting areOtherCalls: %@", _areOtherCalls ? @"true" : @"false");
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
     
@@ -2663,6 +2667,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 }
 
 - (BOOL)areOtherCalls {
+    NSLog(@"<--check other calls--> areOtherCalls: %@", _areOtherCalls ? @"true" : @"false");
     return _areOtherCalls;
 }
 
