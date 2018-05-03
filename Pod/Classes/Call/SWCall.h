@@ -61,6 +61,7 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 @property (nonatomic, readonly) SWCallState callState;
 @property (nonatomic, readonly) SWMediaState mediaState;
 @property (nonatomic, readonly) BOOL inbound;
+@property (nonatomic, readonly) BOOL isGsm;
 @property (nonatomic, readonly) BOOL withVideo;
 @property (nonatomic, readonly) BOOL missed;
 @property (nonatomic, assign) BOOL speaker;
@@ -81,9 +82,14 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
 @property (nonatomic, assign) NSInteger hangupReason;
 
+
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
 +(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri;
+
+-(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound isGsm: (BOOL) isGsm;
++(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound isGsm: (BOOL) isGsm;
++(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm;
 -(void)initSipDataForCallId: (NSUInteger)callId;
 
 -(SWAccount *)getAccount;

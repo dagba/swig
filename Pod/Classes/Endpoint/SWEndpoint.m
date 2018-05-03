@@ -228,7 +228,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (atomic, assign) BOOL needResetPjPool;
 
 @property (nonatomic, strong) SWRingtone *standartRingtone;
-@property (nonatomic, readonly) NSMutableDictionary<NSNumber *, SWRingtone *>  *ringtones;
+@property (nonatomic, readonly) NSMutableDictionary<NSURL *, SWRingtone *>  *ringtones;
 
 @end
 
@@ -492,7 +492,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     //        [self performSelectorOnMainThread:@selector(keepAlive) withObject:nil waitUntilDone:YES];
     //    }];
     
-    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         for (int i = 0; i < [self.accounts count]; ++i) {
             
             SWAccount *account = [self.accounts objectAtIndex:i];
@@ -521,7 +521,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
-    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         //TODO hangup all calls
         //TODO remove all accounts
         //TODO close all transports
@@ -1272,7 +1272,7 @@ static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_r
     
     if (account) {
         
-        SWCall *call = [SWCall callWithId:call_id accountId:acc_id inBound:YES];
+        SWCall *call = [SWCall callWithId:call_id accountId:acc_id inBound:YES isGsm:NO];
         
         if (call) {
             
@@ -2548,23 +2548,26 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 }
 
 - (SWRingtone *) getRingtoneForReason: (NSInteger) reason {
+    SWRingtone *ringtone;
     
+    //TODO: get ringtone description from main app
     
-    // withUrl: (NSURL *) url hasVibrations: (BOOL) hasVibrations
-    SWRingtone *ringtone = [self.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
+    //Поищем в конфиге
+    SWRingtoneDescription *description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
     
-    //Возможно, такой рингтон уже есть в кэше
-    if (ringtone == nil) {
-        //Или поищем в конфиге
-        SWRingtoneDescription *description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
+    if (description) {
         
-        if (description) {
-            //Если есть конфиг, создадим ринтон и поместим его в кэш
+        //Возможно, такой рингтон уже есть в кэше
+        ringtone = [self.ringtones objectForKey:description.url];
+        
+        //...или создадим по конфигу
+        if ((ringtone == nil) && (description.url != nil)) {
+            //создадим ринтон и поместим его в кэш
             ringtone = [[SWRingtone alloc] initWithFileAtPath:description.url];
             ringtone.noVibrations = !description.hasVibrations;
             ringtone.isFinite = description.isFinite;
             
-            [self.ringtones setObject:ringtone forKey:[NSNumber numberWithInteger:reason]];
+            [self.ringtones setObject:ringtone forKey:description.url];
         }
     }
     

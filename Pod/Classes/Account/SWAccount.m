@@ -703,7 +703,7 @@ void * refToSelf;
         NSString *uri = [SWUriFormatter sipUriWithPhone:URI fromAccount:self toGSM:isGSM];
         pj_str_t pjuri = [uri pjString];
         
-        SWCall *call = [SWCall callBeforeSipForAccountId:self.accountId inBound:NO withVideo:withVideo forUri: uri];
+        SWCall *call = [SWCall callBeforeSipForAccountId:self.accountId inBound:NO withVideo:withVideo forUri: uri isGsm:isGSM];
         
         //call.ctcallId = @"outgoing polyphone";
         

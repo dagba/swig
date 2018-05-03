@@ -38,6 +38,7 @@
 
 @implementation SWCall {
     NSTimeInterval _spendTime;
+    BOOL _isGsm;
 }
 
 -(instancetype)init {
@@ -47,9 +48,9 @@
     return nil;
 }
 
--(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
+-(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound isGsm: (BOOL) isGsm {
     
-    self = [self initBeforeSipWithAccountId:accountId inBound:inbound withVideo:NO forUri:nil];
+    self = [self initBeforeSipWithAccountId:accountId inBound:inbound withVideo:NO forUri:nil isGsm:isGsm];
     
     if (!self) {
         return nil;
@@ -60,7 +61,13 @@
     return self;
 }
 
--(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+
+ -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
+     return [self initWithCallId:callId accountId:accountId inBound:inbound isGsm:NO];
+ }
+
+
+-(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm {
     
     self = [super init];
     
@@ -70,6 +77,7 @@
     _accountId = accountId;
     _inbound = inbound;
     _spendTime = -1;
+    _isGsm = isGsm;
     
     self.currentVideoCaptureDevice = PJMEDIA_NO_VID_DEVICE;
     
@@ -96,6 +104,11 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(returnToBackground:) name:UIApplicationWillResignActiveNotification object:nil];
     
     return self;
+}
+
+-(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+    
+    return [self initBeforeSipWithAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri isGsm:NO];
 }
 
 -(void)initSipDataForCallId: (NSUInteger)callId {
@@ -156,17 +169,26 @@
 
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
     
-    SWCall *call = [[SWCall alloc] initWithCallId:callId accountId:accountId inBound:inbound];
+    return [self callWithId:callId accountId:accountId inBound:inbound isGsm:NO];
+}
+
++(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound isGsm: (BOOL) isGsm {
+    
+    SWCall *call = [[SWCall alloc] initWithCallId:callId accountId:accountId inBound:inbound isGsm:isGsm];
     
     return call;
 }
 
-+(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
++(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm {
     
-    SWCall *call = [[SWCall alloc] initBeforeSipWithAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri];
+    SWCall *call = [[SWCall alloc] initBeforeSipWithAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri isGsm:isGsm];
     
     return call;
 }
+
+ +(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+     return [self callBeforeSipForAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri isGsm:NO];
+ }
 
 -(void)createLocalNotification {
     
@@ -410,6 +432,8 @@
             
             [self disableVideoCaptureDevice];
             
+            _spendTime = [[NSDate date] timeIntervalSinceDate:self.dateStartSpeaking];
+            
             SWRingtone *ringtone = nil;
             
             //Если отбой инициирован не нами, по причине отбоя найдём рингтон
@@ -418,9 +442,7 @@
                 ringtone = [endpoint getRingtoneForReason:reason];
                 [ringtone setAudioPlayerDelegate:self];
             }
-            
-            _spendTime = [[NSDate date] timeIntervalSinceDate:self.dateStartSpeaking];
-            
+                        
             //и есть ли соответствующий гудок
             if (ringtone) {
                 self.callState = SWCallStateDisconnectRingtone;
