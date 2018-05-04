@@ -2547,13 +2547,18 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     self.ringtone = _standartRingtone;
 }
 
-- (SWRingtone *) getRingtoneForReason: (NSInteger) reason {
+- (SWRingtone *) getRingtoneForReason: (NSInteger) reason andCall: (SWCall *) call {
     SWRingtone *ringtone;
+    SWRingtoneDescription *description;
     
-    //TODO: get ringtone description from main app
-    
-    //Поищем в конфиге
-    SWRingtoneDescription *description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
+    if (self.endpointConfiguration.getRingtoneBlock != nil) {
+        //Может быть, в конфигурации задан блок поиска рингтона
+        description = self.endpointConfiguration.getRingtoneBlock(reason, call);
+    }
+    else {
+        //Поищем в конфиге
+        description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
+    }
     
     if (description) {
         
@@ -2572,6 +2577,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     }
     
     return ringtone;
+}
+
+- (SWRingtone *) getRingtoneForReason: (NSInteger) reason {
+    return [self getRingtoneForReason:reason andCall:nil];
 }
 
 - (void) startStandartRingtone {

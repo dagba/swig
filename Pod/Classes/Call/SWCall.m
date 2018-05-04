@@ -363,7 +363,7 @@
                 localReason = SWCallReasonConnecting;
             }
             
-            ringtone = [endpoint getRingtoneForReason: localReason];
+            ringtone = [endpoint getRingtoneForReason: localReason andCall:self];
             
             //Если мы звоним, до прихода гудков с сервера играем свои
             if ((!self.inbound) && (ringtone != nil)) {
@@ -439,7 +439,7 @@
             //Если отбой инициирован не нами, по причине отбоя найдём рингтон
             //Если звонок не соединился и при этом не наш, гудки играть не нужно
             if (!self.isHangupSent && (self.wasConnected || (!self.inbound))) {
-                ringtone = [endpoint getRingtoneForReason:reason];
+                ringtone = [endpoint getRingtoneForReason:reason andCall:self];
                 [ringtone setAudioPlayerDelegate:self];
             }
                         

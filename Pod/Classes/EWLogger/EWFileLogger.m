@@ -86,7 +86,7 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
     if ([[NSFileManager defaultManager] isDeletableFileAtPath:path]) {
         BOOL success = [[NSFileManager defaultManager] removeItemAtPath:path error:&error];
         if (!success) {
-            NSLog(@"Error removing file at path: %@", error.localizedDescription);
+            //NSLog(@"Error removing file at path: %@", error.localizedDescription);
         }
     }
 }

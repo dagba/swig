@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-@class SWRingtoneDescription;
+@class SWRingtoneDescription, SWCall;
 
 @interface SWEndpointConfiguration : NSObject
 
@@ -29,6 +29,7 @@
 @property (nonatomic, strong) NSArray *transportConfigurations; //empty by default must specify
 
 @property (nonatomic, readonly) NSMutableDictionary <NSNumber *, SWRingtoneDescription *> *ringtones;
+@property (nonatomic, copy, nullable) SWRingtoneDescription* (^getRingtoneBlock)(NSInteger reason, SWCall *call);
 
 +(instancetype)configurationWithTransportConfigurations:(NSArray *)transportConfigurations;
 
