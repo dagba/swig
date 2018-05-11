@@ -11,6 +11,7 @@
 #import <pjsua.h>
 #import "SWRingtone.h"
 #import <pjnath.h>
+#import "SWMessageSenderProtocol.h"
 
 struct Sync {
     NSUInteger lastSmidRX;
@@ -59,7 +60,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 //typedef void (^SWBalanceUpdatedBlock) (NSNumber *balance);
 
 
-@class SWEndpointConfiguration, SWAccount, SWCall, SWThreadManager;
+@class SWEndpointConfiguration, SWAccount, SWCall, SWThreadManager, SWIntentManager;
 
 @interface SWEndpoint : NSObject
 
@@ -70,6 +71,8 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 @property (nonatomic, readonly) BOOL areOtherCalls;
 
 @property (nonatomic, strong) SWThreadManager *threadFactory;
+@property (nonatomic, readonly) id<SWMessageSenderProtocol> messageSender;
+@property (strong, readonly) SWIntentManager *intentManager;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
 

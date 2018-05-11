@@ -17,19 +17,6 @@
 
 @implementation SWIntentManager
 
-static SWIntentManager *_sharedInstance = nil;
-
-+(id)sharedInstance {
-    
-    static dispatch_once_t onceToken;
-    
-    dispatch_once(&onceToken, ^{
-        _sharedInstance = [self new];
-    });
-    
-    return _sharedInstance;
-}
-
 - (instancetype)init
 {
     self = [super init];
@@ -56,9 +43,15 @@ static SWIntentManager *_sharedInstance = nil;
         return;
     }
     
+#ifndef DEBUG
+#error TODO
+    //TODO: убрать проверку выше, вместо этого возвращать что-то из блока ниже?
+#endif
+    
     __weak typeof(self) weakSelf = self;
     
     dispatch_async(self.serialQueue, ^{
+        
         //double check
         if( ! [weakSelf needPerformNext]) {
             return;
@@ -76,7 +69,7 @@ static SWIntentManager *_sharedInstance = nil;
 - (BOOL) needPerformNext {
 #ifndef DEBUG
 #error TODO
-    //TODO: check SIP status
+    //TODO: check SIP status (on reg thread?)
 #endif
     
     return self.intents.count > 0;

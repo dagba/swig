@@ -8,6 +8,7 @@
 #import "SWMessageSender.h"
 #import "SWSipMessage.h"
 #import "SWEndpoint.h"
+#import "SWIntentManager.h"
 
 @implementation SWMessageSender
 
@@ -25,10 +26,11 @@
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
-#ifndef DEBUG
-#error TODO
-    //TODO: add intent here
-#endif
+    [endpoint.intentManager addIntent:messageparams];
+}
+
+-(void)sendMessage:(NSString *)message fileType:(SWFileType) fileType fileHash:(NSString *) fileHash to:(NSString *)URI isGroup:(BOOL) isGroup completionHandler:(void(^)(NSError *error, NSString *SMID, NSString *fileServer, NSDate *date))handler {
+    [self sendMessage:message fileType:fileType fileHash:fileHash to:URI isGroup:isGroup forceOffline:NO isGSM:NO completionHandler:handler];
 }
 
 @end

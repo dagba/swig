@@ -11,6 +11,7 @@
 #import <UIKit/UIKit.h>
 #import <pjsip/sip_types.h>
 #import "pjsua.h"
+#import "SWMessageSenderProtocol.h"
 
 //TODO: remove account from accounts when disconnected
 
@@ -31,18 +32,6 @@ typedef NS_ENUM(NSInteger, SWPresenseState) {
 typedef NS_ENUM(NSInteger, SWPresenseAction) {
     SWPresenseActionSubscribe,
     SWPresenseActionUnsubscribe
-};
-
-
-typedef NS_ENUM(NSInteger, SWFileType) {
-    SWFileTypeNo,
-    SWFileTypeBin,
-    SWFileTypePicture,
-    SWFileTypeAudio,
-    SWFileTypeVideo,
-    SWFileTypeLocation,
-    SWFileTypeContact,
-    SWFileTypeSticker
 };
 
 typedef NS_ENUM(NSInteger, SWGroupAction) {

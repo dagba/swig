@@ -11,6 +11,6 @@
 
 @interface SWIntentManager : NSObject
 
-+(id)sharedInstance;
+- (void) addIntent: (id<SWIntentProtocol>) intent;
 
 @end

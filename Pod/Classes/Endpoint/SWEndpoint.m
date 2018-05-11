@@ -36,6 +36,8 @@
 #import "SWThreadManager.h"
 #import "SWAudioSessionObserver.h"
 #import "SWRingtoneDescription.h"
+#import "SWMessageSender.h"
+#import "SWIntentManager.h"
 
 #import "SWThreadManager.h"
 
@@ -260,6 +262,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     if (!self) {
         return nil;
     }
+    
+    self->_messageSender = [SWMessageSender new];
+    self->_intentManager = [SWIntentManager new];
     
     pj_str_t method_string_command = pj_str("COMMAND");
     pjsip_method_init_np(&pjsip_command_method, &method_string_command);
