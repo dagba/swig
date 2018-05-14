@@ -87,7 +87,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 -(void)restart:(void(^)(NSError *error))handler;
 -(void)setShouldResumeBlock:(SWShouldResumeBlock)handler;
 
-
+-(BOOL)hasActiveAccount;
 -(void)addAccount:(SWAccount *)account;
 -(void)removeAccount:(SWAccount *)account;
 -(SWAccount *)lookupAccount:(NSInteger)accountId;

@@ -7,11 +7,15 @@
 
 #import "SWIntentManager.h"
 #import "SWIntentProtocol.h"
+#import "SWEndpoint.h"
 
-@interface SWIntentManager ()
+@interface SWIntentManager () {
+    NSThread *_intentsThread;
+}
 
 @property (strong, readonly) NSMutableArray<id<SWIntentProtocol>> *intents;
 @property (strong, readonly) dispatch_queue_t serialQueue;
+@property (assign, atomic) BOOL working;
 
 @end
 
@@ -30,49 +34,68 @@
 - (void) addIntent: (id<SWIntentProtocol>) intent {
     dispatch_async(self.serialQueue, ^{
         [self.intents addObject:intent];
+        self.working = YES;
     });
 
-    if ([self needPerformNext]) {
+    //по добавлению интента
+    [self start];
+}
+
+- (void) start {
+    self.working = YES;
+    [self startIntentsThread];
+}
+
+- (void) startIntentsThread {
+    
+    NSLog(@"<--threads--> requesting: <sipIntentsThread>");
+    
+    @synchronized (self) {
+        if ((_intentsThread == nil) || (!_intentsThread.isExecuting)) {
+            _intentsThread = [[NSThread alloc]  initWithTarget:self selector:@selector(threadKeepAlive:) object:nil];
+            _intentsThread.name = @"sipIntentsThread";
+            [_intentsThread start];
+        }
+    }
+}
+
+- (void)threadKeepAlive:(id)data {
+    while (self.working) {
         [self performNext];
     }
 }
 
 - (void) performNext {
     
-    if (! [self needPerformNext]) {
-        return;
-    }
-    
-#ifndef DEBUG
-#error TODO
-    //TODO: убрать проверку выше, вместо этого возвращать что-то из блока ниже?
-#endif
-    
     __weak typeof(self) weakSelf = self;
     
     dispatch_async(self.serialQueue, ^{
         
-        //double check
         if( ! [weakSelf needPerformNext]) {
             return;
         }
+        
         id<SWIntentProtocol> intent = [weakSelf.intents objectAtIndex:0];
         
         [weakSelf.intents removeObjectAtIndex:0];
         
         [intent performIntent];
     });
-    
-    [self performNext];
 }
 
 - (BOOL) needPerformNext {
-#ifndef DEBUG
-#error TODO
-    //TODO: check SIP status (on reg thread?)
-#endif
+    BOOL result = NO;
     
-    return self.intents.count > 0;
+    //Вернем нет, если нет интентов
+    result = (self.intents.count > 0);
+    
+    //Проверим, готов ли СИП обработать интент
+    result = result && [[SWEndpoint sharedEndpoint] hasActiveAccount];
+    
+    //Если проверка не прошла, останавливаем работу, чтобы не обрабатывать следующие интенты
+    self.working = result;
+    
+    return result;
 }
 
 @end
