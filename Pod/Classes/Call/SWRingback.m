@@ -82,10 +82,7 @@
             return;
         }
     } onThread:callThread wait:YES];
-<<<<<<< HEAD
-    
-=======
->>>>>>> experiment
+
     if (shouldReturnNil) {
         return nil;
     }
