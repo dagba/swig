@@ -15,6 +15,7 @@
 #import "SWUriFormatter.h"
 #import "NSString+PJString.h"
 #import "SWSipMessage.h"
+#import "SWIntentManager.h"
 
 #import "EWFileLogger.h"
 
@@ -589,6 +590,8 @@ void * refToSelf;
         else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
             self.accountState = SWAccountStateConnected;
             self.isPaused = NO;
+            
+            [[SWEndpoint sharedEndpoint].intentManager start];
         }
         
         else {

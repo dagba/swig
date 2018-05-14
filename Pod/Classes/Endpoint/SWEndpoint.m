@@ -36,6 +36,8 @@
 #import "SWThreadManager.h"
 #import "SWAudioSessionObserver.h"
 #import "SWRingtoneDescription.h"
+#import "SWMessageSender.h"
+#import "SWIntentManager.h"
 
 #import "SWThreadManager.h"
 
@@ -260,6 +262,9 @@ static SWEndpoint *_sharedEndpoint = nil;
     if (!self) {
         return nil;
     }
+    
+    self->_messageSender = [SWMessageSender new];
+    self->_intentManager = [SWIntentManager new];
     
     pj_str_t method_string_command = pj_str("COMMAND");
     pjsip_method_init_np(&pjsip_command_method, &method_string_command);
@@ -1373,7 +1378,6 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                 
                 hangupReason = [[hangupReasonStr substringWithRange:[[regex firstMatchInString:hangupReasonStr options:0 range:NSMakeRange(0, hangupReasonStr.length)] rangeAtIndex:1]] integerValue];
             }
-#warning костыль
             else {
                 switch (callInfo.last_status) {
                     case PJSIP_SC_NOT_ACCEPTABLE:
@@ -1386,6 +1390,10 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                         
                     case PJSIP_SC_BUSY_HERE:
                         hangupReason = SWCallReasonRemoteBusy;
+                        break;
+                        
+                    case PJSIP_SC_PAYMENT_REQUIRED:
+                        hangupReason = SWCallReasonNoMoney;
                         break;
                         
                     default:
@@ -2681,6 +2689,39 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 - (BOOL)areOtherCalls {
     NSLog(@"<--check other calls--> areOtherCalls: %@", _areOtherCalls ? @"true" : @"false");
     return _areOtherCalls;
+}
+
+- (BOOL)hasActiveAccount {
+    __block BOOL result = NO;
+    
+    SWThreadManager *threadManager = self.threadFactory;
+    
+    NSThread *regThread = [threadManager getRegistrationThread];
+    
+    __weak typeof(self) weakSelf = self;
+    
+    [threadManager runBlock:^{
+        if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
+            result = NO;
+            return;
+        }
+        
+        SWAccount *account = [weakSelf firstAccount];
+        
+        if (account == nil) {
+            result = NO;
+            return;
+        }
+        
+        pjsua_acc_info accinfo = [account getInfo];
+        
+        result = ((account.accountState == SWAccountStateConnected) && (accinfo.expires > 3));
+        
+        return;
+        
+    } onThread:regThread wait:YES];
+    
+    return result;
 }
 
 @end
