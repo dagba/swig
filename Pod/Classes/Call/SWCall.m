@@ -1139,6 +1139,12 @@
 }
 
 - (void) updateOverrideSpeaker {
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) return;
+    
+    //[[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+    
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     NSString *sessionMode = AVAudioSessionModeDefault;
     NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
@@ -1171,6 +1177,7 @@
             sessionActive = YES;
             NSLog(@"<--swcall--> ", audioSession);
             speaker = _speaker;
+            sessionMode = AVAudioSessionModeVoiceChat;
             //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
             break;
             
@@ -1224,14 +1231,23 @@
     
     NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
     
+        
+    NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
+    
+    return;
+    /// TODO: проверить переключение микрофонов
+        
     for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
         NSString *porttype = [desc portType];
         NSString *portname = [desc portName];
         NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
         
-        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
-            return;
-        }
+        
+        
+//        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
+//            NSLog(@"!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])");
+//            return;
+//        }
         
         AVAudioSessionDataSourceDescription *frontMicrophone;
         AVAudioSessionDataSourceDescription *topMicrophone;
@@ -1283,6 +1299,8 @@
     NSLog(@"<--speaker--> audioSession.inputGain:%f", audioSession.inputGain);
     NSLog(@"<--speaker--> audioSession.categoryOptions:%d", audioSession.categoryOptions);
     */
+        NSLog(@"End of updateOverrideSpeaker");
+    });
 }
 
 #warning deprecated
