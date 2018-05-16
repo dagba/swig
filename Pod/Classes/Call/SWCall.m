@@ -1141,14 +1141,16 @@
 - (void) updateOverrideSpeaker {
     
     dispatch_async(dispatch_get_main_queue(), ^{
-        if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) return;
-    
-    //[[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
-    
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    NSString *sessionMode = AVAudioSessionModeDefault;
-    NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
-    
+        
+        AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+        NSString *sessionMode = AVAudioSessionModeDefault;
+        NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
+        
+        if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) {
+            [audioSession setCategory:sessionCategory error:nil];
+            [audioSession setMode:sessionMode error:nil];
+            return;
+        }
     
     BOOL speaker = NO;
     BOOL sessionActive = YES;
@@ -1232,11 +1234,10 @@
     NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
     
         
-    NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
-    
     return;
     /// TODO: проверить переключение микрофонов
         
+    NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
     for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
         NSString *porttype = [desc portType];
         NSString *portname = [desc portName];
@@ -1299,7 +1300,6 @@
     NSLog(@"<--speaker--> audioSession.inputGain:%f", audioSession.inputGain);
     NSLog(@"<--speaker--> audioSession.categoryOptions:%d", audioSession.categoryOptions);
     */
-        NSLog(@"End of updateOverrideSpeaker");
     });
 }
 
