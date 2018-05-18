@@ -62,9 +62,9 @@
 }
 
 
- -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
-     return [self initWithCallId:callId accountId:accountId inBound:inbound isGsm:NO];
- }
+-(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound {
+    return [self initWithCallId:callId accountId:accountId inBound:inbound isGsm:NO];
+}
 
 
 -(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm {
@@ -186,9 +186,9 @@
     return call;
 }
 
- +(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
-     return [self callBeforeSipForAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri isGsm:NO];
- }
++(instancetype)callBeforeSipForAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri {
+    return [self callBeforeSipForAccountId:accountId inBound:inbound withVideo:withVideo forUri:uri isGsm:NO];
+}
 
 -(void)createLocalNotification {
     
@@ -232,7 +232,7 @@
         dispatch_async(dispatch_get_main_queue(), ^{
             pjsua_call_hangup((int)_callId, 0, NULL, NULL);
         });
-
+        
     }
     
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
@@ -313,8 +313,14 @@
 }
 
 -(void)callStateChangedWithReason: (NSInteger) reason {
+    
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
+    
+    [self callStateChanged:callInfo withReason:reason];
+}
+
+-(void)callStateChanged: (pjsua_call_info) callInfo withReason: (NSInteger) reason {
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
@@ -442,14 +448,14 @@
                 ringtone = [endpoint getRingtoneForReason:reason andCall:self];
                 [ringtone setAudioPlayerDelegate:self];
             }
-                        
+            
             //и есть ли соответствующий гудок
             if (ringtone) {
                 self.callState = SWCallStateDisconnectRingtone;
                 
                 [endpoint setRingtone:ringtone];
                 
-//Если используется коллкит, рингтон стратует, когда он закроет сессию. Звонок отслеживает, контролирует ли коллкит сессию
+                //Если используется коллкит, рингтон стратует, когда он закроет сессию. Звонок отслеживает, контролирует ли коллкит сессию
                 if (!self.callkitAreHandlingAudioSession) {
                     [ringtone startRingtone];
                 }
@@ -604,7 +610,7 @@
         [self performSelector:@selector(sendRinging) onThread:callThread withObject:nil waitUntilDone:NO];
         return;
     }
-        
+    
     pj_status_t status;
     NSError *error;
     
@@ -719,7 +725,7 @@
     else if (slf.hangupReason == SWCallReasonLocalBusy) {
         hangupCode = PJSIP_SC_BUSY_HERE;
     }
-     
+    
     if (reason != nil) {
         msg_data = malloc(sizeof(pjsua_msg_data));
         
@@ -825,11 +831,11 @@
      pj_status_t status;
      NSError *error;
      
-    status = pjsua_set_no_snd_dev();
-    
-    if (status != PJ_SUCCESS) {
-        error = [NSError errorWithDomain:@"Error close sound track" code:0 userInfo:nil];
-    }
+     status = pjsua_set_no_snd_dev();
+     
+     if (status != PJ_SUCCESS) {
+     error = [NSError errorWithDomain:@"Error close sound track" code:0 userInfo:nil];
+     }
      */
     
     if (handler) {
@@ -842,9 +848,9 @@
     NSError *error;
     
     if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected && self.callState != SWCallStateDisconnectRingtone) {
-
+        
         pjsua_set_no_snd_dev();
-
+        
         status = pjsua_call_set_hold((int)self.callId, NULL);
         
         if (status != PJ_SUCCESS) {
@@ -858,7 +864,7 @@
     if (handler) {
         handler(error);
     }
-
+    
 }
 
 #pragma mark video
@@ -913,11 +919,11 @@
     
     //Почему-то после этого pjsua_vid_dev_is_active всё равно тру, зато окно превью пропадает насовсем
     /*
-    if(currentDev != PJMEDIA_NO_VID_DEVICE) {
-        //Отключаем захват превью
-        
-        pjsua_vid_preview_stop(currentDev);
-    }
+     if(currentDev != PJMEDIA_NO_VID_DEVICE) {
+     //Отключаем захват превью
+     
+     pjsua_vid_preview_stop(currentDev);
+     }
      */
     
     [self setVideoCaptureDevice:nextDev];
@@ -1038,7 +1044,7 @@
     NSError *error;
     
     if (self.callId != PJSUA_INVALID_ID && self.callState != SWCallStateDisconnected && self.callState != SWCallStateDisconnectRingtone) {
-
+        
 #warning experiment
         /*
          int capture_dev = 0;
@@ -1116,7 +1122,7 @@
         if (status != PJ_SUCCESS) {
             error = [NSError errorWithDomain:@"Error mute" code:0 userInfo:nil];
         }
-
+        
     }
     
     else {
@@ -1125,7 +1131,7 @@
         if (status != PJ_SUCCESS) {
             error = [NSError errorWithDomain:@"Error unmute" code:0 userInfo:nil];
         }
-
+        
     }
     handler(error);
 }
@@ -1151,155 +1157,155 @@
             [audioSession setMode:sessionMode error:nil];
             return;
         }
-    
-    BOOL speaker = NO;
-    BOOL sessionActive = YES;
-    
-    switch (self.callState) {
-        case SWCallStateReady:
-            speaker = YES;
-            //AVAudioSessionCategoryPlayAndRecord не глушится silent switch'ом
-
-            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
-            
-            break;
-        case SWCallStateIncoming:
-            speaker = YES;
-            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
-            break;
-        case SWCallStateCalling:
-            speaker = _speaker || self.inbound;
-            sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
-            break;
-        case SWCallStateConnecting:
-            sessionActive = NO;
-            speaker = _speaker;
-            break;
-        case SWCallStateConnected:
-            sessionActive = YES;
-            NSLog(@"<--swcall--> ", audioSession);
-            speaker = _speaker;
-            sessionMode = AVAudioSessionModeVoiceChat;
-            //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
-            break;
-            
-        case SWCallStateDisconnected: {
-            sessionActive = NO;
-            speaker = NO;
-            
+        
+        BOOL speaker = NO;
+        BOOL sessionActive = YES;
+        
+        switch (self.callState) {
+            case SWCallStateReady:
+                speaker = YES;
+                //AVAudioSessionCategoryPlayAndRecord не глушится silent switch'ом
+                
+                sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
+                
+                break;
+            case SWCallStateIncoming:
+                speaker = YES;
+                sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
+                break;
+            case SWCallStateCalling:
+                speaker = _speaker || self.inbound;
+                sessionCategory = self.inbound ? AVAudioSessionCategorySoloAmbient : AVAudioSessionCategoryPlayAndRecord;
+                break;
+            case SWCallStateConnecting:
+                sessionActive = NO;
+                speaker = _speaker;
+                break;
+            case SWCallStateConnected:
+                sessionActive = YES;
+                NSLog(@"<--swcall--> ", audioSession);
+                speaker = _speaker;
+                sessionMode = AVAudioSessionModeVoiceChat;
+                //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
+                break;
+                
+            case SWCallStateDisconnected: {
+                sessionActive = NO;
+                speaker = NO;
+                
 #warning костыль
-            dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
-            
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), queue, ^{
+                dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
                 
-                [[NSNotificationCenter defaultCenter] postNotificationName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] userInfo:@{AVAudioSessionInterruptionTypeKey: [NSNumber numberWithUnsignedInteger:AVAudioSessionInterruptionTypeEnded]}];
-            });
-            
-            break;
-        }
-            
-        case SWCallStateDisconnectRingtone:
-            speaker = _speaker;
-            break;
-        default:
-            break;
-    }
-    
-    //Если используется коллкит, нам не нужно проигрывать звонок самостоятельно, поэтому не нужен режим, который глушится свитчом (и не запускается в бэкграунде!)
-    if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 10.0) {
-        sessionCategory = AVAudioSessionCategoryPlayAndRecord;
-    }
-    
-    NSError *error = nil;
-    
-    NSTimeInterval bufferDuration = .005;
-    [audioSession setPreferredIOBufferDuration:bufferDuration error:&error];
-    [audioSession setPreferredSampleRate:44100 error:&error];
-    
-    [audioSession setMode:sessionMode error:&error];
-    
-    NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
-    if (speaker) {
-        [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
-    }
-    
-    else {
-        [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
-        
-        if (error) {
-            NSLog(@"<--speaker--> setCategory error: %@", error);
-        }
-    }
-    
-    NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
-    
-        
-    return;
-    /// TODO: проверить переключение микрофонов
-        
-    NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
-    for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
-        NSString *porttype = [desc portType];
-        NSString *portname = [desc portName];
-        NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
-        
-        
-        
-//        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
-//            NSLog(@"!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])");
-//            return;
-//        }
-        
-        AVAudioSessionDataSourceDescription *frontMicrophone;
-        AVAudioSessionDataSourceDescription *topMicrophone;
-        AVAudioSessionDataSourceDescription *bottomMicrophone;
-        
-        //NSLog(@"<--speaker--> available input porttype: %@ : %@. DataSources: %d", porttype, portname, dataSources.count);
-        //NSLog(@"<--speaker--> selectedDataSource:%@. location=%@; orientation=%@; selectedPolarPattern: %@", frontMicrophone.dataSourceName, frontMicrophone.location, frontMicrophone.orientation, frontMicrophone.selectedPolarPattern);
-        
-        
-        for(AVAudioSessionDataSourceDescription* source in dataSources) {
-            //NSLog(@"<--speaker--> --- dataSource: %@", source);
-            if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
-                frontMicrophone = source;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), queue, ^{
+                    
+                    [[NSNotificationCenter defaultCenter] postNotificationName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] userInfo:@{AVAudioSessionInterruptionTypeKey: [NSNumber numberWithUnsignedInteger:AVAudioSessionInterruptionTypeEnded]}];
+                });
+                
+                break;
             }
-            else if ([source.orientation isEqualToString:AVAudioSessionOrientationTop]) {
-                topMicrophone = source;
-            }
-            else if ([source.orientation isEqualToString:AVAudioSessionOrientationBottom]) {
-                bottomMicrophone = source;
-            }
+                
+            case SWCallStateDisconnectRingtone:
+                speaker = _speaker;
+                break;
+            default:
+                break;
         }
         
+        //Если используется коллкит, нам не нужно проигрывать звонок самостоятельно, поэтому не нужен режим, который глушится свитчом (и не запускается в бэкграунде!)
+        if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 10.0) {
+            sessionCategory = AVAudioSessionCategoryPlayAndRecord;
+        }
+        
+        NSError *error = nil;
+        
+        NSTimeInterval bufferDuration = .005;
+        [audioSession setPreferredIOBufferDuration:bufferDuration error:&error];
+        [audioSession setPreferredSampleRate:44100 error:&error];
+        
+        [audioSession setMode:sessionMode error:&error];
+        
+        NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
         if (speaker) {
-            //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
-            if (frontMicrophone) {
-                [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
-                
-                [audioSession setInputDataSource:frontMicrophone error:&error];
-            }
-            else if (topMicrophone) {
-                [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
-                
-                [audioSession setInputDataSource:topMicrophone error:&error];
-            }
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
         }
+        
         else {
-            //переключаемся на нижний микрофон
-            if (bottomMicrophone) {
-                [bottomMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
-                
-                [audioSession setInputDataSource:bottomMicrophone error:&error];
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
+            
+            if (error) {
+                NSLog(@"<--speaker--> setCategory error: %@", error);
             }
         }
-    }
-    
-    /*
-    NSLog(@"<--speaker--> audioSession.category:%@", audioSession.category);
-    NSLog(@"<--speaker--> audioSession.mode:%@", audioSession.mode);
-    NSLog(@"<--speaker--> audioSession.inputGain:%f", audioSession.inputGain);
-    NSLog(@"<--speaker--> audioSession.categoryOptions:%d", audioSession.categoryOptions);
-    */
+        
+        NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
+        
+        
+        return;
+        /// TODO: проверить переключение микрофонов
+        
+        NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
+        for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
+            NSString *porttype = [desc portType];
+            NSString *portname = [desc portName];
+            NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
+            
+            
+            
+            //        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
+            //            NSLog(@"!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])");
+            //            return;
+            //        }
+            
+            AVAudioSessionDataSourceDescription *frontMicrophone;
+            AVAudioSessionDataSourceDescription *topMicrophone;
+            AVAudioSessionDataSourceDescription *bottomMicrophone;
+            
+            //NSLog(@"<--speaker--> available input porttype: %@ : %@. DataSources: %d", porttype, portname, dataSources.count);
+            //NSLog(@"<--speaker--> selectedDataSource:%@. location=%@; orientation=%@; selectedPolarPattern: %@", frontMicrophone.dataSourceName, frontMicrophone.location, frontMicrophone.orientation, frontMicrophone.selectedPolarPattern);
+            
+            
+            for(AVAudioSessionDataSourceDescription* source in dataSources) {
+                //NSLog(@"<--speaker--> --- dataSource: %@", source);
+                if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
+                    frontMicrophone = source;
+                }
+                else if ([source.orientation isEqualToString:AVAudioSessionOrientationTop]) {
+                    topMicrophone = source;
+                }
+                else if ([source.orientation isEqualToString:AVAudioSessionOrientationBottom]) {
+                    bottomMicrophone = source;
+                }
+            }
+            
+            if (speaker) {
+                //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
+                if (frontMicrophone) {
+                    [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    
+                    [audioSession setInputDataSource:frontMicrophone error:&error];
+                }
+                else if (topMicrophone) {
+                    [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    
+                    [audioSession setInputDataSource:topMicrophone error:&error];
+                }
+            }
+            else {
+                //переключаемся на нижний микрофон
+                if (bottomMicrophone) {
+                    [bottomMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    
+                    [audioSession setInputDataSource:bottomMicrophone error:&error];
+                }
+            }
+        }
+        
+        /*
+         NSLog(@"<--speaker--> audioSession.category:%@", audioSession.category);
+         NSLog(@"<--speaker--> audioSession.mode:%@", audioSession.mode);
+         NSLog(@"<--speaker--> audioSession.inputGain:%f", audioSession.inputGain);
+         NSLog(@"<--speaker--> audioSession.categoryOptions:%d", audioSession.categoryOptions);
+         */
     });
 }
 

@@ -568,10 +568,20 @@ void * refToSelf;
 -(void)accountStateChanged {
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
     NSThread *regThread = [thrManager getRegistrationThread];
+    
+    __weak typeof(self) weakSelf = self;
     [thrManager runBlock:^{
+
+#warning experiment
+        if (pjsua_get_state() != PJSUA_STATE_RUNNING) {
+            weakSelf.accountState = SWAccountStateDisconnected;
+            return;
+        }
+         
+        
         pjsua_acc_info accountInfo;
         
-        pjsua_acc_get_info((int)self.accountId, &accountInfo);
+        pjsua_acc_get_info((int)weakSelf.accountId, &accountInfo);
         
         pjsip_status_code code = accountInfo.status;
         
@@ -579,27 +589,27 @@ void * refToSelf;
         //status would be disconnected, online, and offline, isConnected could return true if online/offline
         
         if (code == 0 || accountInfo.expires == -1) {
-            self.accountState = SWAccountStateDisconnected;
+            weakSelf.accountState = SWAccountStateDisconnected;
         }
         
         else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_TRYING) || PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_MULTIPLE_CHOICES)) {
-            self.accountState = SWAccountStateConnecting;
-            self.isPaused = NO;
+            weakSelf.accountState = SWAccountStateConnecting;
+            weakSelf.isPaused = NO;
         }
         
         else if (PJSIP_IS_STATUS_IN_CLASS(code, PJSIP_SC_OK)) {
-            self.accountState = SWAccountStateConnected;
-            self.isPaused = NO;
+            weakSelf.accountState = SWAccountStateConnected;
+            weakSelf.isPaused = NO;
             
             [[SWEndpoint sharedEndpoint].intentManager start];
         }
         
         else {
-            self.accountState = SWAccountStateDisconnected;
+            weakSelf.accountState = SWAccountStateDisconnected;
         }
         
-        if ((self.accountState == SWAccountStateDisconnected) && self.neededRegisterState) {
-            [self requestRegisterState:PJ_TRUE];
+        if ((weakSelf.accountState == SWAccountStateDisconnected) && weakSelf.neededRegisterState) {
+            [weakSelf requestRegisterState:PJ_TRUE];
         }
     } onThread:regThread wait:YES];
     

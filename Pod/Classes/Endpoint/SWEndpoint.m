@@ -627,6 +627,8 @@ static SWEndpoint *_sharedEndpoint = nil;
 }
 
 -(void) configureWithCompletion: (void(^)(NSError *error))handler {
+    self.endpointIteration++;
+    
     pj_status_t status;
     
     status = pjsua_create();
@@ -1019,7 +1021,11 @@ void logCallback (int level, const char *data, int len) {
     NSString *loguid = [[NSUUID UUID] UUIDString];
     
     NSLog(@"<--pjsip freeze--> before pjsua_destroy2. UID=%@", loguid);
-    pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+    while(pjsua_get_state() != PJSUA_STATE_NULL) {
+        NSLog(@"<--pjsip freeze--> before pjsua_destroy2 attempt. UID=%@", loguid);
+        pj_status_t status = pjsua_destroy2(PJSUA_DESTROY_NO_NETWORK);
+        NSLog(@"<--pjsip freeze--> after pjsua_destroy2 attempt. UID=%@", loguid);
+    }
     NSLog(@"<--pjsip freeze--> after pjsua_destroy2. UID=%@", loguid);
     
     self.needResetPjPool = YES;
@@ -1273,24 +1279,27 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
 
 static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_rx_data *rdata) {
     
-    SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-    
-    if (account) {
+    [[SWEndpoint sharedEndpoint].threadFactory runBlockOnRegThread:^{
+        SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
         
-        SWCall *call = [SWCall callWithId:call_id accountId:acc_id inBound:YES isGsm:NO];
-        
-        if (call) {
+        if (account) {
             
-            [account addCall:call];
-            NSLog(@"<--callStateChanged--> SWOnIncomingCall");
+            SWCall *call = [SWCall callWithId:call_id accountId:acc_id inBound:YES isGsm:NO];
             
-            [call callStateChanged];
-            
-            if ([SWEndpoint sharedEndpoint].incomingCallBlock) {
-                [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
+            if (call) {
+                
+                [account addCall:call];
+                NSLog(@"<--callStateChanged--> SWOnIncomingCall");
+                
+                [call callStateChanged];
+                
+                if ([SWEndpoint sharedEndpoint].incomingCallBlock) {
+                    [SWEndpoint sharedEndpoint].incomingCallBlock(account, call);
+                }
             }
         }
-    }
+    } wait:NO];
+    
     
 }
 
@@ -1298,122 +1307,143 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
     
     pjsip_msg *msg = [SWEndpoint getMessageFromEvent:e];
     
+    NSString *hangupReasonStr = [SWEndpoint getHeaderByName:@"X-Reason" forMessage:msg];
+    
+    NSLog(@"<--hangupReason--> reason header: %@", hangupReasonStr);
+    
     pjsua_call_info callInfo;
     pjsua_call_get_info(call_id, &callInfo);
     
+    pjsip_uri* local_contact_uri = pjsip_parse_uri([SWEndpoint sharedEndpoint].pjPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
+    pjsip_sip_uri *local_contact_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_contact_uri);
+    
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
-    
-    SWAccount *account = [endpoint lookupAccount:callInfo.acc_id];
-    
-    if (account) {
-        
-        SWCall *call = [account lookupCall:call_id];
-        
-        if (call) {
-            
-            if (callInfo.state == PJSIP_INV_STATE_CONNECTING && callInfo.role == PJSIP_ROLE_UAC) {
-                pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
-                resp_rport = via_hdr->rport_param;
-                
-                resp_rhost = pj_str(via_hdr->recvd_param.ptr);
-                resp_rhost.slen = via_hdr->recvd_param.slen;
-                
-                NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:resp_rhost], resp_rport);
-            }
-            
-            
-            if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && callInfo.role == PJSIP_ROLE_UAC) {
-                
-                pjsip_uri* local_contact_uri = pjsip_parse_uri([SWEndpoint sharedEndpoint].pjPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
-                pjsip_sip_uri *local_contact_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_contact_uri);
-                
-                local_contact_sip_uri->port = resp_rport;
-                local_contact_sip_uri->host = resp_rhost;
-                
-                char contact_buf[512];
-                pj_str_t new_contact;
-                new_contact.ptr = contact_buf;
-                
-                new_contact.slen = pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, contact_buf, 512);
-                
-                pjsip_tx_data *tdata;
-                pjsua_call *pjcall;
-                pjsip_dialog *dlg = NULL;
-                pj_status_t status;
-                
-                status = acquire_call("pjsua_call_update_contact()", call_id, &pjcall, &dlg);
-                if (status != PJ_SUCCESS) {
-                    NSLog(@"cannot aquire call");
-                }
-                
-                
-                //                / Create UPDATE with new offer /
-                status = pjsip_inv_update(pjcall->inv, &new_contact, NULL, &tdata);
-                if (status != PJ_SUCCESS) {
-                    NSLog(@"Unable to create UPDATE request");
-                }
-                
-                //                / Add additional headers etc /
-                //                pjsua_process_msg_data(tdata, e->body.tx_msg);
-                
-                //                / Send the request /
-                status = pjsip_inv_send_msg(pjcall->inv, tdata);
-                if (status != PJ_SUCCESS) {
-                    NSLog(@"Unable to send UPDATE");
-                }
-                
-                if (dlg) pjsip_dlg_dec_lock(dlg);
-            }
-            
-            NSLog(@"<--callStateChanged--> SWOnCallState: %d callInfo.last_status: %d", callInfo.state, callInfo.last_status);
-            
-            NSInteger hangupReason = 0;
-            
-            NSString *hangupReasonStr = [SWEndpoint getHeaderByName:@"X-Reason" forMessage:msg];
-            
-            NSLog(@"<--hangupReason--> reason header: %@", hangupReasonStr);
-            
-            if (hangupReasonStr) {
-                NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@".*cause=(\\d*);.*" options:NSRegularExpressionCaseInsensitive error:nil];
-                
-                hangupReason = [[hangupReasonStr substringWithRange:[[regex firstMatchInString:hangupReasonStr options:0 range:NSMakeRange(0, hangupReasonStr.length)] rangeAtIndex:1]] integerValue];
-            }
-            else {
-                switch (callInfo.last_status) {
-                    case PJSIP_SC_NOT_ACCEPTABLE:
-                        hangupReason = SWCallReasonUnavailiable;
-                        break;
-                        
-                    case PJSIP_SC_TEMPORARILY_UNAVAILABLE:
-                        hangupReason = SWCallReasonNotAnswered;
-                        break;
-                        
-                    case PJSIP_SC_BUSY_HERE:
-                        hangupReason = SWCallReasonRemoteBusy;
-                        break;
-                        
-                    case PJSIP_SC_PAYMENT_REQUIRED:
-                        hangupReason = SWCallReasonNoMoney;
-                        break;
-                        
-                    default:
-                        break;
-                }
-            }
-            
-            [call callStateChangedWithReason:hangupReason];
-            
-            [endpoint runCallStateChangeBlockForCall:call setCode:callInfo.last_status];
-            
-            if (call.callState == SWCallStateDisconnected) {
-                [account removeCall:call.callId];
-                rport = 0;
-                resp_rport = 0;
-                rhost = pj_str("");
-                resp_rhost = pj_str("");
-            }
+    SWAccount *account;
+    SWCall *call;
+    //Найдем аккаунт, в котором есть звонок с нужным идентификатором
+    for (SWAccount *acc in endpoint.accounts) {
+        call = [acc lookupCall:call_id];
+        if (call != nil) {
+            account = acc;
+            break;
         }
     }
+    
+    [endpoint.threadFactory runBlockOnRegThread:^{
+        #warning experiment вынесено из блока
+        /*
+        pjsua_call_info callInfo;
+        pjsua_call_get_info(call_id, &callInfo);
+        */
+        
+        if (account) {
+            if (call) {
+                
+                if (callInfo.state == PJSIP_INV_STATE_CONNECTING && callInfo.role == PJSIP_ROLE_UAC) {
+                    pjsip_via_hdr *via_hdr = e->body.rx_msg.rdata->msg_info.via;
+                    resp_rport = via_hdr->rport_param;
+                    
+                    resp_rhost = pj_str(via_hdr->recvd_param.ptr);
+                    resp_rhost.slen = via_hdr->recvd_param.slen;
+                    
+                    NSLog(@"MyRealIP: %@:%d", [NSString stringWithPJString:resp_rhost], resp_rport);
+                }
+                
+                
+                if (callInfo.state == PJSIP_INV_STATE_CONFIRMED && callInfo.role == PJSIP_ROLE_UAC) {
+#warning experiment вынесено из блока
+                    /*
+                    pjsip_uri* local_contact_uri = pjsip_parse_uri([SWEndpoint sharedEndpoint].pjPool, callInfo.local_contact.ptr, callInfo.local_contact.slen, NULL);
+                    pjsip_sip_uri *local_contact_sip_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(local_contact_uri);
+                    */
+                     
+                    local_contact_sip_uri->port = resp_rport;
+                    local_contact_sip_uri->host = resp_rhost;
+                    
+                    char contact_buf[512];
+                    pj_str_t new_contact;
+                    new_contact.ptr = contact_buf;
+                    
+                    new_contact.slen = pjsip_uri_print(PJSIP_URI_IN_CONTACT_HDR, local_contact_sip_uri, contact_buf, 512);
+                    
+                    pjsip_tx_data *tdata;
+                    pjsua_call *pjcall;
+                    pjsip_dialog *dlg = NULL;
+                    pj_status_t status;
+                    
+                    status = acquire_call("pjsua_call_update_contact()", call_id, &pjcall, &dlg);
+                    if (status != PJ_SUCCESS) {
+                        NSLog(@"cannot aquire call");
+                    }
+                    
+                    
+                    //                / Create UPDATE with new offer /
+                    status = pjsip_inv_update(pjcall->inv, &new_contact, NULL, &tdata);
+                    if (status != PJ_SUCCESS) {
+                        NSLog(@"Unable to create UPDATE request");
+                    }
+                    
+                    //                / Add additional headers etc /
+                    //                pjsua_process_msg_data(tdata, e->body.tx_msg);
+                    
+                    //                / Send the request /
+                    status = pjsip_inv_send_msg(pjcall->inv, tdata);
+                    if (status != PJ_SUCCESS) {
+                        NSLog(@"Unable to send UPDATE");
+                    }
+                    
+                    if (dlg) pjsip_dlg_dec_lock(dlg);
+                }
+                
+                NSLog(@"<--callStateChanged--> SWOnCallState: %d callInfo.last_status: %d", callInfo.state, callInfo.last_status);
+                
+                NSInteger hangupReason = 0;
+                
+                if (hangupReasonStr) {
+                    NSRegularExpression* regex = [NSRegularExpression regularExpressionWithPattern:@".*cause=(\\d*);.*" options:NSRegularExpressionCaseInsensitive error:nil];
+                    
+                    hangupReason = [[hangupReasonStr substringWithRange:[[regex firstMatchInString:hangupReasonStr options:0 range:NSMakeRange(0, hangupReasonStr.length)] rangeAtIndex:1]] integerValue];
+                }
+                else {
+                    switch (callInfo.last_status) {
+                        case PJSIP_SC_NOT_ACCEPTABLE:
+                            hangupReason = SWCallReasonUnavailiable;
+                            break;
+                            
+                        case PJSIP_SC_TEMPORARILY_UNAVAILABLE:
+                            hangupReason = SWCallReasonNotAnswered;
+                            break;
+                            
+                        case PJSIP_SC_BUSY_HERE:
+                            hangupReason = SWCallReasonRemoteBusy;
+                            break;
+                            
+                        case PJSIP_SC_PAYMENT_REQUIRED:
+                            hangupReason = SWCallReasonNoMoney;
+                            break;
+                            
+                        default:
+                            break;
+                    }
+                }
+                
+                #warning experiment callInfo получаем вне блока
+                //[call callStateChangedWithReason:hangupReason];
+                [call callStateChanged:callInfo withReason:hangupReason];
+                
+                [endpoint runCallStateChangeBlockForCall:call setCode:callInfo.last_status];
+                
+                if (call.callState == SWCallStateDisconnected) {
+                    [account removeCall:call.callId];
+                    rport = 0;
+                    resp_rport = 0;
+                    rhost = pj_str("");
+                    resp_rhost = pj_str("");
+                }
+            }
+        }
+    } wait:NO];
+    
 }
 
 static void SWOnCallMediaState(pjsua_call_id call_id) {
@@ -1454,13 +1484,6 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             
             CGSize videoSize = CGSizeMake(event->data.fmt_changed.new_fmt.det.vid.size.w, event->data.fmt_changed.new_fmt.det.vid.size.h);
             
-#warning костыль. Андроид передаёт неправильный размер. Если разрешение не 640*480 (горизонтально или вертикально, меняем размер на соотношение 3/4)
-            /*
-            if (!((videoSize.height == 640 && videoSize.width == 480) || (videoSize.width == 640 && videoSize.height == 480))) {
-                videoSize = CGSizeMake(videoSize.width, videoSize.width * 4 / 3.0);
-            }
-             */
-            
             videoSize = CGSizeMake(videoSize.width*1.0/scale, videoSize.height*1.0/scale);
             
             const pj_str_t codec_id = {"H264", 4};
@@ -1471,14 +1494,6 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             CGSize codecSize = CGSizeMake(param.dec_fmt.det.vid.size.w, param.dec_fmt.det.vid.size.h);
             
             NSLog(@"MediaEvent. Videosize:%@; codecSize:%@", NSStringFromCGSize(videoSize), NSStringFromCGSize(codecSize));
-            
-            /*
-#warning костыль
-            //Сработает, если перепутана ширина и высота (приходит от андроида)
-            if ((codecSize.width - codecSize.height) * (videoSize.width - videoSize.height) < 0) {
-                videoSize = CGSizeMake(videoSize.height, videoSize.width);
-            }
-             */
             
             NSLog(@"MediaEvent. Videosize changed to:%@", NSStringFromCGSize(videoSize));
             
@@ -1508,11 +1523,48 @@ static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
     NSLog(@"<--SWOnTransportState--> state=%d", state);
-    
-    if (state == PJSIP_TP_STATE_DISCONNECTED && the_transport == tp) {
-        NSLog(@"xxx: Releasing transport..");
-        pjsip_transport_dec_ref(the_transport);
-        the_transport = NULL;
+#warning experiment
+    if (state != PJSIP_TP_STATE_CONNECTED) {
+        //TODO: убрать дублирование кода
+        SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+        SWThreadManager *threadManager = endpoint.threadFactory;
+        
+        NSThread *regThread = [threadManager getRegistrationThread];
+        
+        [threadManager runBlock:^{
+            for (SWTransportConfiguration *transport in endpoint.endpointConfiguration.transportConfigurations) {
+                
+                pjsua_transport_config transportConfig;
+                pjsua_transport_id transportId;
+                
+                pjsip_tls_setting tls_setting;
+                pjsip_tls_setting_default(&tls_setting);
+                
+                tls_setting.method = PJSIP_TLSV1_METHOD;
+                tls_setting.verify_client = PJ_FALSE;
+                tls_setting.verify_server = PJ_FALSE;
+                tls_setting.require_client_cert = PJ_FALSE;
+                
+                transportConfig.tls_setting = tls_setting;
+                pjsua_transport_config_default(&transportConfig);
+                int random_port = 1024 + (rand() % (int)(65535 - 1024 + 1));
+                
+                transportConfig.port = random_port;
+                
+                pjsip_transport_type_e transportType = (pjsip_transport_type_e)transport.transportType;
+                pj_status_t status;
+                
+                status = pjsua_transport_create(transportType, &transportConfig, &transportId);
+                if (status != PJ_SUCCESS) {
+                    
+                    NSError *error = [NSError errorWithDomain:@"Error creating pjsua transport" code:status userInfo:nil];
+                    
+                    return;
+                }
+            }
+        } onThread:regThread wait:NO];
+        
+        
     }
     
     //    NSLog(@"%@ %@", tp, info);
@@ -1643,6 +1695,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         return PJ_FALSE;
     }
     
+    NSString *methodName = [NSString stringWithPJString:data->msg_info.msg->line.req.method.name];
+    
+    NSLog(@"<--Request msg-->incoming request: %@", methodName);
+    
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
         pjsip_ctype_hdr* content_type_hdr = (pjsip_ctype_hdr *)pjsip_msg_find_hdr(&data->msg_info.msg, PJSIP_H_CONTENT_TYPE, nil);
         pj_str_t subtype = pj_str((char *)"im-iscomposing+xml");
@@ -1750,7 +1806,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             _unauthorizedBlock(account);
             return PJ_FALSE;
         }
-        
+         
         pjsua_acc_info accountInfo = [account getInfo];
         
         /*
@@ -1778,11 +1834,30 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             settings.contactServer = [[NSString stringWithPJString:contact_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
         
+        settings.syncServer = @"";
+        /*
+#ifdef DEBUG
+#warning test
+        settings.syncServer = @"http://192.168.2.217:8891";
+#else
+#error test
+#endif
+         */
+        //должно работать так, но пока нет
+        /*
+        pj_str_t sync_server_hdr_str = pj_str((char *)"Sync-Server");
+        pjsip_generic_string_hdr* sync_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &sync_server_hdr_str, nil);
+        if (sync_server_hdr != nil) {
+            settings.syncServer = [[NSString stringWithPJString:sync_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
+        }
+         */
+        
         pj_str_t push_server_hdr_str = pj_str((char *)"Push-Server");
         pjsip_generic_string_hdr* push_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &push_server_hdr_str, nil);
         if (push_server_hdr != nil) {
             settings.pushServer = [[NSString stringWithPJString:push_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
+        
         
         pj_str_t file_server_hdr_str = pj_str((char *)"File-Server");
         pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &file_server_hdr_str, nil);
@@ -1843,6 +1918,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 
 #pragma mark Входящее уведомление
 - (void) incomingNotify:(pjsip_rx_data *)data {
+    NSLog(@"<--sendSubmit--> incomingNotify");
+    
     /* Смотрим о каком абоненте речь в сообщении */
     
     pjsua_acc_id acc_id;
@@ -1970,6 +2047,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 
 
 - (void) incomingMessage:(pjsip_rx_data *)data {
+    
+    NSLog(@"<--sendSubmit--> incomingMessage");
     if (data == nil) {
         return;
     }
@@ -2431,115 +2510,141 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 }
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
+
+//TODO: перестали ходить сообщения после последних изменений в этом методе?
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
+    NSLog(@"<--sendSubmit--> invoked");
     
     SWThreadManager *thrManager = self.threadFactory;
     NSThread *mesThread = [thrManager getMessageThread];
     
-    __block bool ret_value = false;
+    NSInteger endpointIteration = self.endpointIteration;
     
-    [thrManager runBlock:^{
-        pjsip_tx_data *response;
-        pj_status_t status;
-        int sm_id;
+    __weak typeof(self) weakSelf = self;
+    
+#warning experiment часть действий вынесена из блока. Блок запускается асинхронно
+    pjsip_tx_data *response;
+    pj_status_t status;
+    int sm_id;
+    
+    SWAccount *account;
+    
+    /* Готовим ответ абоненту о результате регистрации */
+    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
+    if (status == PJ_SUCCESS) {
+        NSLog(@"<--sendSubmit--> response created");
         
-        /* Готовим ответ абоненту о результате регистрации */
-        status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
-        if (status == PJ_SUCCESS) {
+        pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+        pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+        
+        pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+        pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
+        
+        if (smid_hdr != nil) {
+            pjsip_msg_add_hdr(response->msg, smid_hdr);
+            sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+        }
+        
+        
+        pjsua_acc_id acc_id;
+        if (pjsua_acc_get_count() == 0) {
+            //ret_value = PJ_FALSE;
+            //TODO: Нужно ли обрабатывать ответ?
+            return PJ_FALSE;
+        }
+        
+        acc_id = pjsua_acc_find_for_incoming(message);
+        
+        account = [self lookupAccount:acc_id];
+        
+        if (sync_hdr != nil) {
             
-            pj_str_t smid_hdr_str = pj_str((char *)"SMID");
-            pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+            NSLog(@"<--sendSubmit--> sync header exists");
             
-            pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
-            pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
+            int num = 0;
+            int total = 0;
+            int seq = 0;
+            int type = 0;
             
-            if (smid_hdr != nil) {
-                pjsip_msg_add_hdr(response->msg, smid_hdr);
-                sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+            sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+            
+            
+            if (total == seq) {
+                
+                NSLog(@"<--sendSubmit--> last sync message");
+                
+                char sync_buf[256];
+                
+                pj_str_t hname = pj_str((char *)"SYNC");
+                pj_str_t hvalue;
+                hvalue.ptr = sync_buf;
+                hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
+                
+                pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
+                if (submit_sync_hdr != nil) {
+                    pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
+                }
+                
+            } else {
+                NSLog(@"<--sendSubmit--> not last sync message");
+                //ret_value = YES;
+                //TODO: Нужно ли обрабатывать ответ?
+                return YES;
             }
-            
-            if (sync_hdr != nil) {
-                int num = 0;
-                int total = 0;
-                int seq = 0;
-                int type = 0;
-                
-                sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
-                
-                
-                if (total == seq) {
-                    char sync_buf[256];
-                    
-                    pj_str_t hname = pj_str((char *)"SYNC");
-                    pj_str_t hvalue;
-                    hvalue.ptr = sync_buf;
-                    hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
-                    
-                    pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
-                    if (submit_sync_hdr != nil) {
-                        pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
-                    }
-                    
-                    //В поле TO всегда отвечаем, что это мы. иначе - пизда.
-                    
-                    pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
-                    
-                    pjsua_acc_id acc_id;
-                    if (pjsua_acc_get_count() == 0) {
-                        ret_value = PJ_FALSE;
-                        return;
-                    }
-                        
-                    
-                    acc_id = pjsua_acc_find_for_incoming(message);
-                    
-                    SWAccount *account = [self lookupAccount:acc_id];
-                                        
-                    pjsua_acc_info info = [account getInfo];
-                    
-                    /*
-                     @synchronized ([SWAccount getLocker]) {
-                     pjsua_acc_get_info(acc_id, &info);
-                     }
-                     */
-                    
-                    pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
-                    
-                    to_hdr->uri = uri;
-                    pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);
-                    //
-                    pjsip_msg_add_hdr(response->msg, to_hdr);
-                    
-                } else {
-                    ret_value = YES;
+        }
+        
+        
+        /* Получаем адрес, куда мы должны отправить ответ */
+        pjsip_response_addr  response_addr;
+        status = pjsip_get_response_addr(response->pool, message, &response_addr);
+        if ((status == PJ_SUCCESS) && (account != nil)) {
+            [thrManager runBlock:^{
+                //Если либа перезагружается или перезагрузилась, ничего не делаем. Сообщение придет еще раз.
+                if ((pjsua_get_state() != PJSUA_STATE_RUNNING) || (endpointIteration != weakSelf.endpointIteration)) {
+                    NSLog(@"<--sendSubmit--> runblock stopped");
                     return;
                 }
-            }
-            
-            
-            /* Получаем адрес, куда мы должны отправить ответ */
-            pjsip_response_addr  response_addr;
-            status = pjsip_get_response_addr(response->pool, message, &response_addr);
-            if (status == PJ_SUCCESS) {
+                
+                NSLog(@"<--sendSubmit--> runblock proceeded");
+                
+                pjsua_acc_info info = [account getInfo];
+                
+                pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
+                
+                
+                //В поле TO всегда отвечаем, что это мы. иначе - пизда.
+                pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
+                
+                to_hdr->uri = uri;
+                pjsip_msg_find_remove_hdr(response->msg, PJSIP_H_TO, NULL);
+                //
+                pjsip_msg_add_hdr(response->msg, to_hdr);
+                
+                
                 /* Отправляем ответ на регистрацию */
-                status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, response, nil, nil);
+                pj_status_t status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, response, nil, nil);
                 if (status == PJ_SUCCESS) {
-                    ret_value = true;
+                    
+                    NSLog(@"<--sendSubmit--> submit sent");
+                    //ret_value = true;
+                    //TODO: Нужно ли обрабатывать ответ?
                 }
-            }
+                else {
+                    NSLog(@"<--sendSubmit--> submit sending error");
+                }
+            } onThread:mesThread wait:NO];
         }
-        if (status != PJ_SUCCESS) {
-            NSLog(@"Error");
-            //        [self parseError:status];
-            
-            if(_otherErrorBlock) {
-                _otherErrorBlock(status);
-            }
+    }
+    if (status != PJ_SUCCESS) {
+        NSLog(@"Error");
+        //        [self parseError:status];
+        
+        if(_otherErrorBlock) {
+            _otherErrorBlock(status);
         }
-        return;
-    } onThread:mesThread wait:YES];
+    }
     
-    return ret_value;
+    return YES;
 }
 
 #pragma mark Ringtone management

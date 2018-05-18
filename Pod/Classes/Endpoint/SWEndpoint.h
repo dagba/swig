@@ -24,6 +24,7 @@ struct Settings {
     __unsafe_unretained NSString *contactServer;
     __unsafe_unretained NSString *pushServer;
     __unsafe_unretained NSString *fileServer;
+    __unsafe_unretained NSString *syncServer;
     BOOL homeAbonent;
 };
 
@@ -75,6 +76,8 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 @property (strong, readonly) SWIntentManager *intentManager;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+
+@property (atomic, assign) NSInteger endpointIteration; //Инкрементируется при перезагрузке. Нужна для проверки корректности использования структур библиотеки. Они чистятся вместе с либой.
 
 +(instancetype)sharedEndpoint;
 

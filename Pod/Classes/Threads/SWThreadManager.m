@@ -94,6 +94,12 @@
     }
 }
 
+- (void) runBlockOnRegThread: (void (^)(void)) block wait: (BOOL) wait {
+    NSThread *regThread = [self getRegistrationThread];
+    
+    [self runBlock:block onThread:regThread wait:wait];
+}
+
 - (void) runBlock: (void (^)(void)) block onThread: (NSThread *) thread wait: (BOOL) wait {
     NSLog(@"<--threads--> runBlock to thread: <%@>", thread);
     [self performSelector: @selector(runBlock:) onThread: thread withObject: [block copy] waitUntilDone: wait];
