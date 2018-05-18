@@ -32,6 +32,7 @@
 #import "EWFileLogger.h"
 
 #import "transport_adapter_fec.h"
+#import "transport_adapter_nack.h"
 
 #import "SWThreadManager.h"
 #import "SWAudioSessionObserver.h"
@@ -1626,28 +1627,45 @@ static pjmedia_transport* SWOnMediaTransportCreate (pjsua_call_id call_id,
 #error test
 #endif
      */
-    if (media_idx == 0) return base_tp;
-    
-    //if (base_tp->type != PJMEDIA_TRANSPORT_TYPE_SRTP) return base_tp;
-    
-    
-    pjmedia_transport *adapter;
-    pj_status_t status;
-    
-    /* Create the adapter */
-    status = pjmedia_fec_adapter_create(pjsua_get_pjmedia_endpt(),
-                                       NULL, base_tp,
-                                       (flags & PJSUA_MED_TP_CLOSE_MEMBER),
-                                       &adapter);
-    if (status != PJ_SUCCESS) {
-        NSLog(@"<--swig-->Error creating fec adapter");
-        return NULL;
+    if (media_idx == 0) {
+        pjmedia_transport *adapter;
+        pj_status_t status;
+        
+        /* Create the adapter */
+        status = pjmedia_nack_adapter_create(pjsua_get_pjsip_endpt(), pjsua_get_pjmedia_endpt(),
+                                            NULL, base_tp,
+                                            (flags & PJSUA_MED_TP_CLOSE_MEMBER),
+                                            &adapter);
+        if (status != PJ_SUCCESS) {
+            NSLog(@"<--swig-->Error creating nack adapter");
+            return NULL;
+        }
+        
+        NSLog(@"<--swig-->Nack adapter is created for call %d media %d",
+              call_id, media_idx);
+        
+        return adapter;
+    }
+    else {
+        pjmedia_transport *adapter;
+        pj_status_t status;
+        
+        /* Create the adapter */
+        status = pjmedia_fec_adapter_create(pjsua_get_pjmedia_endpt(),
+                                            NULL, base_tp,
+                                            (flags & PJSUA_MED_TP_CLOSE_MEMBER),
+                                            &adapter);
+        if (status != PJ_SUCCESS) {
+            NSLog(@"<--swig-->Error creating fec adapter");
+            return NULL;
+        }
+        
+        NSLog(@"<--swig-->Fec adapter is created for call %d media %d",
+              call_id, media_idx);
+        
+        return adapter;
     }
     
-    NSLog(@"<--swig-->Fec adapter is created for call %d media %d",
-          call_id, media_idx);
-    
-    return adapter;
 }
 
 static void SWOnDTMFDigit (pjsua_call_id call_id, int digit) {
