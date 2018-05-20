@@ -1185,7 +1185,9 @@
                 sessionActive = YES;
                 NSLog(@"<--swcall--> ", audioSession);
                 speaker = _speaker;
-                sessionMode = AVAudioSessionModeVoiceChat;
+                
+                sessionMode = AVAudioSessionModeDefault;
+                //sessionMode = AVAudioSessionModeVoiceChat; //в этом моде не переключается громкая связь.
                 //sessionMode = speaker ? AVAudioSessionModeVideoChat : AVAudioSessionModeDefault;
                 break;
                 
@@ -1240,10 +1242,10 @@
         NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
         
         
-        return;
+        //return;
         /// TODO: проверить переключение микрофонов
         
-        NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
+        //NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
         for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
             NSString *porttype = [desc portType];
             NSString *portname = [desc portName];

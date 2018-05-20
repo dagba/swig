@@ -94,9 +94,38 @@ static pj_str_t rhost;
 static int resp_rport;
 static pj_str_t resp_rhost;
 
+
+
+static pjsip_contact_hdr* rightFindHeader( const pjsip_msg *msg,
+                                          pjsip_hdr_e type, const void *start) {
+    pjsip_contact_hdr *result = nil;
+    
+    pjsip_hdr *firstHeader = msg->hdr.next;
+    pjsip_hdr *lastHeader = firstHeader->prev;
+    
+    pjsip_hdr *hdr = firstHeader;
+    
+    //Проверяем, пока не дошли до последнего хедера
+    while(hdr != firstHeader) {
+        if (hdr->type == type) {
+            result = hdr;
+            return result;
+        }
+        
+        hdr = hdr->next;
+    }
+    
+    return nil;
+}
+
+//TODO: проверить, нужна ли вообще эта хрень
 static void fixContactHeader(pjsip_tx_data *tdata) {
     //На стороне B фиксим заголовок контакт в INVITE и UPDATE ибо по умолчанию там какая-то левота.
-    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    pjsip_contact_hdr *contact = rightFindHeader(tdata->msg, PJSIP_H_CONTACT, NULL);
+    
+    //Старый вариант (сиповский). При копировании/изменении tdata уходил в бесконечный цикл.
+    //pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
         
@@ -1526,6 +1555,9 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
     NSLog(@"<--SWOnTransportState--> state=%d", state);
 #warning experiment
     if (state != PJSIP_TP_STATE_CONNECTED) {
+        //TODO: транспорт все равно не пересоздается? Разобраться.
+        return;
+        
         //TODO: убрать дублирование кода
         SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
         SWThreadManager *threadManager = endpoint.threadFactory;
@@ -2610,7 +2642,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 return YES;
             }
         }
-        
         
         /* Получаем адрес, куда мы должны отправить ответ */
         pjsip_response_addr  response_addr;
