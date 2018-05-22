@@ -2157,6 +2157,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     if (smid_hdr != nil) {
         sm_id = atoi(smid_hdr->hvalue.ptr);
     }
+    else {
+#warning experiment не отправляем ответ на "печатает"
+        return;
+    }
     
     pj_str_t  groupid_hdr_str = pj_str((char *)"GroupID");
     pjsip_generic_string_hdr* groupid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &groupid_hdr_str, nil);
