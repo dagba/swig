@@ -71,6 +71,7 @@
     
     dispatch_async(self.serialQueue, ^{
         
+        //TODO: Между этой проверкой и отправкой сообщения может вклиниться перезагрузка.
         if( ! [weakSelf needPerformNext]) {
             return;
         }

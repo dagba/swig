@@ -261,6 +261,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 
 @property (nonatomic, strong) SWRingtone *standartRingtone;
 @property (nonatomic, readonly) NSMutableDictionary<NSURL *, SWRingtone *>  *ringtones;
+@property (atomic, assign) pjsua_transport_id pjsuaTransportId;
 
 @end
 
@@ -792,6 +793,8 @@ static SWEndpoint *_sharedEndpoint = nil;
             
             return;
         }
+        
+        self.pjsuaTransportId = transportId;
     }
     
     [self start:handler];
@@ -1452,6 +1455,13 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                             hangupReason = SWCallReasonNoMoney;
                             break;
                             
+                            /*
+#ifndef DEBUG
+#error TODO
+                            //TODO: добавить кейс "абонент заблокирован"
+#endif
+                             */
+                            
                         default:
                             break;
                     }
@@ -1594,6 +1604,7 @@ static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state
                     
                     return;
                 }
+                endpoint.pjsuaTransportId = transportId;
             }
         } onThread:regThread wait:NO];
         
@@ -1961,7 +1972,9 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         
     }
     
-    
+    if(_otherErrorBlock) {
+        _otherErrorBlock(status);
+    }
     
     return PJ_FALSE;
 }
@@ -2018,7 +2031,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
             //            });
         }
         
-        [self sendSubmit:data withCode:PJSIP_SC_OK];
+#warning experiment Если генерируем ответ на сообщение до того, как отправился предыдущий, ловим bad_access. А статус "печатает" отправляется параллельно с сообщениями. Поэтому пробуем не отправлять на него ответ.
+        //[self sendSubmit:data withCode:PJSIP_SC_OK];
         return;
     }
     
@@ -2582,7 +2596,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     /* Готовим ответ абоненту о результате регистрации */
     status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
     if (status == PJ_SUCCESS) {
-        NSLog(@"<--sendSubmit--> response created");
+        NSLog(@"<--sendSubmit--> response created. bufLen = %d; bufOffset = %d", &response->buf.end - &response->buf.start, &response->buf.cur - &response->buf.start);
         
         pj_str_t smid_hdr_str = pj_str((char *)"SMID");
         pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
@@ -2649,19 +2663,17 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         if ((status == PJ_SUCCESS) && (account != nil)) {
             [thrManager runBlock:^{
                 //Если либа перезагружается или перезагрузилась, ничего не делаем. Сообщение придет еще раз.
+                
                 if ((pjsua_get_state() != PJSUA_STATE_RUNNING) || (endpointIteration != weakSelf.endpointIteration)) {
                     NSLog(@"<--sendSubmit--> runblock stopped");
                     return;
                 }
-                
-                NSLog(@"<--sendSubmit--> runblock proceeded");
+                NSLog(@"<--sendSubmit--> runblock proceeded. bufLen = %d; bufOffset = %d, bufcur=%d; bufstart=%d", &response->buf.end - &response->buf.start, &response->buf.cur - &response->buf.start, &response->buf.cur, &response->buf.start);
                 
                 pjsua_acc_info info = [account getInfo];
                 
                 pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
                 
-                
-                //В поле TO всегда отвечаем, что это мы. иначе - пизда.
                 pjsip_to_hdr *to_hdr = pjsip_to_hdr_create(response->pool);
                 
                 to_hdr->uri = uri;
@@ -2671,7 +2683,8 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 
                 
                 /* Отправляем ответ на регистрацию */
-                pj_status_t status = pjsip_endpt_send_response(pjsua_get_pjsip_endpt(), &response_addr, response, nil, nil);
+                pjsip_endpoint *innerEndpoint = pjsua_get_pjsip_endpt();
+                pj_status_t status = pjsip_endpt_send_response(innerEndpoint, &response_addr, response, nil, nil);
                 if (status == PJ_SUCCESS) {
                     
                     NSLog(@"<--sendSubmit--> submit sent");
@@ -2682,14 +2695,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                     NSLog(@"<--sendSubmit--> submit sending error");
                 }
             } onThread:mesThread wait:NO];
-        }
-    }
-    if (status != PJ_SUCCESS) {
-        NSLog(@"Error");
-        //        [self parseError:status];
-        
-        if(_otherErrorBlock) {
-            _otherErrorBlock(status);
         }
     }
     

@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "Swig"
-  s.version          = "0.3.18"
+  s.version          = "0.3.19"
   s.summary          = "PJSIP Wrapper for ios"
   s.description      = <<-DESC
                        Simplifing the use of pjsip on ios

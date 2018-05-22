@@ -1086,27 +1086,31 @@
 - (void) updateMuteStatus {
     
     NSLog(@"<--mute--> value:%@", _mute ? @"true" : @"false");
-    pjsua_call_info callInfo;
-    pjsua_call_get_info((int)self.callId, &callInfo);
-    
-    pj_status_t status;
-    NSError *error = nil;
-    if (_mute) {
-        status = pjsua_conf_disconnect(0, callInfo.conf_slot);
-        if (status != PJ_SUCCESS) {
-            error = [NSError errorWithDomain:@"Error mute" code:0 userInfo:nil];
-            _mute = NO;
-        }
-    }
-    
-    else {
-        status = pjsua_conf_connect(0, callInfo.conf_slot);
-        if (status != PJ_SUCCESS) {
-            error = [NSError errorWithDomain:@"Error unmute" code:0 userInfo:nil];
-            _mute = YES;
+    [[SWEndpoint sharedEndpoint].threadFactory runBlockOnRegThread:^{
+        pjsua_call_info callInfo;
+        pjsua_call_get_info((int)self.callId, &callInfo);
+        
+        pj_status_t status;
+        NSError *error = nil;
+        if (_mute) {
+            status = pjsua_conf_disconnect(0, callInfo.conf_slot);
+            if (status != PJ_SUCCESS) {
+                error = [NSError errorWithDomain:@"Error mute" code:0 userInfo:nil];
+                _mute = NO;
+            }
         }
         
-    }
+        else {
+            status = pjsua_conf_connect(0, callInfo.conf_slot);
+            if (status != PJ_SUCCESS) {
+                error = [NSError errorWithDomain:@"Error unmute" code:0 userInfo:nil];
+                _mute = YES;
+            }
+            
+        }
+    } wait:NO];
+    
+    
 }
 
 -(void)toggleMute:(void(^)(NSError *error))handler {

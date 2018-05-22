@@ -257,12 +257,11 @@ static void posix_timer_cb(int sig, siginfo_t *si, void *uc)
     pj_lock_release(a->timer_lock);
 }
 
-static timer_t posix_timer_start(void *user_data /* TP adapter */, long sec, long msec)
+static void posix_timer_schedule(void *user_data /* TP adapter */, long sec, long msec)
 {
     struct sigevent sev;
     struct itimerspec its;
     struct sigaction sa;
-    timer_t timerid;
     struct nack_adapter *a = (struct nack_adapter *)user_data;
     
     /* Establish handler for timer signal */
@@ -272,17 +271,17 @@ static timer_t posix_timer_start(void *user_data /* TP adapter */, long sec, lon
     if (sigaction(SIG, &sa, NULL) == -1)
     {
         PJ_LOG(4, (a->this_file, "NACK Establish handler for timer signal failed"));
-        return 0;
+        return;
     }
     
     /* Create the timer */
     sev.sigev_notify = SIGEV_SIGNAL;
     sev.sigev_signo = SIG;
     sev.sigev_value.sival_ptr = user_data;
-    if (timer_create(CLOCKID, &sev, &timerid) == -1)
+    if (timer_create(CLOCKID, &sev, &a->posix_timer_id) == -1)
     {
         PJ_LOG(4, (a->this_file, "NACK Create the timer failed"));
-        return 0;
+        return;
     }
     
     /* Start the timer */
@@ -290,32 +289,32 @@ static timer_t posix_timer_start(void *user_data /* TP adapter */, long sec, lon
     its.it_value.tv_nsec = msec * 1000000;
     its.it_interval.tv_sec = its.it_value.tv_sec;
     its.it_interval.tv_nsec = its.it_value.tv_nsec;
-    if (timer_settime(timerid, 0, &its, NULL) == -1)
+    if (timer_settime(a->posix_timer_id, 0, &its, NULL) == -1)
     {
-        PJ_LOG(4, (a->this_file, "NACK Start the timer id=0x%lx failed", (long)timerid));
-        return 0;
+        PJ_LOG(4, (a->this_file, "NACK Start the timer id=0x%lx failed", (long)a->posix_timer_id));
+        return;
     }
     
-    PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx started sec=%ld msec=%ld", (long)timerid, sec, msec));
-    
-    return timerid;
+    PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx started sec=%ld msec=%ld", (long)a->posix_timer_id, sec, msec));
 }
 
-static void posix_timer_stop(void *user_data /* TP adapter */, timer_t timerid)
+static void posix_timer_cancel(void *user_data /* TP adapter */)
 {
     struct nack_adapter *a = (struct nack_adapter *)user_data;
     
-    if (!timerid)
+    if (a->posix_timer_id == -1)
         return;
     
-    if (!timer_delete(timerid))
+    if (!timer_delete(a->posix_timer_id))
     {
-        PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx stopped", (long)timerid));
+        PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx stopped", (long)a->posix_timer_id));
     }
     else
     {
-        PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx stop failed", (long)timerid));
+        PJ_LOG(4, (a->this_file, "NACK Timer id=0x%lx stop failed", (long)a->posix_timer_id));
     }
+    
+    a->posix_timer_id = -1;
 }
 #endif // __ANDROID__
 
@@ -409,7 +408,7 @@ PJ_DEF(pj_status_t) pjmedia_nack_adapter_create(pjsip_endpoint *sip_endpt, pjmed
     a->timer_entry.id = -1;
     
 #if defined (__ANDROID__) //|| defined(TARGET_OS_IOS) || defined(TARGET_OS_IPHONE)
-    a->posix_timer_id = 0;
+    a->posix_timer_id = -1;
 #endif // __ANDROID__
     
     retr_list_init(&a->retr_list, a->retr_arr, RETR_TABLE_SIZE);
@@ -554,7 +553,7 @@ static pj_status_t transport_attach(pjmedia_transport *tp,
  */
 static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_attach_param *att_param)
 {
-    struct nack_adapter *a = (struct nack_adapter*)tp;
+    struct nack_adapter *a = (struct nack_adapter *)tp;
     pj_status_t status;
     pjmedia_transport_attach_param param;
     pjmedia_port *port;
@@ -637,7 +636,7 @@ static pj_status_t transport_attach2(pjmedia_transport *tp, pjmedia_transport_at
     //pjsip_endpt_schedule_timer(a->sip_endpt, &a->timer_entry, &a->delay);
     
 #if defined (__ANDROID__) //|| defined (TARGET_OS_IOS) || defined (TARGET_OS_IPHONE)
-    a->posix_timer_id = posix_timer_start(a, a->delay.sec, a->delay.msec);
+    posix_timer_schedule(a, a->delay.sec, a->delay.msec);
 #else
     a->timer_entry.id = ACK_TIMER;
     pjsip_endpt_schedule_timer(a->sip_endpt, &a->timer_entry, &a->delay);
@@ -678,8 +677,8 @@ static void transport_detach(pjmedia_transport *tp, void *strm)
     PJ_UNUSED_ARG(strm);
     
 #if defined (__ANDROID__) //|| defined (TARGET_OS_IOS) || defined (TARGET_OS_IPHONE)
-    posix_timer_stop(a, a->posix_timer_id);
-    a->posix_timer_id = 0;
+    posix_timer_cancel(a);
+    a->posix_timer_id = -1;
 #else
     if (a->timer_entry.id > 0)
         pjsip_endpt_cancel_timer(a->sip_endpt, &a->timer_entry);
@@ -721,7 +720,7 @@ static void transport_retransmit_rtp(void *user_data, const pj_uint32_t ts_from,
     /* Check transmit window */
     if (ts < a->ts_delay)
         e = NULL;
-    else
+    else if (e)
     /* Go to the untransmitted item */
         e = retr_list_next(&a->retr_list, e);
     
@@ -782,7 +781,7 @@ static pj_status_t transport_send_rtp(pjmedia_transport *tp, const void *pkt, pj
     a->stat.snd++;
     
     
-    /* Store sent packets for ACK/NACK requests */
+    /* Store sent packets for ACK/NACK requests retransmit */
     retr_list_push_back(&a->retr_list, pkt, (pj_uint16_t)size, a->stat.tx_ts_local);
     
     status = pjmedia_transport_send_rtp(a->slave_tp, pkt, size);
