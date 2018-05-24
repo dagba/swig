@@ -13,6 +13,22 @@
 #import <pjnath.h>
 #import "SWMessageSenderProtocol.h"
 
+#ifdef DEBUG
+#warning test
+#else
+#error test
+#endif
+/*
+#define pjsip_msg_find_hdr(msg,\
+type, start) \
+[SWEndpoint rightFindHeaderInMessage:*msg forType:type]
+
+#define pjsip_msg_find_hdr_by_name(msg,\
+name,\
+start) \
+[SWEndpoint rightFindHeaderInMessage:*msg forName:name]
+ */
+ 
 struct Sync {
     NSUInteger lastSmidRX;
     NSUInteger lastSmidTX;
@@ -147,6 +163,9 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (SWRingtone *) getRingtoneForReason: (NSInteger) reason andCall: (SWCall *) call;
 
 + (NSString *) getHeaderByName: (NSString *) hname forMessage: (pjsip_msg *) msg;
-
++ (pjsip_contact_hdr *) rightFindHeaderInMessage: (pjsip_msg)msg
+                                         forType: (pjsip_hdr_e) type;
++ (pjsip_contact_hdr *) rightFindHeaderInMessage: (pjsip_msg)msg
+                                         forName: (const pj_str_t *) name;
 
 @end

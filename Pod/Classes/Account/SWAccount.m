@@ -900,13 +900,16 @@ static void sendMessageCallback(void *token, pjsip_event *e) {
     }
     
     pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+
     pjsip_generic_string_hdr *smid_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &smid_hdr_str, nil);
     
     NSString *fileServer = nil;
     pj_str_t  file_server_hdr_str = pj_str((char *)"File-Server");
+
     pjsip_generic_string_hdr* file_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &file_server_hdr_str, nil);
 
     pj_str_t submit_time_hdr_str = pj_str((char *)"SubmitTime");
+
     pjsip_generic_string_hdr* submit_time_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &submit_time_hdr_str, nil);
     
     NSDate *date = [NSDate date];
@@ -1430,7 +1433,9 @@ static void updateBalanceCallback(void *token, pjsip_event *e) {
         return;
     }
     pj_str_t balance_hdr_str = pj_str((char *)"Balance");
+
     pjsip_generic_string_hdr* balance_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &balance_hdr_str, nil);
+    
     if (balance_hdr != nil) {
         double balanceDouble = [[NSString stringWithPJString:balance_hdr->hvalue] doubleValue];
         NSNumber *balanceNumber = [NSNumber numberWithDouble:balanceDouble];

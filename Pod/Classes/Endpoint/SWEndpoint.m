@@ -94,37 +94,17 @@ static pj_str_t rhost;
 static int resp_rport;
 static pj_str_t resp_rhost;
 
-
-
-static pjsip_contact_hdr* rightFindHeader( const pjsip_msg *msg,
-                                          pjsip_hdr_e type, const void *start) {
-    pjsip_contact_hdr *result = nil;
-    
-    pjsip_hdr *firstHeader = msg->hdr.next;
-    pjsip_hdr *lastHeader = firstHeader->prev;
-    
-    pjsip_hdr *hdr = firstHeader;
-    
-    //Проверяем, пока не дошли до последнего хедера
-    while(hdr != firstHeader) {
-        if (hdr->type == type) {
-            result = hdr;
-            return result;
-        }
-        
-        hdr = hdr->next;
-    }
-    
-    return nil;
-}
-
 //TODO: проверить, нужна ли вообще эта хрень
 static void fixContactHeader(pjsip_tx_data *tdata) {
+#warning experiment это уже не нужно?
+    return;
+    
     //На стороне B фиксим заголовок контакт в INVITE и UPDATE ибо по умолчанию там какая-то левота.
-    pjsip_contact_hdr *contact = rightFindHeader(tdata->msg, PJSIP_H_CONTACT, NULL);
+    //rightFindHeader(tdata->msg, PJSIP_H_CONTACT, NULL);
     
     //Старый вариант (сиповский). При копировании/изменении tdata уходил в бесконечный цикл.
-    //pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    pjsip_contact_hdr *contact = ((pjsip_contact_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL));
+    
     
     if (contact) {
         pjsip_sip_uri *contact_uri = (pjsip_sip_uri *)pjsip_uri_get_uri(contact->uri);
@@ -1756,15 +1736,17 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         return PJ_FALSE;
     }
     
+    NSString *messageStr = [NSString stringWithCharacters:data->msg_info.msg_buf length:data->msg_info.len];
+    
     NSString *methodName = [NSString stringWithPJString:data->msg_info.msg->line.req.method.name];
     
     NSLog(@"<--Request msg-->incoming request: %@", methodName);
     
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
-        pjsip_ctype_hdr* content_type_hdr = (pjsip_ctype_hdr *)pjsip_msg_find_hdr(&data->msg_info.msg, PJSIP_H_CONTENT_TYPE, nil);
+
+        pjsip_ctype_hdr* content_type_hdr = (pjsip_ctype_hdr *)pjsip_msg_find_hdr(data->msg_info.msg, PJSIP_H_CONTENT_TYPE, nil);
         pj_str_t subtype = pj_str((char *)"im-iscomposing+xml");
-        int result = pj_strcmp(&content_type_hdr->media.subtype, &subtype);
-        if (content_type_hdr != nil &&  result == 0) {
+        if ((content_type_hdr != nil) && (pj_strcmp(&content_type_hdr->media.subtype, &subtype) == 0)) {
             return PJ_FALSE;
         }
         [self incomingMessage:data];
@@ -2124,7 +2106,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     }
     
     pjsua_acc_id acc_id;
-    if (pjsua_acc_get_count() == 0) return;
+    if (pjsua_acc_get_count() == 0) {
+        NSLog(@"<--sendSubmit--> no account");
+        return;
+    }
     
     acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
@@ -2159,6 +2144,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     }
     else {
 #warning experiment не отправляем ответ на "печатает"
+        NSLog(@"<--sendSubmit--> typing event. No submit.");
         return;
     }
     
@@ -2579,8 +2565,11 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 
 #pragma mark - Отправляем абоненту результат обработки его сообщения
 
-//TODO: перестали ходить сообщения после последних изменений в этом методе?
 - (BOOL) sendSubmit:(pjsip_rx_data *) message withCode:(int32_t) answer_code {
+    return [self sendSubmitToValue:*message withCode:answer_code];
+}
+
+- (BOOL) sendSubmitToValue:(pjsip_rx_data) messageValue withCode:(int32_t) answer_code {
     NSLog(@"<--sendSubmit--> invoked");
     
     SWThreadManager *thrManager = self.threadFactory;
@@ -2590,91 +2579,107 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     __weak typeof(self) weakSelf = self;
     
-#warning experiment часть действий вынесена из блока. Блок запускается асинхронно
-    pjsip_tx_data *response;
-    pj_status_t status;
-    int sm_id;
-    
-    SWAccount *account;
-    
-    /* Готовим ответ абоненту о результате регистрации */
-    status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
-    if (status == PJ_SUCCESS) {
-        NSLog(@"<--sendSubmit--> response created. bufLen = %d; bufOffset = %d", &response->buf.end - &response->buf.start, &response->buf.cur - &response->buf.start);
+    #warning experiment выполняем в текущем потоке
+    //[thrManager runBlock:^{
         
-        pj_str_t smid_hdr_str = pj_str((char *)"SMID");
-        pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
+        pjsip_rx_data *message = &messageValue;
+        //Если либа перезагружается или перезагрузилась, ничего не делаем. Сообщение придет еще раз.
         
-        pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
-        pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
-        
-        if (smid_hdr != nil) {
-            pjsip_msg_add_hdr(response->msg, smid_hdr);
-            sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+        if ((pjsua_get_state() != PJSUA_STATE_RUNNING) || (endpointIteration != weakSelf.endpointIteration) || (message->msg_info.msg->type != PJSIP_REQUEST_MSG)) {
+            NSLog(@"<--sendSubmit--> runblock stopped");
+            
+            NSString *messageStr = [NSString stringWithCharacters:message->msg_info.msg_buf length:message->msg_info.len];
+            
+            return YES;
         }
         
+        SWAccount *account;
+        pjsip_tx_data *response;
+        pj_status_t status;
+        int sm_id;
         
-        pjsua_acc_id acc_id;
-        if (pjsua_acc_get_count() == 0) {
-            //ret_value = PJ_FALSE;
-            //TODO: Нужно ли обрабатывать ответ?
-            return PJ_FALSE;
-        }
-        
-        acc_id = pjsua_acc_find_for_incoming(message);
-        
-        account = [self lookupAccount:acc_id];
-        
-        if (sync_hdr != nil) {
+        /* Готовим ответ абоненту о результате регистрации */
+        status = pjsip_endpt_create_response(pjsua_get_pjsip_endpt(), message, answer_code, nil, &response);
+        if (status == PJ_SUCCESS) {
+            NSLog(@"<--sendSubmit--> response created. bufLen = %d; bufOffset = %d", &response->buf.end - &response->buf.start, &response->buf.cur - &response->buf.start);
             
-            NSLog(@"<--sendSubmit--> sync header exists");
+            pj_str_t smid_hdr_str = pj_str((char *)"SMID");
+            pjsip_hdr *smid_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &smid_hdr_str, nil);
             
-            int num = 0;
-            int total = 0;
-            int seq = 0;
-            int type = 0;
+            pj_str_t  sync_hdr_str = pj_str((char *)"SYNC");
+            pjsip_generic_string_hdr *sync_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(message->msg_info.msg, &sync_hdr_str, nil);
             
-            sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+            if (smid_hdr != nil) {
+                pjsip_msg_add_hdr(response->msg, smid_hdr);
+                sm_id = atoi(((pjsip_generic_string_hdr *)smid_hdr)->hvalue.ptr);
+            }
             
             
-            if (total == seq) {
-                
-                NSLog(@"<--sendSubmit--> last sync message");
-                
-                char sync_buf[256];
-                
-                pj_str_t hname = pj_str((char *)"SYNC");
-                pj_str_t hvalue;
-                hvalue.ptr = sync_buf;
-                hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
-                
-                pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
-                if (submit_sync_hdr != nil) {
-                    pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
-                }
-                
-            } else {
-                NSLog(@"<--sendSubmit--> not last sync message");
-                //ret_value = YES;
+            pjsua_acc_id acc_id;
+            if (pjsua_acc_get_count() == 0) {
+                //ret_value = PJ_FALSE;
                 //TODO: Нужно ли обрабатывать ответ?
                 return YES;
             }
-        }
-        
-        /* Получаем адрес, куда мы должны отправить ответ */
-        pjsip_response_addr  response_addr;
-        status = pjsip_get_response_addr(response->pool, message, &response_addr);
-        if ((status == PJ_SUCCESS) && (account != nil)) {
-            [thrManager runBlock:^{
-                //Если либа перезагружается или перезагрузилась, ничего не делаем. Сообщение придет еще раз.
+            
+            /*
+             //Работаем с одним аккаунтом
+            acc_id = pjsua_acc_find_for_incoming(message);
+            account = [self lookupAccount:acc_id];
+             */
+            
+            account = [self firstAccount];
+            
+            if (sync_hdr != nil) {
                 
-                if ((pjsua_get_state() != PJSUA_STATE_RUNNING) || (endpointIteration != weakSelf.endpointIteration)) {
-                    NSLog(@"<--sendSubmit--> runblock stopped");
-                    return;
+                NSLog(@"<--sendSubmit--> sync header exists");
+                
+                int num = 0;
+                int total = 0;
+                int seq = 0;
+                int type = 0;
+                
+                sscanf(sync_hdr->hvalue.ptr, "num=%i, total=%i, seq=%i, type=%i", &num, &total, &seq, &type);
+                
+                
+                if (total == seq) {
+                    
+                    NSLog(@"<--sendSubmit--> last sync message");
+                    
+                    char sync_buf[256];
+                    
+                    pj_str_t hname = pj_str((char *)"SYNC");
+                    pj_str_t hvalue;
+                    hvalue.ptr = sync_buf;
+                    hvalue.slen = snprintf(sync_buf, 256, "num=%i, smid=%i, type=%i", num, sm_id, type);
+                    
+                    pjsip_generic_string_hdr* submit_sync_hdr = pjsip_generic_string_hdr_create(response->pool, &hname, &hvalue);
+                    if (submit_sync_hdr != nil) {
+                        pjsip_msg_add_hdr(response->msg, submit_sync_hdr);
+                    }
+                    
+                } else {
+                    NSLog(@"<--sendSubmit--> not last sync message");
+                    //ret_value = YES;
+                    //TODO: Нужно ли обрабатывать ответ?
+                    return YES;
                 }
+            }
+            
+            if (account != nil) {
+                
+                /* Получаем адрес, куда мы должны отправить ответ */
+                pjsip_response_addr  response_addr;
+                status = pjsip_get_response_addr(response->pool, message, &response_addr);
+                
                 NSLog(@"<--sendSubmit--> runblock proceeded. bufLen = %d; bufOffset = %d, bufcur=%d; bufstart=%d", &response->buf.end - &response->buf.start, &response->buf.cur - &response->buf.start, &response->buf.cur, &response->buf.start);
                 
-                pjsua_acc_info info = [account getInfo];
+                //pjsua_acc_info info = [account getInfo];
+                
+#warning experiment можно ли делать это в текущем потоке? Это и так поток сипа
+                pjsua_acc_info info;
+                pjsua_acc_get_info(account.accountId, &info);
+                
                 
                 pjsip_uri *uri = (pjsip_name_addr*)pjsip_parse_uri(response->pool, info.acc_uri.ptr, info.acc_uri.slen, PJSIP_PARSE_URI_AS_NAMEADDR);
                 
@@ -2685,10 +2690,9 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 //
                 pjsip_msg_add_hdr(response->msg, to_hdr);
                 
-                
                 /* Отправляем ответ на регистрацию */
                 pjsip_endpoint *innerEndpoint = pjsua_get_pjsip_endpt();
-                pj_status_t status = pjsip_endpt_send_response(innerEndpoint, &response_addr, response, nil, nil);
+                status = pjsip_endpt_send_response(innerEndpoint, &response_addr, response, nil, nil);
                 if (status == PJ_SUCCESS) {
                     
                     NSLog(@"<--sendSubmit--> submit sent");
@@ -2698,12 +2702,18 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
                 else {
                     NSLog(@"<--sendSubmit--> submit sending error");
                 }
-            } onThread:mesThread wait:NO];
+            }
+            else {
+                NSLog(@"<--sendSubmit--> account is nil");
+            }
         }
-    }
+        
+#warning experiment выполняем в текущем потоке
+    //} onThread:mesThread wait:NO];
     
     return YES;
 }
+
 
 #pragma mark Ringtone management
 
@@ -2885,6 +2895,85 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     } onThread:regThread wait:YES];
     
     return result;
+}
+
++ (pjsip_contact_hdr *) rightFindHeaderInMessage: (pjsip_msg) msg
+                                         forType: (pjsip_hdr_e) type {
+    
+    pjsip_contact_hdr *result = nil;
+    
+    pjsip_hdr *firstHeader = msg.hdr.next->next;
+    pjsip_hdr *lastHeader = firstHeader->prev;
+    
+    pjsip_hdr *hdr = firstHeader;
+    
+    int i = 0;
+    i++;
+    
+    //Проверяем, пока не дошли до последнего хедера
+    while(hdr != lastHeader) {
+        if (hdr->type == type) {
+            result = hdr;
+            return result;
+        }
+        
+        //ограничим глубину поиска?
+        if (i>100) return result;
+        i++;
+        
+        hdr = hdr->next;
+    }
+    
+    //проверим еще раз для последнего
+    if (hdr->type == type) {
+        result = hdr;
+        return result;
+    }
+    
+    return nil;
+}
+
++ (pjsip_contact_hdr *) rightFindHeaderInMessage: (pjsip_msg)msg
+                                         forName: (const pj_str_t *) name {
+    pjsip_contact_hdr *result = nil;
+    
+    NSString *findingName = [[NSString stringWithPJString:*name] lowercaseString];
+    pjsip_hdr *msgHdr = &msg.hdr;
+    pjsip_hdr *firstHeader = msg.hdr.next->next;
+    pjsip_hdr *lastHeader = firstHeader->prev;
+    
+    pjsip_hdr *hdr = firstHeader;
+    
+    int i = 0;
+    
+    //Проверяем, пока не дошли до последнего хедера
+    while(hdr != lastHeader) {
+        NSString *hdrname;
+        
+        if ((hdr != msgHdr) && (hdr->type <= PJSIP_H_OTHER) && (hdr->name.ptr != nil) && (hdr->name.ptr != "")) {
+            hdrname = [[NSString stringWithPJString:hdr->name] lowercaseString];
+        }
+        if ([findingName isEqualToString:hdrname]) {
+            result = hdr;
+            return result;
+        }
+        
+        
+        //ограничим глубину поиска?
+        if (i>100) return result;
+        i++;
+        
+        hdr = hdr->next;
+    }
+    
+    //проверим еще раз для последнего
+    NSString *hdrname = [NSString stringWithPJString:hdr->name];
+    if ([findingName isEqualToString:hdrname]) {
+        result = hdr;
+        return result;
+    }
+    
+    return nil;
 }
 
 @end
