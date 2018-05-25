@@ -46,6 +46,7 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
     SWCallReasonRemoteHold = 608,
     SWCallReasonRestricted = 603,
     SWCallReasonNotAnswered = 607,
+    SWCallReasonAbonentBlocked = 405,
     SWCallReasonNotExists = 406,
     SWCallReasonUnavailiable = 480,
     SWCallReasonNoMoney = 402,

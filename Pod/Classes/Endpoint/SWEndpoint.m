@@ -1435,12 +1435,9 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                             hangupReason = SWCallReasonNoMoney;
                             break;
                             
-                            /*
-#ifndef DEBUG
-#error TODO
-                            //TODO: добавить кейс "абонент заблокирован"
-#endif
-                             */
+                        case PJSIP_SC_METHOD_NOT_ALLOWED:
+                            hangupReason = SWCallReasonRestricted;
+                            break;
                             
                         default:
                             break;
