@@ -104,6 +104,7 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 -(void)reinvite:(void(^)(NSError *error))handler;
 
 - (void) setVideoEnabled: (BOOL) enabled;
+- (void) reRunVideo;
 - (void) changeVideoCaptureDevice;
 
 //-(void)transferCall:(NSString *)destination completionHandler:(void(^)(NSError *error))handler;

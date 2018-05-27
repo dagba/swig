@@ -50,7 +50,6 @@ typedef void (^SWAccountStateChangeBlock)(SWAccount *account);
 typedef void (^SWIncomingCallBlock)(SWAccount *account, SWCall *call);
 typedef void (^SWCallStateChangeBlock)(SWAccount *account, SWCall *call, pjsip_status_code statusCode);
 typedef void (^SWCallMediaStateChangeBlock)(SWAccount *account, SWCall *call);
-typedef void (^SWCallVideoFormatChangeBlock)(SWAccount *account, SWCall *call);
 
 
 //thread statics
@@ -201,7 +200,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWIncomingCallBlock incomingCallBlock;
 @property (nonatomic, copy) SWCallStateChangeBlock callStateChangeBlock;
 @property (nonatomic, copy) SWCallMediaStateChangeBlock callMediaStateChangeBlock;
-@property (nonatomic, copy) SWCallVideoFormatChangeBlock callVideoFormatChangeBlock;
 @property (nonatomic, copy) SWSyncDoneBlock syncDoneBlock;
 @property (nonatomic, copy) SWGroupCreatedBlock groupCreatedBlock;
 
@@ -465,6 +463,10 @@ static SWEndpoint *_sharedEndpoint = nil;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), queue, ^{
             NSInteger accountState = [SWEndpoint sharedEndpoint].firstAccount.accountState;
             
+            if (! [SWEndpoint sharedEndpoint].firstAccount.isAuthorized) {
+                return;
+            }
+            
             NSLog(@"<--swaccount--> handleEnteredForeground code=%d", accountState);
             if (accountState == SWAccountStateDisconnected) {
                 [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
@@ -679,6 +681,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     //ua_cfg.cb.on_create_media_transport_srtp = &SWOnSrtpTransportCreate;
     ua_cfg.cb.on_dtmf_digit = &SWOnDTMFDigit;
     ua_cfg.cb.on_typing2 = &SWOnTyping;
+    //ua_cfg.cb.on_call_sdp_created = &SWOnCallSdpCreated; //Пока SDP не пригодились
     
     
     //    ua_cfg.stun_host = [@"stun.sipgate.net" pjString];
@@ -1516,10 +1519,6 @@ static void SWOnCallMediaEvent(pjsua_call_id call_id, unsigned med_idx, pjmedia_
             
             [call changeVideoWindowWithSize: videoSize];
             
-            if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
-                [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, call);
-            }
-            
         }
     }
 }
@@ -1536,6 +1535,20 @@ static void SWOnCallReplaced(pjsua_call_id old_call_id, pjsua_call_id new_call_i
 static void SWOnNatDetect(const pj_stun_nat_detect_result *res){
     
     NSLog(@"Nat detect: %s", res->nat_type_name);
+}
+
+static void SWOnCallSdpCreated (pjsua_call_id call_id,
+                                        pjmedia_sdp_session *sdp,
+                                        pj_pool_t *pool,
+             const pjmedia_sdp_session *rem_sdp) {
+    //TODO: перенести эти свойства в звонок
+    if (sdp != NULL) {
+        [SWEndpoint sharedEndpoint]->_localSdp = sdp;
+    }
+    
+    if (rem_sdp != NULL) {
+        [SWEndpoint sharedEndpoint]->_remoteSdp = rem_sdp;
+    }
 }
 
 static void SWOnTransportState (pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info) {
@@ -1737,8 +1750,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     NSString *methodName = [NSString stringWithPJString:data->msg_info.msg->line.req.method.name];
     
-    NSLog(@"<--Request msg-->incoming request: %@", methodName);
-    
     if (pjsip_method_cmp(&data->msg_info.msg->line.req.method, &pjsip_message_method) == 0) {
 
         pjsip_ctype_hdr* content_type_hdr = (pjsip_ctype_hdr *)pjsip_msg_find_hdr(data->msg_info.msg, PJSIP_H_CONTENT_TYPE, nil);
@@ -1772,6 +1783,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
 }
 
 - (pj_bool_t) txRequestPackageProcessing:(pjsip_tx_data *) tdata {
+    
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(tdata->msg);
     
     pjsip_sip_uri *uri = (pjsip_sip_uri *)pjsip_uri_get_uri(from_hdr->uri);

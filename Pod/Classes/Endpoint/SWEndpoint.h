@@ -13,11 +13,6 @@
 #import <pjnath.h>
 #import "SWMessageSenderProtocol.h"
 
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
 /*
 #define pjsip_msg_find_hdr(msg,\
 type, start) \
@@ -71,6 +66,7 @@ typedef void (^SWGroupCreatedBlock) (SWAccount *account, NSInteger groupID, NSSt
 typedef void (^SWTypingBlock) (SWAccount *account, NSString *abonent, NSInteger groupID, BOOL typing);
 typedef BOOL (^SWShouldResumeBlock) (SWAccount *account);
 typedef void (^SWUnauthorizedBlock) (SWAccount *account);
+typedef void (^SWCallVideoFormatChangeBlock)(SWAccount *account, SWCall *call);
 
 typedef void (^SWErrorBlock) (NSUInteger status);
 
@@ -92,6 +88,9 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 @property (strong, readonly) SWIntentManager *intentManager;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+@property (nonatomic, copy) SWCallVideoFormatChangeBlock callVideoFormatChangeBlock;
+@property (readonly) pjmedia_sdp_session *localSdp;
+@property (readonly) pjmedia_sdp_session *remoteSdp;
 
 @property (atomic, assign) NSInteger endpointIteration; //Инкрементируется при перезагрузке. Нужна для проверки корректности использования структур библиотеки. Они чистятся вместе с либой.
 

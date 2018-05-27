@@ -34,6 +34,7 @@
 @property (nonatomic, assign) BOOL isHangupSent;
 @property (nonatomic, assign) BOOL wasConnected;
 
+
 @end
 
 @implementation SWCall {
@@ -474,52 +475,40 @@
     if (!self.withVideo) {
         return;
     }
+    NSLog(@"<--reinvite--> reRunVideo invoked");
+    
+    __weak typeof(self) weakSelf = self;
     
     dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
-    
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), queue, ^{
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), queue, ^{
         
         SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
         
         NSThread *callThread = [thrManager getCallManagementThread];
         
-        [thrManager runBlock:^{
-            pjsua_call *call;
-            
-            pjsua_call_media *call_med;
-            
-            call = &pjsua_var.calls[self.callId];
-            
-            int med_idx = pjsua_call_get_vid_stream_idx(self.callId);
+        dispatch_async(dispatch_get_main_queue(), ^{
             pj_status_t status;
             
-            call_med = &call->media[med_idx];
-            pjmedia_vid_stream *stream = call_med->strm.v.stream;
-            char errmsg[PJ_ERR_MSG_SIZE];
+            pjsua_call_setting call_setting;
+            pjsua_call_setting_default(&call_setting);
+            call_setting.vid_cnt=1;
             
-            if (!stream) {
-                pjmedia_endpt *endpt = pjsua_var.med_endpt;
-                pjmedia_vid_stream_info *info;
-                
-                status = pjmedia_vid_stream_create(endpt, NULL, &info, call_med->tp, NULL, &stream);
-                
-                
-                if (status != PJ_SUCCESS) {
-                    pj_strerror(status, errmsg, sizeof(errmsg));
-                }
-            }
-            
-            BOOL isRunning = pjmedia_vid_stream_is_running(stream, PJMEDIA_DIR_ENCODING);
-            
-            if(!isRunning) {
-                pjmedia_vid_stream_start(stream);
-            }
-        } onThread:callThread wait:NO];
+            NSLog(@"<--reinvite--> reinvite sending");
+            status = pjsua_call_reinvite2((int)self.callId, &call_setting, NULL);
+            //status = pjsua_call_reinvite((int)weakSelf.callId, PJ_TRUE, NULL);
+        });
         
     });
 }
 
 -(void)mediaStateChanged {
+    
+#ifndef DEBUG
+#error TODO
+    //TODO: убрать эти логи
+#endif
+    NSLog(@"<--reinvite--> mediaStateChanged invoked");
     
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
@@ -527,10 +516,24 @@
     if (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE || callInfo.media_status == PJSUA_CALL_MEDIA_REMOTE_HOLD) {
         pjsua_conf_connect(callInfo.conf_slot, 0);
         pjsua_conf_connect(0, callInfo.conf_slot);
+        unsigned medCnt = callInfo.media_cnt;
         if(self.withVideo && (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE)) {
-#warning включать видео здесь
-            //[self setVideoEnabled:true];
-            [self sendVideoKeyframe];
+            NSLog(@"<--reinvite--> mediaStateChanged active");
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if ([[UIApplication sharedApplication] applicationState] == UIApplicationStateActive) {
+                    
+                    NSLog(@"<--reinvite--> mediaStateChanged UIApplicationStateActive");
+#ifndef DEBUG
+#error TODO
+                    //TODO: включать видеоокно по кейфрейму
+#endif
+                    //[self enableVideoWindow];
+                    //[self runVideoStream];
+                    [self sendVideoKeyframe];
+                }
+            });
+            
         }
     }
     
@@ -539,37 +542,133 @@
     self.mediaState = (SWMediaState)mediaStatus;
 }
 
+- (void) runVideoStream {
+    pjsua_call *call;
+    
+    pjsua_call_media *call_med;
+    
+    call = &pjsua_var.calls[self.callId];
+    
+    int med_idx = pjsua_call_get_vid_stream_idx(self.callId);
+    pj_status_t status;
+    
+    call_med = &call->media[med_idx];
+    pjmedia_vid_stream *stream = call_med->strm.v.stream;
+    char errmsg[PJ_ERR_MSG_SIZE];
+    
+    if (!stream) {
+        NSLog(@"<--reinvite--> runVideoStream stream not exists - 1");
+        pjmedia_endpt *endpt = pjsua_var.med_endpt;
+        pjmedia_vid_stream_info *info;
+        
+        status = pjmedia_vid_stream_create(endpt, NULL, &info, call_med->tp, NULL, &stream);
+        
+        
+        if (status != PJ_SUCCESS) {
+            pj_strerror(status, errmsg, sizeof(errmsg));
+            
+            NSLog(@"<--reinvite--> runVideoStream stream creating failed");
+        }
+    }
+    else {
+        NSLog(@"<--reinvite--> runVideoStream stream exists - 1");
+    }
+    
+    if (!stream) {
+        NSLog(@"<--reinvite--> runVideoStream stream not exists - 2");
+        return;
+    }
+    
+    
+    NSLog(@"<--reinvite--> runVideoStream stream exists - 2");
+    
+    BOOL isRunning = pjmedia_vid_stream_is_running(stream, PJMEDIA_DIR_ENCODING);
+    
+    if(!isRunning) {
+        NSLog(@"<--reinvite--> runVideoStream stream is not running");
+        status = pjmedia_vid_stream_start(stream);
+        if (status != PJ_SUCCESS) {
+            NSLog(@"<--reinvite--> runVideoStream stream not started");
+        }
+        else {
+            NSLog(@"<--reinvite--> runVideoStream stream started");
+        }
+    }
+    else {
+        NSLog(@"<--reinvite--> runVideoStream stream is running");
+    }
+}
+
 - (void) changeVideoWindowWithSize: (CGSize) size {
-    int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
-    pjsua_vid_win_id wid;
     
-    if (vid_idx >= 0) {
-        pjsua_call_info ci;
+    NSLog(@"<--reinvite--> changeVideoWindowWithSize: %fx%f", size.width, size.height);
+    self.videoSize = size;
+    
+    [self enableVideoWindow];
+}
+
+- (void) enableVideoWindow {
+    NSLog(@"<--reinvite--> enableVideoWindow invoked");
+#warning experiment Похоже,требует главного потока (работа с окнами итп)
+    dispatch_async(dispatch_get_main_queue(), ^{
+    //[[SWEndpoint sharedEndpoint].threadFactory runBlockOnRegThread:^{
         
-        pjsua_call_get_info((int)self.callId, &ci);
-        wid = ci.media[vid_idx].stream.vid.win_in;
+        NSLog(@"<--reinvite--> enableVideoWindow started on thread");
         
-        //Если окно не инициализировано, wid = -1
-        if (wid == PJSUA_INVALID_ID) {
-            return;
+        int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
+        pjsua_vid_win_id wid;
+        
+        if (vid_idx >= 0) {
+            pjsua_call_info ci;
+            
+            pjsua_call_get_info((int)self.callId, &ci);
+            wid = ci.media[vid_idx].stream.vid.win_in;
+            
+            //Если окно не инициализировано, wid = -1
+            if (wid == PJSUA_INVALID_ID) {
+                NSLog(@"<--reinvite--> enableVideoWindow invalid window id");
+                return;
+            }
+            
+            NSLog(@"<--reinvite--> enableVideoWindow valid window id");
+            
+            pjsua_vid_win_info windowInfo;
+            pj_status_t status;
+            
+            status = pjsua_vid_win_get_info(wid, &windowInfo);
+            
+            if(status == PJ_SUCCESS) {
+                
+                UIView *videoView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
+                NSLog(@"<--reinvite--> video window started: %@", videoView);
+                self.videoView = videoView;
+                
+#ifdef DEBUG
+#warning test
+                //reinvite test
+                pjsua_vid_win_set_show(wid, PJ_TRUE);
+#else
+#error test
+#endif
+            }
+            else {
+                NSLog(@"<--reinvite--> enableVideoWindow get info error");
+            }
         }
         
-        pjsua_vid_win_info windowInfo;
-        pj_status_t status;
-        
-        status = pjsua_vid_win_get_info(wid, &windowInfo);
-        
-        if(status == PJ_SUCCESS) {
-            self.videoView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
-            self.videoSize = size;
+        if (self.currentVideoCaptureDevice == PJMEDIA_NO_VID_DEVICE) {
+            self.currentVideoCaptureDevice = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
         }
-    }
-    
-    if (self.currentVideoCaptureDevice == PJMEDIA_NO_VID_DEVICE) {
-        self.currentVideoCaptureDevice = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
-    }
-    
-    [self setVideoCaptureDevice:self.currentVideoCaptureDevice];
+        
+        [self setVideoCaptureDevice:self.currentVideoCaptureDevice];
+        
+        SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:self.accountId];
+        
+        if ([SWEndpoint sharedEndpoint].callVideoFormatChangeBlock) {
+            [SWEndpoint sharedEndpoint].callVideoFormatChangeBlock(account, self);
+        }
+    //} wait:NO];
+    });
 }
 
 -(SWAccount *)getAccount {
@@ -643,6 +742,15 @@
     pjsua_call_setting call_setting;
     pjsua_call_setting_default(&call_setting);
     call_setting.vid_cnt=1;
+    
+#ifdef DEBUG
+#warning test
+    //reinvite test
+    call_setting.vid_cnt=0;
+#else
+#error test
+#endif
+    
     pjsua_call_answer2((int)self.callId, &call_setting, PJSIP_SC_OK, NULL, NULL);
     
     //status = pjsua_call_answer((int)self.callId, PJSIP_SC_OK, NULL, NULL);
@@ -972,55 +1080,60 @@
 
 - (void) setVideoCaptureDevice: (int) devId {
     SWAccount *account = [self getAccount];
+    __weak typeof(self) weakSelf = self;
     
-    [account configureVideoCodecForDevice: devId];
-    
-    pjsua_call_vid_strm_op_param param;
-    
-    pjsua_call_vid_strm_op_param_default(&param);
-    
-    param.cap_dev = devId;
-    
-    pjsua_call_set_vid_strm(self.callId,
-                            PJSUA_CALL_VID_STRM_CHANGE_CAP_DEV,
-                            &param);
-    
-    pjsua_vid_preview_param prvParam;
-    
-    pjsua_vid_preview_param_default(&prvParam);
-    prvParam.wnd_flags = PJMEDIA_VID_DEV_WND_BORDER |
-    PJMEDIA_VID_DEV_WND_RESIZABLE;
-    
-    pjsua_vid_preview_start(devId,&prvParam);
-    
-    pjsua_vid_win_id wnd = pjsua_vid_preview_get_win(devId);
-    
-    self.currentVideoCaptureDevice = devId;
-    
-    pjsua_vid_win_info windowInfo;
-    
-    pj_status_t status = pjsua_vid_win_get_info(wnd, &windowInfo);
-    
-    if(status != PJ_SUCCESS) return;
-    
-    if ((self.videoPreviewSize.width > 0) && (self.videoPreviewSize.height > 0)) {
-        pjmedia_rect_size size;
+#warning experiment Похоже, код ниже требует главного потока. Иначе потом будет bad_access
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [account configureVideoCodecForDevice: devId];
         
-        CGSize outputVideoSize = account.currentOutputVideoSize;
+        pjsua_call_vid_strm_op_param param;
         
-        CGFloat aspect = outputVideoSize.width / outputVideoSize.height;
+        pjsua_call_vid_strm_op_param_default(&param);
         
-        size.w = (int)self.videoPreviewSize.width;
+        param.cap_dev = devId;
+        
+        pjsua_call_set_vid_strm(weakSelf.callId,
+                                PJSUA_CALL_VID_STRM_CHANGE_CAP_DEV,
+                                &param);
+        
+        pjsua_vid_preview_param prvParam;
+        
+        pjsua_vid_preview_param_default(&prvParam);
+        prvParam.wnd_flags = PJMEDIA_VID_DEV_WND_BORDER |
+        PJMEDIA_VID_DEV_WND_RESIZABLE;
+        
+        pjsua_vid_preview_start(devId,&prvParam);
+        
+        pjsua_vid_win_id wnd = pjsua_vid_preview_get_win(devId);
+        
+        weakSelf.currentVideoCaptureDevice = devId;
+        
+        pjsua_vid_win_info windowInfo;
+        
+        pj_status_t status = pjsua_vid_win_get_info(wnd, &windowInfo);
+        
+        if(status != PJ_SUCCESS) return;
+        
+        if ((weakSelf.videoPreviewSize.width > 0) && (weakSelf.videoPreviewSize.height > 0)) {
+            pjmedia_rect_size size;
+            
+            CGSize outputVideoSize = account.currentOutputVideoSize;
+            
+            CGFloat aspect = outputVideoSize.width / outputVideoSize.height;
+            
+            size.w = (int)weakSelf.videoPreviewSize.width;
 #warning игнорируется переданная высота. Может быть, использовать как ограничения?
-        size.h = (int)self.videoPreviewSize.width / aspect;
+            size.h = (int)weakSelf.videoPreviewSize.width / aspect;
+            
+            pjsua_vid_win_set_size(wnd, &size);
+        }
+        else {
+            pjsua_vid_win_set_show(wnd, PJ_FALSE);
+        }
         
-        pjsua_vid_win_set_size(wnd, &size);
-    }
-    else {
-        pjsua_vid_win_set_show(wnd, PJ_FALSE);
-    }
+        weakSelf.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
+    });
     
-    self.videoPreviewView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
 }
 
 - (void) sendVideoKeyframe {
@@ -1032,6 +1145,7 @@
             [NSThread sleepForTimeInterval:1];
 #warning UI thread
             dispatch_async(dispatch_get_main_queue(), ^{
+                NSLog(@"<--reinvite--> keyframe sending");
                 pj_status_t status;
                 status = pjsua_call_set_vid_strm(weakSelf.callId, PJSUA_CALL_VID_STRM_SEND_KEYFRAME, NULL);
             });
@@ -1056,7 +1170,11 @@
         
         status = pjsua_set_snd_dev(PJMEDIA_AUD_DEFAULT_CAPTURE_DEV, PJMEDIA_AUD_DEFAULT_PLAYBACK_DEV);
         
-        status = pjsua_call_reinvite((int)self.callId, PJ_TRUE, NULL);
+        pjsua_call_setting call_setting;
+        pjsua_call_setting_default(&call_setting);
+        call_setting.vid_cnt=1;
+        
+        status = pjsua_call_reinvite2((int)self.callId, &call_setting, NULL);
         
         if (status != PJ_SUCCESS) {
             error = [NSError errorWithDomain:@"Error reinvite call" code:0 userInfo:nil];
@@ -1231,16 +1349,18 @@
         [audioSession setMode:sessionMode error:&error];
         
         NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
+        //[audioSession setCategory:sessionCategory error:&error];
         if (speaker) {
             [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
+            
+            //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         }
         
         else {
             [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
             
-            if (error) {
-                NSLog(@"<--speaker--> setCategory error: %@", error);
-            }
+            //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
+            
         }
         
         NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
