@@ -1221,13 +1221,13 @@
                 [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
             }
             else {
-                [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+                //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
             }
             
             return;
         }
         
-        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+        //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
         
         BOOL speaker = NO;
         BOOL sessionActive = YES;
