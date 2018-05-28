@@ -140,6 +140,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 
 - (void) setUnauthorizedBlock: (SWUnauthorizedBlock) unauthorizedBlock;
 
+- (void) setRegisterErrorBlock: (SWErrorBlock) registerErrorBlock;
 - (void) setOtherErrorBlock: (SWErrorBlock) otherErrorBlock;
 
 //- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
