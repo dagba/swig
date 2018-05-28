@@ -480,7 +480,7 @@
         
         NSThread *callThread = [thrManager getCallManagementThread];
         
-        dispatch_async(dispatch_get_main_queue(), ^{
+        [thrManager runBlock:^{
             pj_status_t status;
             
             pjsua_call_setting call_setting;
@@ -489,7 +489,7 @@
             
             status = pjsua_call_reinvite2((int)self.callId, &call_setting, NULL);
             //status = pjsua_call_reinvite((int)weakSelf.callId, PJ_TRUE, NULL);
-        });
+        } onThread:callThread wait:NO];
         
     });
 }
@@ -1218,7 +1218,7 @@
             
             //коллкит корректно понимает переключение на динамик только так
             if (_speaker) {
-                [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
+                //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
             }
             else {
                 //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
@@ -1300,13 +1300,13 @@
         NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
         //[audioSession setCategory:sessionCategory error:&error];
         if (speaker) {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionDuckOthers error:&error];
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         }
         
         else {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
+            [audioSession setCategory:sessionCategory error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
             
@@ -1325,6 +1325,7 @@
             NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
             
             
+            NSLog(@"<--speaker--> inpit: %@", porttype);
             
             //        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
             //            NSLog(@"!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])");
@@ -1340,7 +1341,7 @@
             
             
             for(AVAudioSessionDataSourceDescription* source in dataSources) {
-                //NSLog(@"<--speaker--> --- dataSource: %@", source);
+                NSLog(@"<--speaker--> dataSource: %@", source);
                 if ([source.orientation isEqualToString:AVAudioSessionOrientationFront]) {
                     frontMicrophone = source;
                 }
@@ -1352,25 +1353,73 @@
                 }
             }
             
+            BOOL ok;
+            
             if (speaker) {
                 //Если нашли передний микрофон, используем его (на 6 и выше?), иначе верхний (на 4s и на 5-х?)
                 if (frontMicrophone) {
-                    [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    NSLog(@"<--speaker--> front microphone");
                     
-                    [audioSession setInputDataSource:frontMicrophone error:&error];
+                    ok = [audioSession setPreferredInput:desc error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    ok = [desc setPreferredDataSource:frontMicrophone error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    ok = [frontMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
                 }
                 else if (topMicrophone) {
-                    [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    NSLog(@"<--speaker--> top microphone");
                     
-                    [audioSession setInputDataSource:topMicrophone error:&error];
+                    ok = [audioSession setPreferredInput:desc error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    ok = [desc setPreferredDataSource:topMicrophone error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    ok = [topMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                }
+                ok = [audioSession setInputGain:1.0 error:&error];
+                
+                if ((error != nil) || (!ok)) {
+                    NSLog(@"<--speaker--> error: %@", error);
                 }
             }
             else {
                 //переключаемся на нижний микрофон
                 if (bottomMicrophone) {
-                    [bottomMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    NSLog(@"<--speaker--> bottom microphone");
                     
-                    [audioSession setInputDataSource:bottomMicrophone error:&error];
+                    ok = [audioSession setPreferredInput:desc error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    ok = [desc setPreferredDataSource:bottomMicrophone error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
+                    
+                    
+                    ok = [bottomMicrophone setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional error:&error];
+                    if ((error != nil) || (!ok)) {
+                        NSLog(@"<--speaker--> error: %@", error);
+                    }
                 }
             }
         }
