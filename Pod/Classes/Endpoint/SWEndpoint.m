@@ -1652,14 +1652,6 @@ static pjmedia_transport* SWOnMediaTransportCreate (pjsua_call_id call_id,
     
     NSLog(@"<--SWOnMediaTransportCreate-->");
     
-#warning отличать видеопоток от аудио-
-    /*
-#ifdef DEBUG
-#warning test
-#else
-#error test
-#endif
-     */
     if (media_idx == 0) {
         pjmedia_transport *adapter;
         pj_status_t status;

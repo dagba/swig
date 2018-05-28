@@ -83,6 +83,8 @@ typedef NS_ENUM(NSInteger, SWCallReason) {
 @property (nonatomic, readonly) NSTimeInterval duration; //TODO: update with timer
 @property (nonatomic, assign) NSInteger hangupReason;
 
+@property (assign, nonatomic) BOOL videoIsInactive;
+
 
 -(instancetype)initWithCallId:(NSUInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;
 +(instancetype)callWithId:(NSInteger)callId accountId:(NSInteger)accountId inBound:(BOOL)inbound;

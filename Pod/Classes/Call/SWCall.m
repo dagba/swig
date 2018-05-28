@@ -424,12 +424,6 @@
             self->_dateStartSpeaking = [NSDate date];
             [self updateMuteStatus];
             [self updateOverrideSpeaker];
-            
-            __weak typeof(self) weakSelf = self;
-#warning костыль
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-                [weakSelf updateOverrideSpeaker];
-            });
         } break;
             
         case PJSIP_INV_STATE_DISCONNECTED: {
@@ -475,7 +469,6 @@
     if (!self.withVideo) {
         return;
     }
-    NSLog(@"<--reinvite--> reRunVideo invoked");
     
     __weak typeof(self) weakSelf = self;
     
@@ -494,7 +487,6 @@
             pjsua_call_setting_default(&call_setting);
             call_setting.vid_cnt=1;
             
-            NSLog(@"<--reinvite--> reinvite sending");
             status = pjsua_call_reinvite2((int)self.callId, &call_setting, NULL);
             //status = pjsua_call_reinvite((int)weakSelf.callId, PJ_TRUE, NULL);
         });
@@ -503,13 +495,6 @@
 }
 
 -(void)mediaStateChanged {
-    
-#ifndef DEBUG
-#error TODO
-    //TODO: убрать эти логи
-#endif
-    NSLog(@"<--reinvite--> mediaStateChanged invoked");
-    
     pjsua_call_info callInfo;
     pjsua_call_get_info((int)self.callId, &callInfo);
     
@@ -518,18 +503,9 @@
         pjsua_conf_connect(0, callInfo.conf_slot);
         unsigned medCnt = callInfo.media_cnt;
         if(self.withVideo && (callInfo.media_status == PJSUA_CALL_MEDIA_ACTIVE)) {
-            NSLog(@"<--reinvite--> mediaStateChanged active");
             
             dispatch_async(dispatch_get_main_queue(), ^{
                 if ([[UIApplication sharedApplication] applicationState] == UIApplicationStateActive) {
-                    
-                    NSLog(@"<--reinvite--> mediaStateChanged UIApplicationStateActive");
-#ifndef DEBUG
-#error TODO
-                    //TODO: включать видеоокно по кейфрейму
-#endif
-                    //[self enableVideoWindow];
-                    //[self runVideoStream];
                     [self sendVideoKeyframe];
                 }
             });
@@ -540,6 +516,8 @@
     pjsua_call_media_status mediaStatus = callInfo.media_status;
     
     self.mediaState = (SWMediaState)mediaStatus;
+    
+    [self updateMuteStatus];
 }
 
 - (void) runVideoStream {
@@ -557,7 +535,6 @@
     char errmsg[PJ_ERR_MSG_SIZE];
     
     if (!stream) {
-        NSLog(@"<--reinvite--> runVideoStream stream not exists - 1");
         pjmedia_endpt *endpt = pjsua_var.med_endpt;
         pjmedia_vid_stream_info *info;
         
@@ -566,55 +543,30 @@
         
         if (status != PJ_SUCCESS) {
             pj_strerror(status, errmsg, sizeof(errmsg));
-            
-            NSLog(@"<--reinvite--> runVideoStream stream creating failed");
         }
-    }
-    else {
-        NSLog(@"<--reinvite--> runVideoStream stream exists - 1");
     }
     
     if (!stream) {
-        NSLog(@"<--reinvite--> runVideoStream stream not exists - 2");
         return;
     }
-    
-    
-    NSLog(@"<--reinvite--> runVideoStream stream exists - 2");
     
     BOOL isRunning = pjmedia_vid_stream_is_running(stream, PJMEDIA_DIR_ENCODING);
     
     if(!isRunning) {
-        NSLog(@"<--reinvite--> runVideoStream stream is not running");
         status = pjmedia_vid_stream_start(stream);
-        if (status != PJ_SUCCESS) {
-            NSLog(@"<--reinvite--> runVideoStream stream not started");
-        }
-        else {
-            NSLog(@"<--reinvite--> runVideoStream stream started");
-        }
-    }
-    else {
-        NSLog(@"<--reinvite--> runVideoStream stream is running");
     }
 }
 
 - (void) changeVideoWindowWithSize: (CGSize) size {
-    
-    NSLog(@"<--reinvite--> changeVideoWindowWithSize: %fx%f", size.width, size.height);
     self.videoSize = size;
     
     [self enableVideoWindow];
 }
 
 - (void) enableVideoWindow {
-    NSLog(@"<--reinvite--> enableVideoWindow invoked");
 #warning experiment Похоже,требует главного потока (работа с окнами итп)
     dispatch_async(dispatch_get_main_queue(), ^{
     //[[SWEndpoint sharedEndpoint].threadFactory runBlockOnRegThread:^{
-        
-        NSLog(@"<--reinvite--> enableVideoWindow started on thread");
-        
         int vid_idx = pjsua_call_get_vid_stream_idx((int)self.callId);
         pjsua_vid_win_id wid;
         
@@ -626,11 +578,8 @@
             
             //Если окно не инициализировано, wid = -1
             if (wid == PJSUA_INVALID_ID) {
-                NSLog(@"<--reinvite--> enableVideoWindow invalid window id");
                 return;
             }
-            
-            NSLog(@"<--reinvite--> enableVideoWindow valid window id");
             
             pjsua_vid_win_info windowInfo;
             pj_status_t status;
@@ -640,19 +589,10 @@
             if(status == PJ_SUCCESS) {
                 
                 UIView *videoView = (__bridge UIView *)windowInfo.hwnd.info.ios.window;
-                NSLog(@"<--reinvite--> video window started: %@", videoView);
+                
                 self.videoView = videoView;
                 
-#ifdef DEBUG
-#warning test
-                //reinvite test
                 pjsua_vid_win_set_show(wid, PJ_TRUE);
-#else
-#error test
-#endif
-            }
-            else {
-                NSLog(@"<--reinvite--> enableVideoWindow get info error");
             }
         }
         
@@ -738,18 +678,17 @@
     pj_status_t status;
     NSError *error;
     
+    
+    unsigned vid_cnt = 0;
+    
+    if (self.withVideo && (!self.videoIsInactive)) {
+        vid_cnt = 1;
+    }
+    
 #warning отвечать без видео, если звонок с коллкита с заблокированного экрана?
     pjsua_call_setting call_setting;
     pjsua_call_setting_default(&call_setting);
-    call_setting.vid_cnt=1;
-    
-#ifdef DEBUG
-#warning test
-    //reinvite test
-    call_setting.vid_cnt=0;
-#else
-#error test
-#endif
+    call_setting.vid_cnt=vid_cnt;
     
     pjsua_call_answer2((int)self.callId, &call_setting, PJSIP_SC_OK, NULL, NULL);
     
@@ -1145,7 +1084,6 @@
             [NSThread sleepForTimeInterval:1];
 #warning UI thread
             dispatch_async(dispatch_get_main_queue(), ^{
-                NSLog(@"<--reinvite--> keyframe sending");
                 pj_status_t status;
                 status = pjsua_call_set_vid_strm(weakSelf.callId, PJSUA_CALL_VID_STRM_SEND_KEYFRAME, NULL);
             });
@@ -1277,8 +1215,19 @@
         if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) {
             [audioSession setCategory:sessionCategory error:nil];
             [audioSession setMode:sessionMode error:nil];
+            
+            //коллкит корректно понимает переключение на динамик только так
+            if (_speaker) {
+                [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
+            }
+            else {
+                [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
+            }
+            
             return;
         }
+        
+        [audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
         
         BOOL speaker = NO;
         BOOL sessionActive = YES;

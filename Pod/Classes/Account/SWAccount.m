@@ -135,15 +135,6 @@ void * refToSelf;
     acc_cfg.vid_in_auto_show = PJ_TRUE;
     acc_cfg.vid_out_auto_transmit = PJ_TRUE;
     
-#ifdef DEBUG
-#warning test
-    //reinvite test
-    //acc_cfg.vid_in_auto_show = PJ_FALSE;
-    //acc_cfg.vid_out_auto_transmit = PJ_FALSE;
-#else
-#error test
-#endif
-    
     acc_cfg.vid_wnd_flags = PJMEDIA_VID_DEV_WND_BORDER | PJMEDIA_VID_DEV_WND_RESIZABLE;
     acc_cfg.vid_cap_dev = PJMEDIA_VID_DEFAULT_CAPTURE_DEV;
     acc_cfg.vid_rend_dev = PJMEDIA_VID_DEFAULT_RENDER_DEV;
