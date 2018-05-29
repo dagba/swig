@@ -26,6 +26,11 @@
 
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
+@property (nonatomic, copy, nullable) void (^answerHandler)(NSError *error);
+#ifndef DEBUG
+#error TODO
+//TODO: вместо хэндлера надо использовать признак, который не может быть nil
+#endif
 
 #define PJMEDIA_NO_VID_DEVICE -100
 
@@ -40,6 +45,7 @@
 @implementation SWCall {
     NSTimeInterval _spendTime;
     BOOL _isGsm;
+    BOOL _callkitAreHandlingAudioSession;
 }
 
 -(instancetype)init {
@@ -666,6 +672,13 @@
 
 -(void)answer:(void(^)(NSError *error))handler {
     
+    if ((!self.callkitAreHandlingAudioSession) && (@available(iOS 10.0, *))) {
+        self.answerHandler = handler;
+        return;
+    }
+    
+    self.answerHandler = nil;
+    
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     
     NSThread *callThread = [endpoint.threadFactory getCallManagementThread];
@@ -1128,6 +1141,7 @@
 //-(void)replaceCall:(SWCall *)call completionHandler:(void (^)(NSError *))handler;
 
 - (void)setMute:(BOOL)mute {
+    NSLog(@"<--mute--> setMute: %@", mute ? @"true" : @"false");
     if (mute == _mute) {
         return;
     }
@@ -1210,7 +1224,7 @@
         
         //усиление микрофона
         if(_speaker) {
-            pjsua_conf_adjust_rx_level(0, 5.0);
+            pjsua_conf_adjust_rx_level(0, 1.5);
         }
         else {
             pjsua_conf_adjust_rx_level(0, 1.0);
@@ -1513,6 +1527,18 @@
     
     //...либо посчитаем по дате начала разговора
     return [[NSDate date] timeIntervalSinceDate:self.dateStartSpeaking];
+}
+
+-(BOOL)callkitAreHandlingAudioSession {
+    return _callkitAreHandlingAudioSession;
+}
+
+-(void)setCallkitAreHandlingAudioSession:(BOOL)callkitAreHandlingAudioSession {
+    _callkitAreHandlingAudioSession = callkitAreHandlingAudioSession;
+    
+    if ((callkitAreHandlingAudioSession != nil) && (self.answerHandler != nil)) {
+        [self answer:self.answerHandler];
+    }
 }
 
 @end
