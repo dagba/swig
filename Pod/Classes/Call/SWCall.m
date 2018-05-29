@@ -472,30 +472,6 @@
     
     __weak typeof(self) weakSelf = self;
     
-    /*
-#ifdef DEBUG
-#warning test
-    //убираем задержку
-#else
-#error test
-#endif
-    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
-    
-    NSThread *callThread = [thrManager getCallManagementThread];
-    
-    [thrManager runBlock:^{
-        pj_status_t status;
-        
-        pjsua_call_setting call_setting;
-        pjsua_call_setting_default(&call_setting);
-        call_setting.vid_cnt=1;
-        
-        status = pjsua_call_reinvite2((int)self.callId, &call_setting, NULL);
-        //status = pjsua_call_reinvite((int)weakSelf.callId, PJ_TRUE, NULL);
-    } onThread:callThread wait:NO];
-    */
-     
-    
     dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0);
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), queue, ^{
@@ -516,7 +492,6 @@
         } onThread:callThread wait:NO];
         
     });
-    
 }
 
 -(void)mediaStateChanged {
@@ -1101,14 +1076,6 @@
 }
 
 - (void) sendVideoKeyframe {
-    /*
-#ifdef DEBUG
-#warning test
-    return;
-#else
-#error test
-#endif
-    */
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
         __weak typeof(self) weakSelf = self;
         for(int i = 0; i < 5; i++) {
@@ -1240,8 +1207,14 @@
 - (void) updateOverrideSpeaker {
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        
         //усиление микрофона
-        pjsua_conf_adjust_rx_level(0, 5.0);
+        if(_speaker) {
+            pjsua_conf_adjust_rx_level(0, 5.0);
+        }
+        else {
+            pjsua_conf_adjust_rx_level(0, 1.0);
+        }
         
         AVAudioSession *audioSession = [AVAudioSession sharedInstance];
         NSString *sessionMode = AVAudioSessionModeDefault;
@@ -1334,7 +1307,6 @@
         
         NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
         //[audioSession setCategory:sessionCategory error:&error];
-        
         if (speaker) {
             [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error];
             
