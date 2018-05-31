@@ -27,10 +27,12 @@
 @property (nonatomic, strong) UILocalNotification *notification;
 @property (nonatomic, strong) SWRingback *ringback;
 @property (nonatomic, copy, nullable) void (^answerHandler)(NSError *error);
+/*
 #ifndef DEBUG
 #error TODO
 //TODO: вместо хэндлера надо использовать признак, который не может быть nil
 #endif
+ */
 
 #define PJMEDIA_NO_VID_DEVICE -100
 
@@ -1220,8 +1222,16 @@
 
 - (void) updateOverrideSpeaker {
     
+    
     dispatch_async(dispatch_get_main_queue(), ^{
-        
+        /*
+#ifdef DEBUG
+#warning test
+        pjsua_conf_adjust_rx_level(0, 1.0);
+#else
+#error test
+#endif
+        */
         //усиление микрофона
         if(_speaker) {
             pjsua_conf_adjust_rx_level(0, 1.5);

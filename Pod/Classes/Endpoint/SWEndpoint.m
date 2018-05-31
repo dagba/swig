@@ -95,8 +95,6 @@ static pj_str_t resp_rhost;
 
 //TODO: проверить, нужна ли вообще эта хрень
 static void fixContactHeader(pjsip_tx_data *tdata) {
-#warning experiment это уже не нужно?
-    return;
     
     //На стороне B фиксим заголовок контакт в INVITE и UPDATE ибо по умолчанию там какая-то левота.
     //rightFindHeader(tdata->msg, PJSIP_H_CONTACT, NULL);
@@ -326,72 +324,82 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     [[AFNetworkReachabilityManager sharedManager] startMonitoring];
     
-    self.callCenter = [[CTCallCenter alloc] init]; // get a CallCenter somehow; most likely as a global object or something similar?
-    
     __weak typeof(self) weakSelf = self;
     
-    [_callCenter setCallEventHandler:^(CTCall *call) {
+    //пишут, что инициализированный не в главном потоке, криво возвращает список звонков
+    dispatch_async(dispatch_get_main_queue(), ^{
+        weakSelf.callCenter = [[CTCallCenter alloc] init];
         
-        __strong typeof(weakSelf) slf = weakSelf;
-        if(!slf) return;
-        
-        SWAccount *account = [slf firstAccount];
-        
-        SWCall *swcall = [account firstCall];
-        
-        //Может ли звонок в коллцентре появиться до СИПа?
-        if (!swcall) {
+        [_callCenter setCallEventHandler:^(CTCall *call) {
             
-            NSUInteger callCount = [[self.callCenter currentCalls] count];
-            if((call.callState == CTCallStateDisconnected) && (callCount > 0)) {
-                callCount--;
+            __strong typeof(weakSelf) slf = weakSelf;
+            if(!slf) return;
+            
+            SWAccount *account = [slf firstAccount];
+            
+            SWCall *swcall = [account firstCall];
+            
+            //Может ли звонок в коллцентре появиться до СИПа?
+            if (!swcall) {
+                
+                NSUInteger callCount = [[self.callCenter currentCalls] count];
+                if((call.callState == CTCallStateDisconnected) && (callCount > 0)) {
+                    callCount--;
+                }
+                
+                slf->_areOtherCalls = (callCount > 0);
+                NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf->_areOtherCalls ? @"true" : @"false");
+                return;
+            }
+            else {
+                //TODO: areOtherCalls wrong! Зафиксирован случай, когда прошли по этой ветке при активном GSM-звонке. (Эвент был вызван самим СИП-звонком)
+                NSLog(@"<--check other calls--> setting areOtherCalls: false");
+                slf->_areOtherCalls = NO;
             }
             
-            slf->_areOtherCalls = (callCount > 0);
-            NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf->_areOtherCalls ? @"true" : @"false");
-            return;
-        }
-        else {
-            //TODO: areOtherCalls wrong! Зафиксирован случай, когда прошли по этой ветке при активном GSM-звонке. (Эвент был вызван самим СИП-звонком)
-            NSLog(@"<--check other calls--> setting areOtherCalls: false");
-            slf->_areOtherCalls = NO;
-        }
-        
-        //Если звонок не привязан к звонку коллцентра, привяжем
-        if (swcall.ctcallId == nil) {
-            swcall.ctcallId = call.callID;
-        }
-        
-        //Если это событие по тому же звонку, ничего больше делать не нужно
-        if ([call.callID isEqualToString: swcall.ctcallId]) {
-            return;
-        }
-        
-        /*
-        if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
-            
-            if (swcall && swcall.mediaState == SWMediaStateActive) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [swcall setHold:^(NSError *error) {
-                    }];
-                });
-            }
-        } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
-            
-            if (swcall && swcall.mediaState == SWMediaStateLocalHold) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    
-                    [swcall reinvite:^(NSError *error) {
-                    }];
-                });
+            //Если звонок не привязан к звонку коллцентра, привяжем
+            if (swcall.ctcallId == nil) {
+                swcall.ctcallId = call.callID;
             }
             
-        }
-         */
-    }];
+            //Если это событие по тому же звонку, ничего больше делать не нужно
+            if ([call.callID isEqualToString: swcall.ctcallId]) {
+                return;
+            }
+            
+            /*
+             if ([[call callState] isEqual:CTCallStateConnected] || [[call callState] isEqual:CTCallStateIncoming]|| [[call callState] isEqual:CTCallStateDialing]) {
+             
+             if (swcall && swcall.mediaState == SWMediaStateActive) {
+             dispatch_async(dispatch_get_main_queue(), ^{
+             [swcall setHold:^(NSError *error) {
+             }];
+             });
+             }
+             } else if ([[call callState] isEqual:CTCallStateDisconnected]) {
+             
+             if (swcall && swcall.mediaState == SWMediaStateLocalHold) {
+             dispatch_async(dispatch_get_main_queue(), ^{
+             
+             [swcall reinvite:^(NSError *error) {
+             }];
+             });
+             }
+             
+             }
+             */
+        }];
+        
+        __strong typeof(weakSelf) slf2 = weakSelf;
+        
+        slf2->_areOtherCalls = ([[slf2.callCenter currentCalls] count] > 0);
+        NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf2->_areOtherCalls ? @"true" : @"false");
+    });
+#ifndef DEBUG
+#error TODO
+    //TODO: проверить, успеет ли инициализироваться при старте приложения по звонку
+#endif
     
-    _areOtherCalls = ([[self.callCenter currentCalls] count] > 0);
-    NSLog(@"<--check other calls--> setting areOtherCalls: %@", _areOtherCalls ? @"true" : @"false");
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
     
@@ -540,6 +548,7 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
+    //TODO: перенести в зарегистрированный поток
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         //TODO hangup all calls
         //TODO remove all accounts
@@ -1303,8 +1312,21 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
 }
 
 static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_rx_data *rdata) {
-    
-    [[SWEndpoint sharedEndpoint].threadFactory runBlockOnRegThread:^{
+    SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
+#ifdef DEBUG
+#warning test
+    dispatch_async(dispatch_get_main_queue(), ^{
+#ifndef DEBUG
+#error TODO
+        //TODO: проверить, что сработает для 4s в заблокированном состоянии при активном GSM-звонке
+#endif
+        NSSet<CTCall*> *currentCalls = [endpoint.callCenter currentCalls];
+        endpoint->_areOtherCalls = ([currentCalls count] > 0);
+    });
+#else
+#error test
+#endif
+    [endpoint.threadFactory runBlockOnRegThread:^{
         SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
         
         if (account) {
