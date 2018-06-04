@@ -395,11 +395,12 @@ static SWEndpoint *_sharedEndpoint = nil;
         slf2->_areOtherCalls = ([[slf2.callCenter currentCalls] count] > 0);
         NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf2->_areOtherCalls ? @"true" : @"false");
     });
+    /*
 #ifndef DEBUG
 #error TODO
     //TODO: проверить, успеет ли инициализироваться при старте приложения по звонку
 #endif
-    
+    */
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
     
@@ -1313,19 +1314,17 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
 
 static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_rx_data *rdata) {
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
-#ifdef DEBUG
-#warning test
+    
     dispatch_async(dispatch_get_main_queue(), ^{
+        /*
 #ifndef DEBUG
 #error TODO
         //TODO: проверить, что сработает для 4s в заблокированном состоянии при активном GSM-звонке
 #endif
+         */
         NSSet<CTCall*> *currentCalls = [endpoint.callCenter currentCalls];
         endpoint->_areOtherCalls = ([currentCalls count] > 0);
     });
-#else
-#error test
-#endif
     [endpoint.threadFactory runBlockOnRegThread:^{
         SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
         
