@@ -1314,16 +1314,24 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
 
 static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_rx_data *rdata) {
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
-    
     dispatch_async(dispatch_get_main_queue(), ^{
         /*
-#ifndef DEBUG
-#error TODO
-        //TODO: проверить, что сработает для 4s в заблокированном состоянии при активном GSM-звонке
-#endif
+         #ifndef DEBUG
+         #error TODO
+         //TODO: проверить, что сработает для 4s в заблокированном состоянии при активном GSM-звонке
+         #endif
          */
-        NSSet<CTCall*> *currentCalls = [endpoint.callCenter currentCalls];
-        endpoint->_areOtherCalls = ([currentCalls count] > 0);
+        CTCallCenter *callCenter = [[CTCallCenter alloc] init];
+        NSSet<CTCall*> *currentCalls = [callCenter currentCalls];
+        BOOL areOtherCalls = [currentCalls count] > 0;
+        
+        NSLog(@"<--areOtherCalls--> areOtherCalls: %@", areOtherCalls ? @"true" : @"false");
+        
+        endpoint->_areOtherCalls = areOtherCalls;
+        
+        if(areOtherCalls) {
+            [[[endpoint firstAccount] lookupCall:call_id] hangupOnReason:SWCallReasonLocalBusy withCompletion:nil];
+        }
     });
     [endpoint.threadFactory runBlockOnRegThread:^{
         SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
@@ -2775,6 +2783,11 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     else {
         //Поищем в конфиге
         description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:reason]];
+        
+        //Если причина не нашлась, проиграем общий рингтон (короткие гудки)
+        if (description == nil) {
+            description = [self.endpointConfiguration.ringtones objectForKey:[NSNumber numberWithInteger:0]];
+        }
     }
     
     if (description) {
