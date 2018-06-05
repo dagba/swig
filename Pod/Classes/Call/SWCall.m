@@ -378,6 +378,8 @@
                 localReason = SWCallReasonConnecting;
             }
             
+            //Рингтон на стадии звонка решено не использовать - только гудки с Б-стороны
+            /*
             ringtone = [endpoint getRingtoneForReason: localReason andCall:self];
             
             //Если мы звоним, до прихода гудков с сервера играем свои
@@ -386,6 +388,7 @@
                 [endpoint setRingtone:ringtone];
                 [ringtone startRingtone];
             }
+             */
             
             self.callState = SWCallStateCalling;
             [self updateOverrideSpeaker];
