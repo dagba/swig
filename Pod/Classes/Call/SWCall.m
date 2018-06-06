@@ -1227,6 +1227,8 @@
     
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL isOnlyBuiltinInput = [SWCall isOnlyBuiltinInput];
+        
         /*
 #ifdef DEBUG
 #warning test
@@ -1235,8 +1237,8 @@
 #error test
 #endif
         */
-        //усиление микрофона
-        if(_speaker) {
+        //усиление микрофона - при громкой связи, если не подключена гарнитура
+        if(_speaker && isOnlyBuiltinInput) {
             pjsua_conf_adjust_rx_level(0, 1.5);
         }
         else {
@@ -1349,10 +1351,15 @@
         
         NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
         
+#ifndef DEBUG
+#error TODO
+        //TODO: проверять микрофон гарнитуры и переключаться на него
+#endif
         
-        //return;
-        /// TODO: проверить переключение микрофонов
-        
+        if (!isOnlyBuiltinInput) {
+            return;
+        }
+         
         //NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
         for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
             NSString *porttype = [desc portType];
@@ -1360,7 +1367,7 @@
             NSArray<AVAudioSessionDataSourceDescription *> *dataSources = desc.dataSources;
             
             
-            NSLog(@"<--speaker--> inpit: %@", porttype);
+            NSLog(@"<--speaker--> input: %@", porttype);
             
             //        if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])) {
             //            NSLog(@"!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver])");
@@ -1516,6 +1523,16 @@
     for (AVAudioSessionPortDescription* desc in [route outputs]) {
         NSString *porttype = [desc portType];
         if (!([porttype isEqualToString:AVAudioSessionPortBuiltInSpeaker] || [porttype isEqualToString:AVAudioSessionPortBuiltInReceiver]))
+            return NO;
+    }
+    return YES;
+}
+
++ (BOOL)isOnlyBuiltinInput {
+    AVAudioSessionRouteDescription* route = [[AVAudioSession sharedInstance] currentRoute];
+    for (AVAudioSessionPortDescription* desc in [route outputs]) {
+        NSString *porttype = [desc portType];
+        if (![porttype isEqualToString:AVAudioSessionPortBuiltInMic])
             return NO;
     }
     return YES;

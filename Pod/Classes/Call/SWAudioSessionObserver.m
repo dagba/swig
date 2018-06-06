@@ -7,9 +7,13 @@
 
 #import "SWAudioSessionObserver.h"
 
+#import "SWCall.h"
+#import "SWEndpoint.h"
+#import "SWAccount.h"
 #import "EWFileLogger.h"
 
 #import <AVFoundation/AVFoundation.h>
+
 
 @implementation SWAudioSessionObserver
 
@@ -18,6 +22,7 @@
     if (self) {
         
         NSNotificationCenter *notCenter = [NSNotificationCenter defaultCenter];
+        [notCenter addObserver:self selector:@selector(audioSessionRouteDidChangeWithNotification:) name:AVAudioSessionRouteChangeNotification object:nil];
         /*
         [notCenter addObserver:self selector:@selector(videoWasInterruptedNotification:) name:AVCaptureSessionWasInterruptedNotification object:nil];
         
@@ -56,9 +61,13 @@
             NSLog(@"<--AudioSession notification--> routeChangeReason : AVAudioSessionRouteChangeReasonNewDeviceAvailable");
             break;
             
-        case AVAudioSessionRouteChangeReasonOldDeviceUnavailable:
+        case AVAudioSessionRouteChangeReasonOldDeviceUnavailable: {
             // a headset was added or removed
             NSLog(@"<--AudioSession notification--> routeChangeReason : AVAudioSessionRouteChangeReasonOldDeviceUnavailable");
+            //Если гарнитура отключилась, надо снова выставить подходящие настройки аудиосессии.
+            SWCall *call = [[[SWEndpoint sharedEndpoint] firstAccount] firstCall];
+            [call updateOverrideSpeaker];
+        }
             break;
             
         case AVAudioSessionRouteChangeReasonCategoryChange:
