@@ -549,13 +549,12 @@ static SWEndpoint *_sharedEndpoint = nil;
     
     UIApplication *application = (UIApplication *)notification.object;
     
-    //TODO: перенести в зарегистрированный поток
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self.threadFactory runBlockOnRegThread:^{
+        [application setApplicationIconBadgeNumber:0];
         //TODO hangup all calls
         //TODO remove all accounts
         //TODO close all transports
         //TODO reset endpoint
-        
         for (int i = 0; i < [self.accounts count]; ++i) {
             
             SWAccount *account = [self.accounts objectAtIndex:i];
@@ -582,8 +581,7 @@ static SWEndpoint *_sharedEndpoint = nil;
         
         pj_status_t status = pjsua_destroy();
         
-        [application setApplicationIconBadgeNumber:0];
-    });
+    } wait:NO];
     
 }
 
