@@ -80,6 +80,9 @@
     
     self = [super init];
     
+    //TODO: проверить закомментированный вариант
+    //[SWCall closeSoundTrack:nil];
+    
     [[NSNotificationCenter defaultCenter] postNotificationName:AVAudioSessionInterruptionNotification object:[AVAudioSession sharedInstance] userInfo:@{AVAudioSessionInterruptionTypeKey: [NSNumber numberWithUnsignedInteger:AVAudioSessionInterruptionTypeBegan]}];
     
     _callId = -2;
@@ -1350,11 +1353,6 @@
         }
         
         NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
-        
-#ifndef DEBUG
-#error TODO
-        //TODO: проверять микрофон гарнитуры и переключаться на него
-#endif
         
         if (!isOnlyBuiltinInput) {
             return;
