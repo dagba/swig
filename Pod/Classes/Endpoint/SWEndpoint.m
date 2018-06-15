@@ -395,12 +395,6 @@ static SWEndpoint *_sharedEndpoint = nil;
         slf2->_areOtherCalls = ([[slf2.callCenter currentCalls] count] > 0);
         NSLog(@"<--check other calls--> setting areOtherCalls: %@", slf2->_areOtherCalls ? @"true" : @"false");
     });
-    /*
-#ifndef DEBUG
-#error TODO
-    //TODO: проверить, успеет ли инициализироваться при старте приложения по звонку
-#endif
-    */
     
     self.audioSessionObserver = [SWAudioSessionObserver new];
     
@@ -1313,12 +1307,6 @@ static void SWOnRegStarted(pjsua_acc_id acc_id, pj_bool_t renew) {
 static void SWOnIncomingCall(pjsua_acc_id acc_id, pjsua_call_id call_id, pjsip_rx_data *rdata) {
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
     dispatch_async(dispatch_get_main_queue(), ^{
-        /*
-         #ifndef DEBUG
-         #error TODO
-         //TODO: проверить, что сработает для 4s в заблокированном состоянии при активном GSM-звонке
-         #endif
-         */
         CTCallCenter *callCenter = [[CTCallCenter alloc] init];
         NSSet<CTCall*> *currentCalls = [callCenter currentCalls];
         BOOL areOtherCalls = [currentCalls count] > 0;
@@ -1833,8 +1821,23 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
     
+#ifdef DEBUG
+#warning test
+    //не обращаем внимания на хедер авторизации
+#else
+#error test
+#endif
+    
+    BOOL authExists = NO;
+    
     pjsip_authorization_hdr *auth_header = (pjsip_authorization_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, 0);
-    if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && auth_header) {
+    
+    pj_str_t  auth_header_name = pj_str((char *)"Auth");
+    pjsip_generic_string_hdr* auth_header_custom = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &auth_header_name, nil);
+    
+    authExists = (auth_header != nil) || (auth_header_custom != nil);
+    
+    if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && authExists ) {
         pj_str_t hname = pj_str((char *)"SYNC");
         
         __block struct Sync counters;

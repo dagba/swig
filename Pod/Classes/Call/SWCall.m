@@ -75,8 +75,7 @@
     return [self initWithCallId:callId accountId:accountId inBound:inbound isGsm:NO];
 }
 
-
--(instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm {
+- (instancetype)initBeforeSipWithAccountId:(NSInteger)accountId inBound:(BOOL)inbound withVideo: (BOOL) withVideo forUri: (NSString *) uri isGsm: (BOOL) isGsm {
     
     self = [super init];
     
