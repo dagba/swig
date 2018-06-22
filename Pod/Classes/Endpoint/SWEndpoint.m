@@ -1277,7 +1277,9 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
                     SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
 #warning mainthread
                     dispatch_async(dispatch_get_main_queue(), ^{
-                        observer(account);
+                        if (observer) {
+                            observer(account);
+                        }
                     });
                 }
             }
@@ -1821,13 +1823,6 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
     }
     
-#ifdef DEBUG
-#warning test
-    //не обращаем внимания на хедер авторизации
-#else
-#error test
-#endif
-    
     BOOL authExists = NO;
     
     pjsip_authorization_hdr *auth_header = (pjsip_authorization_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, 0);
@@ -1837,7 +1832,15 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     authExists = (auth_header != nil) || (auth_header_custom != nil);
     
-    if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && authExists ) {
+    int expiresval = 0;
+    
+    pjsip_generic_string_hdr *exp_header = (pjsip_generic_string_hdr *)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_EXPIRES, 0);
+    
+    if ((exp_header != NULL) && (exp_header->hvalue.slen < 10)) {
+        expiresval = [[NSString stringWithPJString:exp_header->hvalue] intValue];
+    }
+    
+    if (_getCountersBlock && pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && authExists /* && (expiresval > 0) */ ) {
         pj_str_t hname = pj_str((char *)"SYNC");
         
         __block struct Sync counters;
@@ -1846,7 +1849,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         counters = _getCountersBlock(account);
         //        });
         
-        pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%tu, last_smid_tx=%tu, last_report=%tu, last_view=%tu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
+        pj_str_t hvalue = [[NSString stringWithFormat:@"last_smid_rx=%llu, last_smid_tx=%llu, last_report=%llu, last_view=%llu", counters.lastSmidRX, counters.lastSmidTX, counters.lastReport, counters.lastViev] pjString];
         
         pjsip_generic_string_hdr* sync_hdr = pjsip_generic_string_hdr_create(tdata->pool, &hname, &hvalue);
         
@@ -1918,22 +1921,12 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
         }
         
         settings.syncServer = @"";
-        /*
-#ifdef DEBUG
-#warning test
-        settings.syncServer = @"http://192.168.2.217:8891";
-#else
-#error test
-#endif
-         */
-        //должно работать так, но пока нет
-        /*
+        
         pj_str_t sync_server_hdr_str = pj_str((char *)"Sync-Server");
         pjsip_generic_string_hdr* sync_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &sync_server_hdr_str, nil);
         if (sync_server_hdr != nil) {
             settings.syncServer = [[NSString stringWithPJString:sync_server_hdr->hvalue] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"<>"]];
         }
-         */
         
         pj_str_t push_server_hdr_str = pj_str((char *)"Push-Server");
         pjsip_generic_string_hdr* push_server_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(data->msg_info.msg, &push_server_hdr_str, nil);

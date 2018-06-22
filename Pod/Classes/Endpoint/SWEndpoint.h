@@ -25,10 +25,10 @@ start) \
  */
  
 struct Sync {
-    NSUInteger lastSmidRX;
-    NSUInteger lastSmidTX;
-    NSUInteger lastReport;
-    NSUInteger lastViev;
+    uint64_t lastSmidRX;
+    uint64_t lastSmidTX;
+    uint64_t lastReport;
+    uint64_t lastViev;
 };
 
 struct Settings {
