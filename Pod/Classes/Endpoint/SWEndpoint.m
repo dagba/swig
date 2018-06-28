@@ -1468,6 +1468,10 @@ static void SWOnCallState(pjsua_call_id call_id, pjsip_event *e) {
                             hangupReason = SWCallReasonRestricted;
                             break;
                             
+                        case 499:
+                            hangupReason = SWCallReasonNotExists;
+                            break;
+                            
                         default:
                             break;
                     }
