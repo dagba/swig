@@ -2552,9 +2552,20 @@ static void reportUserCallback(void *token, pjsip_event *e) {
 }
 
 - (void) clearCallsCompletionHandler:(void(^)(NSError *error))handler {
+    __weak typeof(self) weakSelf = self;
+    
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
     NSThread *regThread = [thrManager getRegistrationThread];
     [thrManager runBlock:^{
+        
+        if (! pjsua_acc_is_valid((int)weakSelf.accountId)) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+                [weakSelf clearCallsCompletionHandler:handler];
+            });
+            
+            return;
+        }
+        
         pj_status_t    status;
         pjsip_tx_data *tx_msg;
         
@@ -2565,7 +2576,7 @@ static void reportUserCallback(void *token, pjsip_event *e) {
         
         pjsua_acc_info info;
         
-        pjsua_acc_get_info((int)self.accountId, &info);
+        pjsua_acc_get_info((int)weakSelf.accountId, &info);
         
         /* Создаем непосредственно запрос */
         status = pjsua_acc_create_request((int)self.accountId, &method, &info.acc_uri, &tx_msg);
