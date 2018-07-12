@@ -88,6 +88,7 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 @property (strong, readonly) SWIntentManager *intentManager;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+@property (nonatomic, copy) SWErrorBlock registerErrorBlock;
 @property (nonatomic, copy) SWCallVideoFormatChangeBlock callVideoFormatChangeBlock;
 @property (readonly) pjmedia_sdp_session *localSdp;
 @property (readonly) pjmedia_sdp_session *remoteSdp;
@@ -141,7 +142,6 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (void) setUnauthorizedBlock: (SWUnauthorizedBlock) unauthorizedBlock;
 
 - (void) setOtherErrorBlock: (SWErrorBlock) otherErrorBlock;
-- (void) setRegisterErrorBlock: (SWErrorBlock) registerErrorBlock;
 
 //- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 

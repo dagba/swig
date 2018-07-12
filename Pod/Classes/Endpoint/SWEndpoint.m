@@ -215,7 +215,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWUnauthorizedBlock unauthorizedBlock;
 
 @property (nonatomic, copy) SWErrorBlock otherErrorBlock;
-@property (nonatomic, copy) SWErrorBlock registerErrorBlock;
 
 //@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
@@ -1183,10 +1182,6 @@ void logCallback (int level, const char *data, int len) {
 
 - (void)setOtherErrorBlock:(SWErrorBlock)otherErrorBlock {
     _otherErrorBlock = otherErrorBlock;
-}
-
-- (void)setRegisterErrorBlock:(SWErrorBlock)registerErrorBlock {
-    _registerErrorBlock = registerErrorBlock;
 }
 
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock {

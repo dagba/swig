@@ -330,6 +330,12 @@ void * refToSelf;
         
         NSError *error = [NSError errorWithDomain:@"Error setting registration" code:status userInfo:nil];
         
+        if(status == 70018) {
+            if ([SWEndpoint sharedEndpoint].registerErrorBlock) {
+                [SWEndpoint sharedEndpoint].registerErrorBlock(PJSIP_SC_SERVICE_UNAVAILABLE);
+            }
+        }
+            
         if (handler) {
             handler(error);
         }
