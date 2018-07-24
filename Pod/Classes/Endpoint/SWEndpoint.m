@@ -467,8 +467,15 @@ static SWEndpoint *_sharedEndpoint = nil;
             NSInteger accountState = [SWEndpoint sharedEndpoint].firstAccount.accountState;
             
             if (! [SWEndpoint sharedEndpoint].firstAccount.isAuthorized) {
+                NSLog(@"<--swaccount--> handleEnteredForeground firstAccount isAuthorized false");
                 return;
             }
+            
+            if(self.isWakingUp) {
+                NSLog(@"<--swaccount--> handleEnteredForeground isWakingUp already");
+                return;
+            }
+            self.isWakingUp = YES;
             
             NSLog(@"<--swaccount--> handleEnteredForeground code=%d", accountState);
             if (accountState == SWAccountStateDisconnected) {
@@ -478,13 +485,13 @@ static SWEndpoint *_sharedEndpoint = nil;
                     SWAccountConfiguration *configuration = account.accountConfiguration;
                     
                     [account resume:^(NSError *error) {
-                        
+                        self.isWakingUp = NO;
                     }];
                 }];
             } else {
                 SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
                 [account resume:^(NSError *error) {
-                    
+                    self.isWakingUp = NO;
                 }];
             }
         });

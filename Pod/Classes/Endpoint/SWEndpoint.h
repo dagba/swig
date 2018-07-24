@@ -95,6 +95,8 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 
 @property (atomic, assign) NSInteger endpointIteration; //Инкрементируется при перезагрузке. Нужна для проверки корректности использования структур библиотеки. Они чистятся вместе с либой.
 
+@property (atomic, assign) BOOL isWakingUp;
+
 +(instancetype)sharedEndpoint;
 
 - (pj_pool_t *) pjPool;
