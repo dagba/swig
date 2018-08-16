@@ -114,7 +114,7 @@ void * refToSelf;
     acc_cfg.allow_contact_rewrite = 0;
     acc_cfg.contact_rewrite_method = PJSUA_CONTACT_REWRITE_ALWAYS_UPDATE;
     acc_cfg.allow_via_rewrite = 0;
-//    acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
+    acc_cfg.ipv6_media_use = [SWEndpoint sharedEndpoint].isMediaIpv6Enabled ? PJSUA_IPV6_ENABLED : PJSUA_IPV6_DISABLED;
 //    acc_cfg.transport_id = 0;
 
     //    acc_cfg.reg_delay_before_refresh

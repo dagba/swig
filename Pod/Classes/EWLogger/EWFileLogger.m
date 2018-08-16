@@ -46,7 +46,7 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
     }
     
     // get path to Documents/somefile.txt
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
     NSString *path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
     // create if needed
