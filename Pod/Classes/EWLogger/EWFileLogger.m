@@ -41,17 +41,20 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
 
 +(void) append: (NSString *) msg{
     
+    BOOL filenameGenerated = NO;
+    
     if (!EWFileLogger.logFileName) {
         EWFileLogger.logFileName = [EWFileLogger generateFilename];
+        filenameGenerated = YES;
     }
     
     // get path to Documents/somefile.txt
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
     NSString *path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
     // create if needed
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]){
-        [self createFileAt:path];
+        [self createFileAt:path withReason:filenameGenerated ? @"newFileName" : @"fileNotExists"];
     }
     else {
         NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:NULL];
@@ -64,20 +67,25 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
             EWFileLogger.logFileNameOld = EWFileLogger.logFileName;
             EWFileLogger.logFileName = [EWFileLogger generateFilename];
             path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
-            [self createFileAt:path];
+            [self createFileAt:path withReason:@"logfileSizeTooMuch"];
         }
     }
     
     // append
+    [self append_lowlevelMsg:msg toFile:path];
+}
+    
++ (void) append_lowlevelMsg: (NSString *) msg toFile: (NSString *) path {
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
     [handle truncateFileAtOffset:[handle seekToEndOfFile]];
     [handle writeData:[msg dataUsingEncoding:NSUTF8StringEncoding]];
     [handle closeFile];
 }
 
-+ (void) createFileAt: (NSString *) path {
++ (void) createFileAt: (NSString *) path withReason: (NSString *) reason {
     fprintf(stderr,"Creating file at %s",[path UTF8String]);
     [[NSData data] writeToFile:path atomically:YES];
+    [self append_lowlevelMsg:[NSString stringWithFormat:@"<--logfile--> logfile created with Reason:%@", reason] toFile:path];
 }
 
 + (void) deleteFileAt: (NSString *) path {

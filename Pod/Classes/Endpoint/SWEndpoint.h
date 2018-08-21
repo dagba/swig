@@ -88,11 +88,15 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 @property (strong, readonly) SWIntentManager *intentManager;
 
 @property (nonatomic, copy) SWNeedConfirmBlock needConfirmBlock;
+@property (nonatomic, copy) SWErrorBlock registerErrorBlock;
 @property (nonatomic, copy) SWCallVideoFormatChangeBlock callVideoFormatChangeBlock;
 @property (readonly) pjmedia_sdp_session *localSdp;
 @property (readonly) pjmedia_sdp_session *remoteSdp;
 
 @property (atomic, assign) NSInteger endpointIteration; //Инкрементируется при перезагрузке. Нужна для проверки корректности использования структур библиотеки. Они чистятся вместе с либой.
+
+@property (atomic, assign) BOOL isWakingUp;
+@property (atomic, assign) BOOL isMediaIpv6Enabled;
 
 +(instancetype)sharedEndpoint;
 
@@ -141,7 +145,6 @@ typedef void (^SWErrorBlock) (NSUInteger status);
 - (void) setUnauthorizedBlock: (SWUnauthorizedBlock) unauthorizedBlock;
 
 - (void) setOtherErrorBlock: (SWErrorBlock) otherErrorBlock;
-- (void) setRegisterErrorBlock: (SWErrorBlock) registerErrorBlock;
 
 //- (void) setReadyToSendFileBlock: (SWReadyToSendFileBlock) readyToSendFileBlock;
 

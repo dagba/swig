@@ -215,7 +215,6 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, copy) SWUnauthorizedBlock unauthorizedBlock;
 
 @property (nonatomic, copy) SWErrorBlock otherErrorBlock;
-@property (nonatomic, copy) SWErrorBlock registerErrorBlock;
 
 //@property (nonatomic, copy) SWReadyToSendFileBlock readyToSendFileBlock;
 
@@ -239,6 +238,7 @@ static void refer_notify_callback(void *token, pjsip_event *e) {
 @property (nonatomic, strong) SWRingtone *standartRingtone;
 @property (nonatomic, readonly) NSMutableDictionary<NSURL *, SWRingtone *>  *ringtones;
 @property (atomic, assign) pjsua_transport_id pjsuaTransportId;
+@property (atomic, assign) BOOL regRequestWasSent;
 
 @end
 
@@ -428,6 +428,9 @@ static SWEndpoint *_sharedEndpoint = nil;
 
 - (void) handleEnteredForeground: (NSNotification *)notification {
     NSLog(@"<--starting--> handleEnteredForeground %@", _callCenter.currentCalls);
+    
+    //Этим свойством отсекаем лишнюю реакцию на подвисший ответ REGISTER, обработанный после перезапуска приложения
+    self.regRequestWasSent = NO;
     //    [self.firstAccount setPresenseStatusOnline:SWPresenseStateOnline completionHandler:^(NSError *error) {
     //    }];
     
@@ -468,8 +471,15 @@ static SWEndpoint *_sharedEndpoint = nil;
             NSInteger accountState = [SWEndpoint sharedEndpoint].firstAccount.accountState;
             
             if (! [SWEndpoint sharedEndpoint].firstAccount.isAuthorized) {
+                NSLog(@"<--swaccount--> handleEnteredForeground firstAccount isAuthorized false");
                 return;
             }
+            
+            if(self.isWakingUp) {
+                NSLog(@"<--swaccount--> handleEnteredForeground isWakingUp already");
+                return;
+            }
+            self.isWakingUp = YES;
             
             NSLog(@"<--swaccount--> handleEnteredForeground code=%d", accountState);
             if (accountState == SWAccountStateDisconnected) {
@@ -479,13 +489,13 @@ static SWEndpoint *_sharedEndpoint = nil;
                     SWAccountConfiguration *configuration = account.accountConfiguration;
                     
                     [account resume:^(NSError *error) {
-                        
+                        self.isWakingUp = NO;
                     }];
                 }];
             } else {
                 SWAccount *account = [[SWEndpoint sharedEndpoint] firstAccount];
                 [account resume:^(NSError *error) {
-                    
+                    self.isWakingUp = NO;
                 }];
             }
         });
@@ -1185,10 +1195,6 @@ void logCallback (int level, const char *data, int len) {
     _otherErrorBlock = otherErrorBlock;
 }
 
-- (void)setRegisterErrorBlock:(SWErrorBlock)registerErrorBlock {
-    _registerErrorBlock = registerErrorBlock;
-}
-
 - (void) setMessageStatusBlock: (SWMessageStatusBlock) messageStatusBlock {
     _messageStatusBlock = messageStatusBlock;
 }
@@ -1241,6 +1247,8 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
     
     NSLog(@"<--swaccount--> SWOnRegState2 code=%d", info->cbparam->code);
     
+    BOOL regRequestWasSent = [SWEndpoint sharedEndpoint].regRequestWasSent;
+    
     if ((info != NULL) && (info->cbparam != NULL) && (info->cbparam->code == PJSIP_SC_REQUEST_TIMEOUT)) {
         
         [[SWEndpoint sharedEndpoint] restart:^(NSError *error) {
@@ -1249,7 +1257,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
             NSThread *regThread = [thrManager getRegistrationThread];
             [thrManager runBlock:^{
                 SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-                if (account) {
+                if ((account != nil) && regRequestWasSent) {
                     [account accountStateChanged];
                     NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
                     for (NSString *key in observersKeys) {
@@ -1269,7 +1277,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
         NSThread *regThread = [thrManager getRegistrationThread];
         [thrManager runBlock:^{
             SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
-            if (account) {
+            if ((account != nil) && regRequestWasSent) {
                 [account accountStateChanged];
                 
                 NSArray *observersKeys = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers allKeys];
@@ -1814,17 +1822,22 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:acc_id];
     
-    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0 && [account.accountConfiguration.code length] == 4) {
-        pj_str_t hname = pj_str((char *)"Auth");
+    if (pjsip_method_cmp(&tdata->msg->line.req.method, &pjsip_register_method) == 0) {
         
-        NSString *devID = [[UIDevice currentDevice] uuid];
+        self.regRequestWasSent = YES;
         
-        pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@ UID=%@ DevID=%@", account.accountConfiguration.code, account.accountConfiguration.password, devID] pjString];
-        [account.accountConfiguration setCode:@""];
-        
-        pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tdata->pool, &hname, &hvalue);
-        
-        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+        if ([account.accountConfiguration.code length] == 4) {
+            pj_str_t hname = pj_str((char *)"Auth");
+            
+            NSString *devID = [[UIDevice currentDevice] uuid];
+            
+            pj_str_t hvalue = [[NSString stringWithFormat:@"code=%@ UID=%@ DevID=%@", account.accountConfiguration.code, account.accountConfiguration.password, devID] pjString];
+            [account.accountConfiguration setCode:@""];
+            
+            pjsip_generic_string_hdr* event_hdr = pjsip_generic_string_hdr_create(tdata->pool, &hname, &hvalue);
+            
+            pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)event_hdr);
+        }
     }
     
     BOOL authExists = NO;
@@ -1891,27 +1904,25 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     acc_id = pjsua_acc_find_for_incoming(data);
     SWAccount *account = [[SWEndpoint sharedEndpoint] lookupAccount:(int)acc_id];
     
+    [self setMediaIpv6Enabled:(data->pkt_info.src_addr.addr.sa_family == AF_INET6) forAccId:acc_id];
+    
+    BOOL isRegMethod = (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0);
+    
     if ((_unauthorizedBlock != nil) && (status == PJSIP_SC_NOT_FOUND || status == PJSIP_SC_UNAUTHORIZED || status == 467)) {
         if (status == PJSIP_SC_NOT_FOUND || status == 467) {
+            NSLog(@"<--logout--> SIP unauthorizedBlock. Code=%d", status);
             _unauthorizedBlock(account);
             return PJ_FALSE;
         }
          
-        pjsua_acc_info accountInfo = [account getInfo];
-        
-        /*
-        @synchronized ([SWAccount getLocker]) {
-            pjsua_acc_get_info(acc_id, &accountInfo);
-        }
-         */
-
-        if(accountInfo.expires > 0) {
+        if ((account.accountState == SWAccountStateConnected) && (!isRegMethod)) {
+            NSLog(@"<--logout--> SIP unauthorizedBlock. Code=%d; AccState=SWAccountStateConnected", status);
             _unauthorizedBlock(account);
             return PJ_FALSE;
         }
     }
     
-    if (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0) {
+    if (isRegMethod) {
         
         struct Settings settings;
         settings.fileServer = nil;
@@ -2374,6 +2385,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     pjsua_acc_create_request(acc_id, &pjsip_notify_method, &target, &pjsua_data);
     //
     
+    /*
     pjsua_acc_config acc_cfg;
     pjsua_acc_get_config(acc_id, pjsua_data->pool, &acc_cfg);
     
@@ -2390,6 +2402,10 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     if (status_acc != PJ_SUCCESS) {
         NSLog(@"Failed To modify acc");
     }
+     */
+    
+    BOOL ipv6Enabled = (data->pkt_info.src_addr.addr.sa_family == AF_INET6);
+    [self setMediaIpv6Enabled:ipv6Enabled forAccId:acc_id];
     
     pj_str_t hname = pj_str((char *)"Event");
     pj_str_t hvalue = pj_str((char *)"Ready");
@@ -2418,6 +2434,38 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     if (status != PJ_SUCCESS) {
         return;
+    }
+}
+
+- (void) setMediaIpv6Enabled: (BOOL) enabled forAccId: (int) accId {
+    /*
+#ifndef DEBUG
+#error TODO
+    //TODO: разделить этот признак по аккаунтам?
+#endif
+     */
+    if(self.isMediaIpv6Enabled == enabled) {
+        return;
+    }
+    
+    pjsua_acc_config acc_cfg;
+    pjsua_acc_get_config(accId, self.pjPool, &acc_cfg);
+    
+    self.isMediaIpv6Enabled = enabled;
+    
+    if (enabled) {
+        acc_cfg.ipv6_media_use = PJSUA_IPV6_ENABLED;
+        NSLog(@"<--ipv6-->WIll USE IPv6 For Media");
+    } else {
+        acc_cfg.ipv6_media_use = PJSUA_IPV6_DISABLED;
+        NSLog(@"<--ipv6-->WIll USE IPv4 For Media");
+        
+    }
+    
+    pj_status_t status_acc = pjsua_acc_modify(accId, &acc_cfg);
+    if (status_acc != PJ_SUCCESS) {
+        NSLog(@"<--ipv6-->Failed To modify acc");
+        self.isMediaIpv6Enabled = !enabled;
     }
 }
 
