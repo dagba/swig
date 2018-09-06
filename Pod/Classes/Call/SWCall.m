@@ -1247,6 +1247,14 @@
             pjsua_conf_adjust_rx_level(0, 1.0);
         }
         
+        /*
+         #ifndef DEBUG
+         #error TODO
+         //TODO: сделать что-то вроде этого?
+         #endif
+         pj_status_t stts = pjsua_set_ec(5000,0);
+        */
+        
         AVAudioSession *audioSession = [AVAudioSession sharedInstance];
         NSString *sessionMode = AVAudioSessionModeDefault;
         NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;

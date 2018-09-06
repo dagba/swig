@@ -704,6 +704,8 @@ void * refToSelf;
     
     NSLog(@"<--pjPool--> makeCall invoked");
     
+    [SWCall closeSoundTrack:nil];
+    
     SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
     NSThread *callThread = [thrManager getCallManagementThread];
     
@@ -722,6 +724,7 @@ void * refToSelf;
         pj_str_t pjuri = [uri pjString];
         
         SWCall *call = [SWCall callBeforeSipForAccountId:self.accountId inBound:NO withVideo:withVideo forUri: uri isGsm:isGSM];
+        
         
         //call.ctcallId = @"outgoing polyphone";
         

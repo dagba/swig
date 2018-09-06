@@ -48,8 +48,8 @@ void _Log(NSString *prefix, const char *file, int lineNumber, const char *funcNa
         filenameGenerated = YES;
     }
     
-    // get path to Documents/somefile.txt
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    // get path to Application Support/somefile.txt
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
     NSString *path = [documentsDirectory stringByAppendingPathComponent:EWFileLogger.logFileName];
     // create if needed
