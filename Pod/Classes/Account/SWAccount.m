@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define kRegTimeout 600
+#define kRegTimeout 60 * 60 * 24 // 600
 
 void * refToSelf;
 
@@ -318,47 +318,48 @@ void * refToSelf;
 -(void)connect:(void(^)(NSError *error))handler {
     
     //FIX: registering too often will cause the server to possibly return error
-    
-    pj_status_t status;
-    
-    NSLog(@"<--pjsua_acc_set_registration--> connect");
-    
-    //status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
-    status = [self requestRegisterState:PJ_TRUE];
-    
-    if (status != PJ_SUCCESS) {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        pj_status_t status;
         
-        NSError *error = [NSError errorWithDomain:@"Error setting registration" code:status userInfo:nil];
+        NSLog(@"<--pjsua_acc_set_registration--> connect");
         
-        if(status == 70018) {
-            if ([SWEndpoint sharedEndpoint].registerErrorBlock) {
-                [SWEndpoint sharedEndpoint].registerErrorBlock(PJSIP_SC_SERVICE_UNAVAILABLE);
-            }
-        }
+        //status = pjsua_acc_set_registration((int)self.accountId, PJ_TRUE);
+        status = [self requestRegisterState:PJ_TRUE];
+        
+        if (status != PJ_SUCCESS) {
             
-        if (handler) {
-            handler(error);
+            NSError *error = [NSError errorWithDomain:@"Error setting registration" code:status userInfo:nil];
+            
+            if(status == 70018) {
+                if ([SWEndpoint sharedEndpoint].registerErrorBlock) {
+                    [SWEndpoint sharedEndpoint].registerErrorBlock(PJSIP_SC_SERVICE_UNAVAILABLE);
+                }
+            }
+            
+            if (handler) {
+                handler(error);
+            }
+            
+            return;
         }
         
-        return;
-    }
-    
-    status = pjsua_acc_set_online_status((int)self.accountId, PJ_TRUE);
-    
-    if (status != PJ_SUCCESS) {
+        status = pjsua_acc_set_online_status((int)self.accountId, PJ_TRUE);
         
-        NSError *error = [NSError errorWithDomain:@"Error setting online status" code:status userInfo:nil];
-        
-        if (handler) {
-            handler(error);
+        if (status != PJ_SUCCESS) {
+            
+            NSError *error = [NSError errorWithDomain:@"Error setting online status" code:status userInfo:nil];
+            
+            if (handler) {
+                handler(error);
+            }
+            
+            return;
         }
         
-        return;
-    }
-    
-    if (handler) {
-        handler(nil);
-    }
+        if (handler) {
+            handler(nil);
+        }
+    });
 }
 
 - (pj_status_t) requestRegisterState: (pj_bool_t) state {
