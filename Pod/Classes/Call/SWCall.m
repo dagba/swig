@@ -1347,13 +1347,14 @@
         NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
         //[audioSession setCategory:sessionCategory error:&error];
         if (speaker) {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker error:&error];
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionAllowBluetooth error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         }
         
         else {
-            [audioSession setCategory:sessionCategory error:&error];
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth error:&error];
+            //[audioSession setCategory:sessionCategory error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
             
