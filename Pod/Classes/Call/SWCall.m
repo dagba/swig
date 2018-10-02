@@ -1240,8 +1240,13 @@
 #endif
         */
         //усиление микрофона - при громкой связи, если не подключена гарнитура
-        if(_speaker && isOnlyBuiltinInput) {
+        if (!isOnlyBuiltinInput) {
+            pjsua_conf_adjust_rx_level(0, 2.0);
+        }
+        else if(_speaker) {
             pjsua_conf_adjust_rx_level(0, 1.5);
+            pj_status_t stts = pjsua_set_ec(1000,0);
+            //pjsua_conf_adjust_rx_level(0, 1.5);
         }
         else {
             pjsua_conf_adjust_rx_level(0, 1.0);
