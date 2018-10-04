@@ -1242,6 +1242,7 @@
         //усиление микрофона - при громкой связи, если не подключена гарнитура
         if (!isOnlyBuiltinInput) {
             pjsua_conf_adjust_rx_level(0, 2.0);
+            NSLog(@"<--headset settings-->");
         }
         else if(_speaker) {
             pjsua_conf_adjust_rx_level(0, 1.5);
@@ -1265,7 +1266,7 @@
         NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
         
         if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) {
-            [audioSession setCategory:sessionCategory error:nil];
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth error:nil];
             [audioSession setMode:sessionMode error:nil];
             
             //коллкит корректно понимает переключение на динамик только так
