@@ -195,7 +195,8 @@
     
     NSError *setCategoryError;
     
-    if (![audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:(AVAudioSessionCategoryOptionDuckOthers|AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionDefaultToSpeaker) error:&setCategoryError]) {
+    NSLog(@"<--AudioSession notification--> set category on ringtone");
+    if (![audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:(AVAudioSessionCategoryOptionDuckOthers|AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionDefaultToSpeaker) error:&setCategoryError]) {
         
     }
     

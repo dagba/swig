@@ -684,6 +684,7 @@
         return;
     }
     
+    
     self.answerHandler = nil;
     
     SWEndpoint *endpoint = [SWEndpoint sharedEndpoint];
@@ -1229,6 +1230,7 @@
     
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        
         BOOL isOnlyBuiltinInput = [SWCall isOnlyBuiltinInput];
         
         /*
@@ -1266,9 +1268,10 @@
         NSString *sessionCategory = AVAudioSessionCategoryPlayAndRecord;
         
         if ([[UIApplication sharedApplication] applicationState] != UIApplicationStateActive) {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth error:nil];
+            NSLog(@"<--AudioSession notification--> set category in background");
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP error:nil];
             [audioSession setMode:sessionMode error:nil];
-            
+             
             //коллкит корректно понимает переключение на динамик только так
             if (_speaker) {
                 //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
@@ -1353,25 +1356,41 @@
         NSLog(@"<--swcall-->audioSession: %@ speaker value:%@", audioSession, speaker ? @"true" : @"false");
         //[audioSession setCategory:sessionCategory error:&error];
         if (speaker) {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionAllowBluetooth error:&error];
+            NSLog(@"<--AudioSession notification--> set category on callstate, speaker on, callstate: %d", self.callState);
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker|AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:&error];
         }
         
         else {
-            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth error:&error];
+            NSLog(@"<--AudioSession notification--> set category on callstate, speaker off, callstate: %d", self.callState);
+            [audioSession setCategory:sessionCategory withOptions:AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP error:&error];
             //[audioSession setCategory:sessionCategory error:&error];
             
             //[audioSession overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:&error];
             
         }
         
+        NSLog(@"<--AudioSession notification--> set category on callstate error: %@", error);
+        
         NSLog(@"<--swcall--> audiosession options: %d", audioSession.categoryOptions);
         
         if (!isOnlyBuiltinInput) {
+            for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
+                NSString *porttype = [desc portType];
+                if ([porttype isEqualToString:AVAudioSessionPortBluetoothLE]
+                    ||[porttype isEqualToString:AVAudioSessionPortCarAudio]
+                    ||[porttype isEqualToString:AVAudioSessionPortBluetoothHFP]
+                    ||[porttype isEqualToString:AVAudioSessionPortBluetoothA2DP]
+                    ) {
+                    [audioSession setPreferredInput:desc error:nil];
+                    break;
+                }
+            }
+            
             return;
         }
-         
+        
         //NSLog(@"<--speaker--> available inputs: %d", [audioSession availableInputs]);
         for (AVAudioSessionPortDescription* desc in [audioSession availableInputs]) {
             NSString *porttype = [desc portType];
