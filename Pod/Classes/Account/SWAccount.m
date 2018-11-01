@@ -278,41 +278,47 @@ void * refToSelf;
 }
 
 - (void) setPhone: (NSString *) phone completionHandler:(void(^)(NSError *error))handler {
-    self.accountConfiguration.username = phone;
-    self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
-
-    pjsua_acc_config acc_cfg;
-    pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+    SWThreadManager *thrManager = [SWEndpoint sharedEndpoint].threadFactory;
+    NSThread *regThread = thrManager.getRegistrationThread;
     
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+    [thrManager runBlock:^{
+        self.accountConfiguration.username = phone;
+        self.accountConfiguration.address = [SWAccountConfiguration addressFromUsername:self.accountConfiguration.username domain:self.accountConfiguration.domain];
+        
+        pjsua_acc_config acc_cfg;
+        pj_status_t status = pjsua_acc_get_config((int)self.accountId, [[SWEndpoint sharedEndpoint] pjPool], &acc_cfg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Cannot get config" code:status userInfo:nil];
+            
+            if (handler) {
+                handler(error);
+            }
+            return;
+        }
+        
+        acc_cfg.id = [[SWUriFormatter sipUri:self.accountConfiguration.address withDisplayName:self.accountConfiguration.displayName] pjString];
+        
+        acc_cfg.cred_info[0].username = [phone pjString];
+        
+        status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
+        
+        if (status != PJ_SUCCESS) {
+            NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
+            
+            if (handler) {
+                handler(error);
+            }
+            return;
+        }
+        
         
         if (handler) {
-            handler(error);
+            handler(nil);
         }
         return;
-    }
+    } onThread:regThread wait:NO];
     
-    acc_cfg.id = [[SWUriFormatter sipUri:self.accountConfiguration.address withDisplayName:self.accountConfiguration.displayName] pjString];
-
-    acc_cfg.cred_info[0].username = [phone pjString];
-    
-    status = pjsua_acc_modify((int)self.accountId, &acc_cfg);
-    
-    if (status != PJ_SUCCESS) {
-        NSError *error = [NSError errorWithDomain:@"Cannot modify account" code:status userInfo:nil];
-        
-        if (handler) {
-            handler(error);
-        }
-        return;
-    }
-    
-    
-    if (handler) {
-        handler(nil);
-    }
-    return;
 }
 
 -(void)connect:(void(^)(NSError *error))handler {
