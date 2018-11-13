@@ -1284,7 +1284,7 @@ static void SWOnRegState2(pjsua_acc_id acc_id, pjsua_reg_info *info) {
                 for (NSString *key in observersKeys) {
                     SWAccountStateChangeBlock observer = [[SWEndpoint sharedEndpoint].accountStateChangeBlockObservers objectForKey:key];
 #warning mainthread
-                    dispatch_async(dispatch_get_main_queue(), ^{
+                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                         if (observer) {
                             observer(account);
                         }
