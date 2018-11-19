@@ -1908,7 +1908,7 @@ static void SWOnTyping (pjsua_call_id call_id, const pj_str_t *from, const pj_st
     
     BOOL isRegMethod = (pjsip_method_cmp(&data->msg_info.cseq->method, &pjsip_register_method) == 0);
     
-    if ((_unauthorizedBlock != nil) && (status == PJSIP_SC_NOT_FOUND || status == PJSIP_SC_UNAUTHORIZED || status == 467)) {
+    if ((_unauthorizedBlock != nil) && (status == PJSIP_SC_NOT_FOUND || status == PJSIP_SC_UNAUTHORIZED || status == 467 || status == PJSIP_SC_FORBIDDEN)) {
         if (status == PJSIP_SC_NOT_FOUND || status == 467 || status == PJSIP_SC_FORBIDDEN) {
             NSLog(@"<--logout--> SIP unauthorizedBlock. Code=%d", status);
             _unauthorizedBlock(account);
